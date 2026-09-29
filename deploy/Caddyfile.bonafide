@@ -1,0 +1,26 @@
+# Bona Fide on one origin: the App's endpoints go to its container, and everything else is the
+# static pages. deploy.sh installs this file as /opt/bona-fide/site/Caddyfile.bonafide and imports
+# it from the main Caddyfile.
+#
+# Caddy reaches the App at BONA_FIDE_UPSTREAM: 127.0.0.1:8930 unless Caddy's environment sets it.
+# A Caddy container on the App's Docker network sets it to bona-fide-app:3000.
+bonafide.lysakov.com {
+	request_body {
+		max_size 1MB
+	}
+
+	encode zstd gzip
+
+	@app path /webhook /relay/* /forfeit /binding-proof /health
+	handle @app {
+		reverse_proxy {$BONA_FIDE_UPSTREAM:127.0.0.1:8930}
+	}
+
+	# Browsers check the pages again on every visit, so a deploy, such as a new config.js, reaches
+	# returning visitors at once. An unchanged file costs a 304.
+	handle {
+		root * /opt/bona-fide/site/pages
+		header Cache-Control no-cache
+		file_server
+	}
+}

@@ -1,0 +1,63 @@
+/* Bona Fide's brand: the petrol accent, light and dark, and the identity in each page's top bar.
+   This file is loaded before styles/app.css, so each token selector here is one step more
+   specific than its counterpart there (html:root beats :root) and the brand values win. */
+
+html:root {
+  --accent: #04657e;
+  --accent-hover: #03566c;
+  --accent-soft: #e1f4fb;
+  --link: #04657e;
+  --mark: #04657e;
+  --focus: 0 0 0 3px rgba(4, 101, 126, 0.35);
+}
+
+@media (prefers-color-scheme: dark) {
+  html:root:not([data-theme="light"]) {
+    --accent: #047996;
+    --accent-hover: #0d7f9d;
+    --accent-soft: #0c2b34;
+    --link: #79acbe;
+    --mark: #79acbe;
+    --focus: 0 0 0 3px rgba(121, 172, 190, 0.4);
+  }
+}
+
+html:root[data-theme="dark"] {
+  --accent: #047996;
+  --accent-hover: #0d7f9d;
+  --accent-soft: #0c2b34;
+  --link: #79acbe;
+  --mark: #79acbe;
+  --focus: 0 0 0 3px rgba(121, 172, 190, 0.4);
+}
+
+.bf-brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  color: var(--text);
+  font-size: 16px;
+  font-weight: 650;
+  white-space: nowrap;
+}
+
+.bf-brand:hover {
+  text-decoration: none;
+}
+
+.bf-brand .mark {
+  color: var(--mark);
+}
+
+.bf-brand .mark svg {
+  width: 30px;
+  height: 30px;
+}
+
+.bf-brand .area {
+  overflow: hidden;
+  color: var(--text-2);
+  font-weight: 500;
+  text-overflow: ellipsis;
+}

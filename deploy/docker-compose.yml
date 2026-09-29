@@ -1,0 +1,32 @@
+# The Bona Fide App on one host, behind Caddy. deploy.sh installs this file as
+# /opt/bona-fide/docker-compose.yml, next to the Dockerfile, app/ and the server's .env.
+name: bona-fide
+
+services:
+  bona-fide-app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: bona-fide-app
+    container_name: bona-fide-app
+    env_file: .env
+    environment:
+      PORT: "3000"
+    # Loopback only: Caddy on this host is the one way in.
+    ports:
+      - "127.0.0.1:8930:3000"
+    restart: unless-stopped
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    mem_limit: 512m
+    logging:
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: "3"
+
+# A fixed name, so a Caddy that runs in a container can join this network.
+networks:
+  default:
+    name: bona-fide

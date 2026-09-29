@@ -1,0 +1,27 @@
+<div class="backdrop" data-picker hidden>
+  <div class="dialog" role="dialog" aria-modal="true" aria-labelledby="picker-title">
+    <h2 id="picker-title">Connect a wallet</h2>
+    <div data-picker-list></div>
+    <div class="empty" data-picker-empty hidden>
+      <strong>No wallet found in this browser</strong>
+      Install a browser wallet such as MetaMask or Rabby, then reload this page. On a phone, open this page in your
+      wallet app's browser.
+      <button class="btn secondary block mt-12" type="button" data-picker-copy>
+        <svg class="icon md"><use href="#i-copy"></use></svg><span data-picker-copy-label>Copy this page's link</span>
+      </button>
+    </div>
+    <p class="inline-note mt-12" data-picker-error role="alert" hidden></p>
+    <p class="hint mt-16">
+      <svg class="icon"><use href="#i-lock"></use></svg>
+      <span>Bona Fide never asks for your recovery phrase or private key.</span>
+    </p>
+    <button class="btn ghost block mt-8" type="button" data-picker-cancel>Cancel</button>
+  </div>
+</div>
+<template data-picker-option>
+  <button class="wallet-option" type="button">
+    <img alt="" hidden />
+    <span class="ico accent"><svg class="icon md"><use href="#i-browser"></use></svg></span>
+    <span><strong></strong><small>In this browser</small></span>
+  </button>
+</template>

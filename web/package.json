@@ -1,0 +1,27 @@
+{
+  "name": "bona-fide-web",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Bona Fide's pages: the deposit page, the Maintainer's pages and the public repo page.",
+  "type": "module",
+  "engines": {
+    "node": ">=24"
+  },
+  "scripts": {
+    "build": "node build.ts",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit && tsc --noEmit -p test",
+    "format": "prettier --write build.ts networks.ts src test styles vitest.config.ts"
+  },
+  "dependencies": {
+    "viem": "2.56.9",
+    "yaml": "2.9.1"
+  },
+  "devDependencies": {
+    "@types/node": "24.19.0",
+    "prettier": "3.9.9",
+    "rolldown": "1.2.11",
+    "typescript": "7.0.2",
+    "vitest": "5.0.2"
+  }
+}

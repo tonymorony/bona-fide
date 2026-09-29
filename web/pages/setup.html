@@ -1,0 +1,330 @@
+<!doctype html>
+<html lang="en" data-state="loading">
+  <head>
+    {{> head}}
+    <title>Prove wallet control · Bona Fide</title>
+  </head>
+  <body>
+    {{> icons}}
+    <header class="bf-top">
+      <a class="bf-brand" href="/">{{> lockup}} <span class="area">· Maintainer</span></a>
+      <div class="end">{{> network-tag}} {{> wallet-pill}}</div>
+    </header>
+    {{> noscript}}
+
+    <main class="page narrow">
+      <p class="eyebrow" data-if="repo-known">
+        <svg class="icon"><use href="#i-repo"></use></svg><a data-href="repo-url" data-text="repo"></a><span>· one-time setup</span>
+      </p>
+      <h1>Prove you control the Maintainer wallet</h1>
+      <p class="lede">
+        Sign one message with the wallet named in <code>.github/bona-fide.yml</code>. It's free: it isn't a transaction,
+        and it moves no funds.
+      </p>
+
+      <ol class="setup-steps" data-if="repo-known">
+        <li class="done" data-if="file-ok">
+          <span class="num"><svg class="icon"><use href="#i-check"></use></svg></span>
+          <span>Install the App and commit <code>bona-fide.yml</code></span>
+        </li>
+        <li class="current" data-if="file-needed"><span class="num">1</span><span>Install the App and commit <code>bona-fide.yml</code></span></li>
+        <li class="current" data-if="step-sign"><span class="num">2</span><span>Sign a proof with the wallet</span></li>
+        <li data-if="file-needed"><span class="num">2</span><span>Sign a proof with the wallet</span></li>
+        <li class="done" data-if="step-signed">
+          <span class="num"><svg class="icon"><use href="#i-check"></use></svg></span><span>Sign a proof with the wallet</span>
+        </li>
+        <li data-if="step-waiting"><span class="num">3</span><span>Live <span data-text="delay"></span> later</span></li>
+        <li class="current" data-if="step-live-soon"><span class="num">3</span><span>Live <span data-text="delay"></span> later</span></li>
+        <li class="done" data-if="step-live">
+          <span class="num"><svg class="icon"><use href="#i-check"></use></svg></span><span>Live</span>
+        </li>
+      </ol>
+
+      <section class="card" data-show="loading" aria-live="polite">
+        <div class="waiting">
+          <span class="spinner" aria-hidden="true"></span>
+          <div>
+            <strong>Reading this repo's setup</strong>
+            <p class="muted">Its <code>bona-fide.yml</code> on GitHub, and its Binding on {{network.name}}.</p>
+          </div>
+        </div>
+      </section>
+
+      <section class="card mt-24" data-show="bad-link" aria-labelledby="bad-link-title">
+        <div class="result">
+          <div class="big warn"><svg class="icon"><use href="#i-alert"></use></svg></div>
+          <h2 id="bad-link-title">This link is incomplete</h2>
+          <p>Open this page from the Bona Fide check on one of your repo's PRs. Its link names the repo.</p>
+        </div>
+      </section>
+
+      <section class="card" data-show="chain-error" aria-labelledby="chain-error-title">
+        <div class="result">
+          <div class="big warn"><svg class="icon"><use href="#i-alert"></use></svg></div>
+          <h2 id="chain-error-title">Can't reach {{network.name}} right now</h2>
+          <p>This page couldn't read the repo's Binding. Check your connection, then try again.</p>
+        </div>
+        <button class="btn primary block mt-20" type="button" data-action="reload">Try again</button>
+      </section>
+
+      <section class="card" data-show="no-file" aria-labelledby="no-file-title">
+        <h2 id="no-file-title">Commit <code>.github/bona-fide.yml</code> first</h2>
+        <p class="muted mt-8">
+          GitHub shows no <code>.github/bona-fide.yml</code> on <span data-text="repo"></span>'s default branch. Commit one
+          that names your wallet, then check again.
+        </p>
+        <pre class="example">maintainer: <span data-text="example-wallet"></span>
+amount: 1          # USDC
+forfeit: 50%       # the most a bad-faith Forfeit takes
+timeout: 7 days    # how long you have to decide</pre>
+        <button class="btn primary block mt-16" type="button" data-action="reload-file">Check again</button>
+        <p class="hint mt-12">
+          <svg class="icon"><use href="#i-info"></use></svg>
+          <span>
+            Just committed it? GitHub can take a minute to show it.
+            {{#if links.installApp}}And <a href="{{links.installApp}}">install the Bona Fide App</a> on the repo, if you haven't.{{/if}}
+          </span>
+        </p>
+      </section>
+
+      <section class="card" data-show="file-problem" aria-labelledby="file-problem-title">
+        <h2 id="file-problem-title"><code>bona-fide.yml</code> needs a fix</h2>
+        <p class="muted mt-8">Bona Fide can't use the file on <span data-text="repo"></span>'s default branch:</p>
+        <ul class="mt-8" data-problems></ul>
+        <button class="btn primary block mt-16" type="button" data-action="reload-file">Check again</button>
+      </section>
+
+      <section class="card" data-show="no-maintainer" aria-labelledby="no-maintainer-title">
+        <h2 id="no-maintainer-title">Name your wallet in <code>bona-fide.yml</code></h2>
+        <p class="muted mt-8">
+          The file on <span data-text="repo"></span>'s default branch names no Maintainer wallet. Add this line with the
+          wallet you'll sign verdicts with, commit it, then check again.
+        </p>
+        <pre class="example">maintainer: <span data-text="example-wallet"></span></pre>
+        <button class="btn primary block mt-16" type="button" data-action="reload-file">Check again</button>
+      </section>
+
+      <section class="card" data-show="live" aria-labelledby="live-title">
+        <div class="result">
+          <div class="big"><svg class="icon"><use href="#i-check"></use></svg></div>
+          <h2 id="live-title">Bona Fide is live here</h2>
+          <p><span data-text="repo"></span> takes Deposits on the terms in its <code>bona-fide.yml</code>. There's nothing to sign.</p>
+        </div>
+        <dl class="rows mt-20">
+          <div><dt>Maintainer wallet</dt><dd data-text="bound-maintainer"></dd></div>
+          <div><dt>Terms</dt><dd data-text="bound-terms"></dd></div>
+        </dl>
+        <a class="btn secondary block mt-16" data-href="repo-page"><span>See Deposits in <span data-text="repo"></span></span></a>
+      </section>
+
+      <!-- After the proof -->
+      <section class="card" data-show="done" aria-labelledby="done-title">
+        <div class="result" role="status">
+          <div class="big"><svg class="icon"><use href="#i-check"></use></svg></div>
+          <h2 id="done-title" data-if="just-proposed">Proof accepted</h2>
+          <h2 data-if="already-proposed">Already proposed</h2>
+          <p>The Binding for <span data-text="repo"></span> takes effect on <time data-time="effective-at"></time>, or shortly after.</p>
+        </div>
+        <dl class="rows mt-20">
+          <div><dt>Maintainer wallet</dt><dd data-text="bound-maintainer"></dd></div>
+          <div><dt>Terms</dt><dd data-text="bound-terms"></dd></div>
+          <div data-if="proposal-tx">
+            <dt>Proposed in</dt>
+            <dd><a data-href="tx-url" data-text="tx-short" target="_blank" rel="noopener"></a><small>Anyone can see it on {{network.name}} before it takes effect.</small></dd>
+          </div>
+          <div>
+            <dt>Until then</dt>
+            <dd data-if="first-binding">Nobody is asked for a Deposit.</dd>
+            <dd data-if="changing-terms">New Deposits keep the current terms.</dd>
+          </div>
+        </dl>
+      </section>
+      <section class="card" data-show="done live" aria-labelledby="next-title">
+        <h2 id="next-title">Next</h2>
+        <ul class="next-list">
+          <li>
+            <span class="ico accent"><svg class="icon md"><use href="#i-shield"></use></svg></span>
+            <div>
+              <strong>Make “Bona Fide” a required check</strong>
+              <p>In your default branch's protection rules. Then a PR can't merge until it has its Deposit or needs none.</p>
+            </div>
+          </li>
+          <li>
+            <span class="ico"><svg class="icon md"><use href="#i-pen"></use></svg></span>
+            <div>
+              <strong>Changing the terms later?</strong>
+              <p>Edit <code>bona-fide.yml</code> and sign a new proof here. New terms take effect <span data-text="delay"></span> later, and Deposits already made keep theirs.</p>
+            </div>
+          </li>
+        </ul>
+      </section>
+
+      <!-- Before the proof -->
+      <section class="card" data-if="explain" aria-labelledby="why-title">
+        <h2 id="why-title">Why sign</h2>
+        <p class="muted" data-if="file-known">
+          <code>.github/bona-fide.yml</code> names <strong data-text="file-maintainer-short"></strong> as the Maintainer
+          wallet. Only that wallet will be able to sign bad-faith verdicts in <span data-text="repo"></span>. Signing
+          proves it's yours, so a typo can't bind a wallet nobody controls.
+        </p>
+        <p class="muted" data-if="file-unknown">
+          Only the wallet named in <code>.github/bona-fide.yml</code> can sign bad-faith verdicts in
+          <span data-text="repo"></span>. Signing proves it's yours, so a typo can't bind a wallet nobody controls.
+        </p>
+      </section>
+
+      <div class="alert warn" data-if="file-unknown" data-hide="loading bad-link chain-error">
+        <svg class="icon md"><use href="#i-info"></use></svg>
+        <div>
+          <strong>This page can't read <code>bona-fide.yml</code></strong>
+          <p>GitHub didn't show it here, so the terms below are missing. You can still sign: Bona Fide reads the file when it gets your proof.</p>
+        </div>
+      </div>
+
+      <section class="card mt-16" data-if="explain" aria-labelledby="what-title">
+        <h2 id="what-title">What you sign</h2>
+        <p class="muted">Your wallet shows a request from BonaFide called Binding, with these fields.</p>
+        <dl class="rows mt-12">
+          <div><dt><code>repo</code></dt><dd><span data-text="binding-repo"></span><small>The repo you're setting up</small></dd></div>
+          <div>
+            <dt><code>maintainer</code></dt>
+            <dd><span data-text="signing-wallet"></span><small data-if="file-known">The wallet in bona-fide.yml</small><small data-if="file-unknown">The wallet you connect</small></dd>
+          </div>
+          <div>
+            <dt><code>nonce</code></dt>
+            <dd><span data-text="nonce"></span><small>A random value, so each proof is new</small></dd>
+          </div>
+          <div>
+            <dt><code>deadline</code></dt>
+            <dd data-if="deadline-known"><span data-text="deadline-unix"></span><small><time data-time="deadline"></time>. After it, the proof is refused.</small></dd>
+            <dd data-if="deadline-later">30 minutes after you sign<small>After it, the proof is refused.</small></dd>
+          </div>
+        </dl>
+        <p class="hint mt-12">
+          <svg class="icon"><use href="#i-info"></use></svg>
+          <span>It's signed for the Bona Fide escrow on {{network.name}} (<span data-text="escrow-short"></span>), so it can't be used anywhere else.</span>
+        </p>
+      </section>
+
+      <section class="card" data-if="terms-known" aria-labelledby="terms-title">
+        <h2 id="terms-title">The terms you're binding</h2>
+        <p class="muted">From <code>.github/bona-fide.yml</code> on the default branch.</p>
+        <div class="terms-grid">
+          <div class="term"><span>Deposit</span><strong data-text="file-amount"></strong></div>
+          <div class="term"><span>Timeout</span><strong data-text="file-timeout"></strong></div>
+          <div class="term">
+            <span>Bad-faith share</span><strong data-text="file-share"></strong><small>{{capital:forfeits.purpose}}</small>
+          </div>
+        </div>
+      </section>
+
+      <div class="callout" data-if="explain">
+        <span class="ico accent"><svg class="icon md"><use href="#i-clock"></use></svg></span>
+        <div>
+          <strong>Live <span data-text="delay"></span> after your proof</strong>
+          <p>
+            Bona Fide proposes this Binding on-chain right away. It takes effect <span data-text="delay"></span> later, so
+            anyone can see a change before it applies.
+            <span data-if="first-binding">Until then, nobody is asked for a Deposit.</span>
+            <span data-if="changing-terms">Until then, new Deposits keep the current terms.</span>
+          </p>
+        </div>
+      </div>
+
+      <!-- Actions -->
+      <section class="card mt-16" data-show="not-connected">
+        <button class="btn primary block" type="button" data-action="connect">
+          <svg class="icon md"><use href="#i-wallet"></use></svg>Connect the Maintainer wallet
+        </button>
+        <p class="hint mt-12">
+          <svg class="icon"><use href="#i-lock"></use></svg>
+          <span>Bona Fide never asks for your recovery phrase or private key.</span>
+        </p>
+        <p class="hint mt-8">
+          <svg class="icon"><use href="#i-info"></use></svg>
+          <span>A smart wallet must already have made a transaction on {{network.name}}: one that hasn't can't sign yet.</span>
+        </p>
+      </section>
+
+      <section class="card mt-16" data-show="wrong-network">
+        {{> wallet-row}}
+        <div class="alert warn mt-14">
+          <svg class="icon md"><use href="#i-alert"></use></svg>
+          <div>
+            <strong>Switch to {{network.name}}</strong>
+            <p>Your wallet is on <span data-text="wallet-network"></span>. The proof is signed for {{network.name}}.</p>
+          </div>
+        </div>
+        <button class="btn primary block mt-14" type="button" data-action="switch-network">Switch to {{network.name}}</button>
+        <p class="inline-note mt-12" data-text="note" data-if="note" role="status"></p>
+      </section>
+
+      <section class="card mt-16" data-show="ready">
+        <div class="wallet">
+          <span class="avatar other"></span>
+          <div class="who"><div class="addr" data-text="account-short"></div><div class="sub">{{network.name}}</div></div>
+          <div class="end" data-if="file-known"><span class="tag">Matches bona-fide.yml</span></div>
+        </div>
+        <button class="btn primary block mt-14" type="button" data-action="sign">Sign the proof</button>
+        <p class="inline-note mt-12" data-text="note" data-if="note" role="status"></p>
+        <p class="hint mt-12">
+          <svg class="icon"><use href="#i-info"></use></svg>
+          <span>Free to sign. It isn't a transaction, and it moves no funds.</span>
+        </p>
+      </section>
+
+      <section class="card mt-16" data-show="wrong-wallet">
+        <div class="wallet">
+          <span class="avatar"></span>
+          <div class="who"><div class="addr" data-text="account-short"></div><div class="sub">{{network.name}}</div></div>
+          <div class="end"><span class="tag danger">Not in bona-fide.yml</span></div>
+        </div>
+        <div class="alert warn mt-14">
+          <svg class="icon md"><use href="#i-alert"></use></svg>
+          <div>
+            <strong>This isn't the Maintainer wallet</strong>
+            <p><code>bona-fide.yml</code> names <span data-text="file-maintainer-short"></span>. Switch to that wallet, or change <code>maintainer</code> in the file and commit it.</p>
+          </div>
+        </div>
+        <button class="btn primary block mt-14" type="button" disabled>Sign the proof</button>
+      </section>
+
+      <section class="card mt-16" data-show="signing sending">
+        <div class="waiting" aria-live="polite">
+          <span class="spinner" aria-hidden="true"></span>
+          <div data-show="signing">
+            <strong>Waiting for your signature</strong>
+            <p class="muted">Your wallet shows a request from BonaFide called Binding, with the fields above.</p>
+          </div>
+          <div data-show="sending">
+            <strong>Sending your proof</strong>
+            <p class="muted">Bona Fide checks it against <code>bona-fide.yml</code>, then proposes the Binding on {{network.name}}.</p>
+          </div>
+        </div>
+        <button class="btn secondary block mt-14" type="button" data-show="signing" data-action="cancel-signing">Cancel</button>
+      </section>
+
+      <section class="card mt-16" data-show="problem">
+        <div class="alert warn">
+          <svg class="icon md"><use href="#i-alert"></use></svg>
+          <div>
+            <strong data-text="problem-title"></strong>
+            <p data-text="problem-body"></p>
+            <p class="detail" data-text="problem-detail" data-if="problem-detail"></p>
+          </div>
+        </div>
+        <button class="btn secondary block mt-14" type="button" data-action="retry" data-if="retry" data-text="retry-label"></button>
+      </section>
+    </main>
+
+    {{> wallet-picker}}
+
+    <footer class="bf-foot">
+      <span>Bona Fide: refundable good-faith deposits for open source.</span>
+      <a href="{{network.explorerUrl}}/address/{{network.escrow}}" target="_blank" rel="noopener">Escrow contract</a>
+      <a data-href="repo-page" data-if="repo-known">Deposits in <span data-text="repo"></span></a>
+      {{#if links.source}}<a href="{{links.source}}/blob/main/app/README.md#turn-it-on-for-a-repo">Maintainer guide</a>{{/if}}
+    </footer>
+    {{> scripts}}
+  </body>
+</html>

@@ -1,0 +1,28 @@
+{
+  "name": "bona-fide-agent",
+  "version": "0.0.0",
+  "private": true,
+  "description": "An MCP server that lets an AI agent read a repo's Bona Fide rules and make its Deposit.",
+  "type": "module",
+  "engines": {
+    "node": ">=24"
+  },
+  "scripts": {
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit",
+    "format": "prettier --write src test vitest.config.ts",
+    "start": "node src/main.ts"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/server": "^2.1.0",
+    "viem": "^2.56.9",
+    "zod": "^4.6.5"
+  },
+  "devDependencies": {
+    "@modelcontextprotocol/client": "^2.1.0",
+    "@types/node": "^24.19.0",
+    "prettier": "^3.9.9",
+    "typescript": "^7.0.2",
+    "vitest": "^5.0.2"
+  }
+}

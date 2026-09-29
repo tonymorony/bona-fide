@@ -1,0 +1,244 @@
+<!doctype html>
+<html lang="en" data-state="loading">
+  <head>
+    {{> head}}
+    <title>Sign a bad-faith verdict · Bona Fide</title>
+  </head>
+  <body>
+    {{> icons}}
+    <header class="bf-top">
+      <a class="bf-brand" href="/">{{> lockup}} <span class="area">· Maintainer</span></a>
+      <div class="end">{{> network-tag}} {{> wallet-pill}}</div>
+    </header>
+    {{> noscript}}
+
+    <main class="page narrow">
+      <p class="eyebrow" data-if="item-known">
+        <svg class="icon"><use href="#i-repo"></use></svg><a data-href="repo-page" data-text="repo"></a><span>·</span
+        ><a data-href="item-url" data-text="item"></a>
+      </p>
+      <h1>Sign a bad-faith verdict</h1>
+      <p class="lede" data-if="item-known">
+        Your signature forfeits the Deposit on <span data-text="item"></span>. The <code>bona-fide:bad-faith</code> label
+        alone moves no funds.
+      </p>
+
+      <section class="card mt-24" data-show="loading" aria-live="polite">
+        <div class="waiting">
+          <span class="spinner" aria-hidden="true"></span>
+          <div>
+            <strong>Reading the Deposit</strong>
+            <p class="muted">From the escrow contract on {{network.name}}.</p>
+          </div>
+        </div>
+      </section>
+
+      <section class="card mt-24" data-show="bad-link" aria-labelledby="bad-link-title">
+        <div class="result">
+          <div class="big warn"><svg class="icon"><use href="#i-alert"></use></svg></div>
+          <h2 id="bad-link-title">This link is incomplete</h2>
+          <p>Open this page from Bona Fide's note on the PR or issue you labelled <code>bona-fide:bad-faith</code>.</p>
+        </div>
+      </section>
+
+      <section class="card mt-24" data-show="chain-error" aria-labelledby="chain-error-title">
+        <div class="result">
+          <div class="big warn"><svg class="icon"><use href="#i-alert"></use></svg></div>
+          <h2 id="chain-error-title">Can't reach {{network.name}} right now</h2>
+          <p>This page couldn't read the Deposit. Check your connection, then try again.</p>
+        </div>
+        <button class="btn primary block mt-20" type="button" data-action="reload">Try again</button>
+      </section>
+
+      <section class="card mt-24" data-show="no-deposit resolved" aria-labelledby="nothing-title">
+        <div class="result">
+          <div class="big info"><svg class="icon"><use href="#i-info"></use></svg></div>
+          <h2 id="nothing-title">Nothing to sign</h2>
+          <p data-show="no-deposit"><span data-text="Item"></span> has no Deposit.</p>
+          <p data-show="resolved">This Deposit was already <span data-text="resolution"></span>.</p>
+        </div>
+        <a class="btn secondary block mt-20" data-href="repo-page"><span>See Deposits in <span data-text="repo"></span></span></a>
+      </section>
+
+      <section class="card mt-24" data-show="done" aria-labelledby="done-title">
+        <div class="result" role="status">
+          <div class="big"><svg class="icon"><use href="#i-check"></use></svg></div>
+          <h2 id="done-title">Verdict signed</h2>
+          <p>The Deposit on <span data-text="item"></span> is forfeited.</p>
+        </div>
+        <dl class="rows mt-20">
+          <div>
+            <dt>For {{forfeits.recipient}}</dt>
+            <dd><span data-text="forfeited"></span><small>It waits in the forfeit router until anyone sends it on, from the repo's Deposits page.</small></dd>
+          </div>
+          <div><dt>Refunded</dt><dd><span data-text="refunded"></span> to <span data-text="depositor-short"></span></dd></div>
+          <div>
+            <dt>Transaction</dt>
+            <dd><a data-href="tx-url" data-text="tx-short" target="_blank" rel="noopener"></a><small>On the {{network.name}} explorer</small></dd>
+          </div>
+        </dl>
+        <a class="btn secondary block mt-16" data-href="repo-page"><span>See Deposits in <span data-text="repo"></span></span></a>
+      </section>
+
+      <section class="card mt-24" data-show="refunded" aria-labelledby="refunded-title">
+        <div class="result" role="status">
+          <div class="big"><svg class="icon"><use href="#i-check"></use></svg></div>
+          <h2 id="refunded-title">Refund sent</h2>
+          <p><span data-text="amount"></span> went back to <span data-text="depositor-short"></span>.</p>
+        </div>
+        <dl class="rows mt-20">
+          <div>
+            <dt>Transaction</dt>
+            <dd><a data-href="tx-url" data-text="tx-short" target="_blank" rel="noopener"></a><small>On the {{network.name}} explorer</small></dd>
+          </div>
+        </dl>
+      </section>
+
+      <section class="card mt-24" data-if="deposit-shown" aria-labelledby="deposit-title">
+        <h2 id="deposit-title">The Deposit</h2>
+        <dl class="rows mt-12">
+          <div><dt>Amount</dt><dd data-text="amount"></dd></div>
+          <div><dt>Paid by</dt><dd data-text="depositor"></dd></div>
+          <div><dt>Serial</dt><dd><span data-text="serial"></span><small>Your signature names it, so it works for this Deposit only.</small></dd></div>
+          <div>
+            <dt>Maintainer wallet</dt>
+            <dd><span data-text="maintainer"></span><small>Fixed when the Deposit was made. Only this wallet can sign.</small></dd>
+          </div>
+        </dl>
+      </section>
+
+      <section class="card" data-if="split-shown" aria-labelledby="split-title">
+        <h2 id="split-title">If you sign</h2>
+        <div class="split" role="img" data-split-label>
+          <span class="to-fund" data-split="fund"></span><span class="to-depositor" data-split="depositor"></span>
+        </div>
+        <ul class="legend">
+          <li><span class="swatch fund"></span><span><strong data-text="forfeited"></strong> {{forfeits.purpose}}.</span></li>
+          <li><span class="swatch depositor"></span><span><strong data-text="refunded"></strong> is refunded to <span data-text="depositor-short"></span>.</span></li>
+        </ul>
+        <p class="promise">
+          <svg class="icon md"><use href="#i-lock"></use></svg>
+          <span>You get none of it, and neither does Bona Fide.</span>
+        </p>
+      </section>
+
+      <div class="callout" data-if="split-shown">
+        <span class="ico warn"><svg class="icon md"><use href="#i-clock"></use></svg></span>
+        <div>
+          <strong>Sign before <time data-time="deadline"></time></strong>
+          <p><span data-text="time-left"></span> left. That's when this Deposit's Timeout ends. After it, the Deposit can only be refunded in full.</p>
+        </div>
+      </div>
+
+      <div class="alert warn mt-16" data-show="too-late">
+        <svg class="icon md"><use href="#i-clock"></use></svg>
+        <div>
+          <strong>The Timeout has passed</strong>
+          <p>It ended on <time data-time="deadline"></time>, so this Deposit can't be forfeited. Anyone can now refund it in full.</p>
+        </div>
+      </div>
+
+      <!-- Actions -->
+      <section class="card mt-16" data-show="not-connected">
+        <button class="btn primary block" type="button" data-action="connect">
+          <svg class="icon md"><use href="#i-wallet"></use></svg>Connect the Maintainer wallet
+        </button>
+        <p class="hint mt-12">
+          <svg class="icon"><use href="#i-info"></use></svg>
+          <span>Only <span data-text="maintainer-short"></span> can sign. A smart wallet must already have made a transaction on {{network.name}}: one that hasn't can't sign yet.</span>
+        </p>
+      </section>
+
+      <section class="card mt-16" data-show="wrong-network">
+        {{> wallet-row}}
+        <div class="alert warn mt-14">
+          <svg class="icon md"><use href="#i-alert"></use></svg>
+          <div>
+            <strong>Switch to {{network.name}}</strong>
+            <p>Your wallet is on <span data-text="wallet-network"></span>. The verdict is signed for {{network.name}}.</p>
+          </div>
+        </div>
+        <button class="btn primary block mt-14" type="button" data-action="switch-network">Switch to {{network.name}}</button>
+        <p class="inline-note mt-12" data-text="note" data-if="note" role="status"></p>
+      </section>
+
+      <section class="card mt-16" data-show="wrong-wallet">
+        {{> wallet-row}}
+        <div class="alert warn mt-14">
+          <svg class="icon md"><use href="#i-alert"></use></svg>
+          <div>
+            <strong>Connect the Maintainer wallet</strong>
+            <p>Only <span data-text="maintainer-short"></span> can sign a verdict for this Deposit. Switch to it in your wallet.</p>
+          </div>
+        </div>
+        <button class="btn danger block mt-14" type="button" disabled>Sign the verdict</button>
+      </section>
+
+      <section class="card mt-16" data-show="ready">
+        <div class="wallet">
+          <span class="avatar other"></span>
+          <div class="who"><div class="addr" data-text="account-short"></div><div class="sub">{{network.name}}</div></div>
+          <div class="end"><span class="tag">Maintainer wallet</span></div>
+        </div>
+        <label class="confirm mt-14">
+          <input type="checkbox" data-confirm />
+          <span>I reviewed <span data-text="item"></span>, and it was made in bad faith.</span>
+        </label>
+        <button class="btn danger block mt-14" type="button" data-action="sign">Sign the verdict</button>
+        <p class="inline-note mt-12" data-text="note" data-if="note" role="status"></p>
+        <p class="hint mt-12">
+          <svg class="icon"><use href="#i-info"></use></svg>
+          <span>This can't be undone. Signing is free: Bona Fide sends your signature to the escrow and pays the network fee.</span>
+        </p>
+      </section>
+
+      <section class="card mt-16" data-show="signing sending">
+        <div class="waiting" aria-live="polite">
+          <span class="spinner" aria-hidden="true"></span>
+          <div data-show="signing">
+            <strong>Waiting for your signature</strong>
+            <p class="muted">Your wallet shows a request from BonaFide called Forfeit, for serial <span data-text="serial"></span>. It's valid for 1 hour.</p>
+          </div>
+          <div data-show="sending">
+            <strong>Sending your verdict</strong>
+            <p class="muted">Bona Fide is sending it to the escrow on {{network.name}}. This usually takes a few seconds.</p>
+          </div>
+        </div>
+        <button class="btn secondary block mt-14" type="button" data-show="signing" data-action="cancel-signing">Cancel</button>
+      </section>
+
+      <section class="card mt-16" data-show="problem">
+        <div class="alert warn">
+          <svg class="icon md"><use href="#i-alert"></use></svg>
+          <div>
+            <strong data-text="problem-title"></strong>
+            <p data-text="problem-body"></p>
+            <p data-if="problem-tx"><a data-href="problem-tx-url" target="_blank" rel="noopener">View the transaction</a></p>
+            <p class="detail" data-text="problem-detail" data-if="problem-detail"></p>
+          </div>
+        </div>
+        <button class="btn secondary block mt-14" type="button" data-action="retry" data-if="retry" data-text="retry-label"></button>
+      </section>
+
+      <section class="card mt-16" data-show="too-late">
+        <button class="btn primary block" type="button" data-action="refund" data-busy-label="Waiting for your wallet">
+          <svg class="icon md"><use href="#i-refund"></use></svg><span>Refund <span data-text="amount"></span> to <span data-text="depositor-short"></span></span></button>
+        <p class="inline-note mt-12" data-text="note" data-if="note" role="status"></p>
+        <p class="hint mt-12">
+          <svg class="icon"><use href="#i-info"></use></svg>
+          <span>Bona Fide usually sends it within a minute of the Timeout. Anyone can send it, and it always goes to the wallet that paid. You pay the network fee, in USDC.</span>
+        </p>
+      </section>
+    </main>
+
+    {{> wallet-picker}}
+
+    <footer class="bf-foot">
+      <span>Bona Fide: refundable good-faith deposits for open source.</span>
+      <a href="{{network.explorerUrl}}/address/{{network.escrow}}" target="_blank" rel="noopener">Escrow contract</a>
+      <a data-href="repo-page" data-if="item-known">Deposits in <span data-text="repo"></span></a>
+      {{#if links.source}}<a href="{{links.source}}">Source code</a>{{/if}}
+    </footer>
+    {{> scripts}}
+  </body>
+</html>

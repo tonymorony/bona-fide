@@ -1,0 +1,256 @@
+<!doctype html>
+<html lang="en" data-state="loading">
+  <head>
+    {{> head}}
+    <title>Deposits · Bona Fide</title>
+  </head>
+  <body>
+    {{> icons}}
+    <header class="bf-top">
+      <a class="bf-brand" href="/">{{> lockup}}</a>
+      <div class="end">{{> network-tag}} {{> wallet-pill}}</div>
+    </header>
+    {{> noscript}}
+
+    <main class="page">
+      <div class="repo-head">
+        <div>
+          <p class="eyebrow"><svg class="icon"><use href="#i-repo"></use></svg>Bona Fide Deposits</p>
+          <h1 data-if="repo-known"><a class="plain" data-href="repo-url" data-text="repo"></a></h1>
+          <h1 data-if="repo-unknown">Deposits</h1>
+          <p class="lede">
+            Contributors this repo doesn't know yet put down a refundable Deposit on each PR or issue. Good-faith work gets
+            it back in full.
+          </p>
+        </div>
+        <span class="status" data-if="live-since"><span class="dot"></span><span>Live since <time data-time="live-since" data-date-only></time></span></span>
+        <span class="status pending" data-if="starts-at"><span class="dot warn"></span><span>Starts <time data-time="starts-at"></time></span></span>
+      </div>
+
+      <section class="card" data-show="loading" aria-live="polite">
+        <div class="waiting">
+          <span class="spinner" aria-hidden="true"></span>
+          <div>
+            <strong>Reading this repo's terms</strong>
+            <p class="muted">From the escrow contract on {{network.name}}.</p>
+          </div>
+        </div>
+      </section>
+
+      <section class="card" data-show="bad-link" aria-labelledby="bad-link-title">
+        <div class="result">
+          <div class="big warn"><svg class="icon"><use href="#i-alert"></use></svg></div>
+          <h2 id="bad-link-title">This link names no repo</h2>
+          <p>Add the repo to the link, such as <code>repo.html?repo=owner/name</code>.</p>
+        </div>
+      </section>
+
+      <section class="card" data-show="chain-error" aria-labelledby="chain-error-title">
+        <div class="result">
+          <div class="big warn"><svg class="icon"><use href="#i-alert"></use></svg></div>
+          <h2 id="chain-error-title">Can't reach {{network.name}} right now</h2>
+          <p>This page couldn't read the repo's terms. Check your connection, then try again.</p>
+        </div>
+        <button class="btn primary block mt-20" type="button" data-action="reload">Try again</button>
+      </section>
+
+      <section class="card" data-show="not-set-up" aria-labelledby="not-set-up-title">
+        <div class="result">
+          <div class="big info"><svg class="icon"><use href="#i-clock"></use></svg></div>
+          <h2 id="not-set-up-title">Not set up here yet</h2>
+          <p><span data-text="repo"></span> doesn't take Deposits. Nobody there is asked for one.</p>
+        </div>
+      </section>
+
+      <div class="alert ok mb-16" data-if="refund-sent" role="status">
+        <svg class="icon md"><use href="#i-check-circle"></use></svg>
+        <div>
+          <strong>Refund sent</strong>
+          <p>
+            <span data-text="refund-amount"></span> went back to <span data-text="refund-to"></span> for
+            <span data-text="refund-item"></span>.
+            <a data-href="refund-tx-url" target="_blank" rel="noopener">View the transaction</a>
+          </p>
+        </div>
+      </div>
+      <div class="alert ok mb-16" data-if="flushed" role="status">
+        <svg class="icon md"><use href="#i-check-circle"></use></svg>
+        <div>
+          <strong>Sent <span data-text="flushed-amount"></span> toward {{forfeits.recipient}}</strong>
+          <p>
+            It arrives on {{forfeits.chain}} once the transfer is completed there.
+            <a data-href="flush-tx-url" target="_blank" rel="noopener">View the transaction</a>
+          </p>
+        </div>
+      </div>
+      <div class="alert warn mb-16" data-if="action-note" role="alert">
+        <svg class="icon md"><use href="#i-alert"></use></svg>
+        <div><p data-text="action-note"></p></div>
+      </div>
+
+      <div class="two-col" data-show="live starting">
+        <section class="card" aria-labelledby="terms-title">
+          <h2 id="terms-title">Terms</h2>
+          <p class="muted" data-if="terms-active">For every new Deposit here.</p>
+          <p class="muted" data-if="terms-starting">From <time data-time="starts-at"></time>, or shortly after.</p>
+          <dl class="rows mt-12">
+            <div><dt>Deposit</dt><dd data-text="amount"></dd></div>
+            <div><dt>Timeout</dt><dd><span data-text="timeout"></span><small>Not merged or accepted by then? It's refunded in full.</small></dd></div>
+            <div><dt>Bad-faith share</dt><dd><span data-text="share"></span><small>{{capital:forfeits.purpose}}</small></dd></div>
+            <div>
+              <dt>Maintainer wallet</dt>
+              <dd>
+                <a data-href="maintainer-url" data-text="maintainer-short" target="_blank" rel="noopener"></a>
+                <small>The only wallet that can sign bad-faith verdicts here</small>
+              </dd>
+            </div>
+          </dl>
+          <p class="hint mt-12" data-if="new-terms">
+            <svg class="icon"><use href="#i-info"></use></svg>
+            <span>New terms start on <time data-time="new-terms-at"></time>, or shortly after: <span data-text="new-terms"></span>. Deposits made before then keep the terms above.</span>
+          </p>
+          <p class="hint mt-12">
+            <svg class="icon"><use href="#i-info"></use></svg>
+            <span>New terms take effect <span data-text="delay"></span> after they're proposed, and never change Deposits already made.</span>
+          </p>
+        </section>
+
+        <section class="card" aria-labelledby="stats-title">
+          <h2 id="stats-title">So far</h2>
+          <p class="muted" data-if="live-since">Since <time data-time="live-since" data-date-only></time>.</p>
+          <div class="progress-line mt-16" data-if="history-loading" aria-live="polite">
+            <span class="spinner" aria-hidden="true"></span><span>Reading Deposits from {{network.name}}: <span data-text="history-progress"></span></span>
+          </div>
+          <div class="stats" data-if="history-ready">
+            <div class="stat"><div class="n" data-text="count-all"></div><div class="l">Deposits</div></div>
+            <div class="stat"><div class="n" data-text="count-active"></div><div class="l">Active</div></div>
+            <div class="stat"><div class="n" data-text="count-refunded"></div><div class="l">Refunded in full</div></div>
+            <div class="stat"><div class="n" data-text="count-forfeited"></div><div class="l">Forfeited</div></div>
+            <div class="stat wide" data-if="decided">
+              <div class="n" data-text="forfeit-rate"></div>
+              <div class="l" data-text="forfeit-rate-detail"></div>
+            </div>
+          </div>
+        </section>
+      </div>
+
+      <section class="card mt-16" data-show="live starting" aria-labelledby="deposits-title">
+        <div class="card-head">
+          <h2 id="deposits-title">Deposits</h2>
+          <button class="link-button" type="button" data-action="show-all" data-if="more">Show all <span data-text="count-all"></span></button>
+        </div>
+        <div class="progress-line mt-8" data-if="history-loading">
+          <span class="spinner" aria-hidden="true"></span><span>Reading Deposits from {{network.name}}: <span data-text="history-progress"></span></span>
+        </div>
+        <div class="alert warn mt-8" data-if="history-failed">
+          <svg class="icon md"><use href="#i-alert"></use></svg>
+          <div>
+            <strong>Couldn't read the Deposits</strong>
+            <p>{{network.name}}'s RPC didn't answer. <button class="link-button" type="button" data-action="reload-history">Try again</button></p>
+          </div>
+        </div>
+        <p class="muted mt-8" data-if="no-deposits">No Deposits yet.</p>
+        <table class="table" data-if="has-deposits">
+          <thead>
+            <tr>
+              <th>For</th>
+              <th>Paid by</th>
+              <th>Amount</th>
+              <th>Status</th>
+              <th>Made</th>
+            </tr>
+          </thead>
+          <tbody data-rows data-self-managed></tbody>
+        </table>
+        <p class="hint mt-14">
+          <svg class="icon"><use href="#i-info"></use></svg>
+          <span>After a Deposit's Timeout, Bona Fide sends its Refund, and anyone else can too. It always goes to the wallet that paid.</span>
+        </p>
+      </section>
+
+      <section class="card mt-16" aria-labelledby="router-title" data-hide="bad-link">
+        <h2 id="router-title">{{forfeits.heading}}</h2>
+        <p class="muted">
+          Forfeited USDC from every repo that uses Bona Fide waits in one forfeit router. Anyone can send it on to
+          {{forfeits.recipient}}. Nobody can change the amount or where it goes.
+        </p>
+        <div class="router mt-20">
+          <div>
+            <div class="balance">
+              <span>Waiting to be sent</span>
+              <strong data-text="router-balance"></strong>
+              <small>From all repos, not only this one</small>
+            </div>
+            <button class="btn primary block mt-14" type="button" data-action="flush" data-if="can-flush" data-busy-label="Waiting for your wallet">
+              <svg class="icon md"><use href="#i-send"></use></svg><span>Send <span data-text="router-balance"></span> to {{forfeits.recipient}}</span></button>
+            <button class="btn primary block mt-14" type="button" data-if="nothing-to-flush" disabled>Nothing to send yet</button>
+            <p class="hint mt-8">
+              <svg class="icon"><use href="#i-info"></use></svg>
+              <span>Anyone can press this. You pay the network fee, in USDC.</span>
+            </p>
+          </div>
+          <div>
+            <dl class="rows compact">
+              <div data-if="history-ready">
+                <dt>Sent so far</dt>
+                <dd><span data-text="flushed-total"></span><small data-text="flush-count"></small></dd>
+              </div>
+              <div>
+                <dt>Recipient</dt>
+                <dd>
+                  {{forfeits.destination}}
+                  <small><a href="{{forfeits.url}}" target="_blank" rel="noopener" data-text="recipient-short"></a></small>
+                </dd>
+              </div>
+            </dl>
+            <details open class="mt-12">
+              <summary>How it reaches {{forfeits.recipient}}</summary>
+              <ol class="path">
+                <li>Sending hands the USDC to Circle's CCTP, which takes it off {{network.name}}.</li>
+                <li>Circle attests the transfer, and anyone can complete it on {{forfeits.chain}}.</li>
+                <li>Circle mints the same amount into {{forfeits.mintInto}}.</li>
+                {{#if forfeits.vests}}<li>Protocol Guild vests it over a year to its members, who maintain Ethereum's open-source core.</li>{{/if}}
+              </ol>
+            </details>
+          </div>
+        </div>
+      </section>
+
+      <section class="card mt-16" aria-labelledby="exempt-title" data-show="live starting">
+        <h2 id="exempt-title">Who needs no Deposit here</h2>
+        <ul class="exempt-list">
+          <li><svg class="icon"><use href="#i-check"></use></svg><span>Collaborators who can push to <span data-text="repo"></span></span></li>
+          <li><svg class="icon"><use href="#i-check"></use></svg><span>Anyone vouched for in <code>VOUCHED.td</code></span></li>
+          <li><svg class="icon"><use href="#i-check"></use></svg><span>Anyone with a merged PR in <span data-text="repo"></span></span></li>
+          <li><svg class="icon"><use href="#i-check"></use></svg><span>Allowed bots, such as Dependabot and Renovate</span></li>
+          <li><svg class="icon"><use href="#i-check"></use></svg><span>A PR or issue a Maintainer labels <code>bona-fide:waive</code></span></li>
+        </ul>
+      </section>
+    </main>
+
+    {{> wallet-picker}}
+
+    <template data-row>
+      <tr>
+        <td class="for"><a data-cell="item"></a></td>
+        <td class="mono" data-label="Paid by"><a data-cell="depositor" target="_blank" rel="noopener"></a></td>
+        <td class="num" data-label="Amount" data-cell="amount"></td>
+        <td>
+          <span class="state">
+            <span class="tag" data-cell="tag"></span><small data-cell="detail"></small>
+            <button class="btn secondary small" type="button" data-action="refund-row" data-busy-label="Refunding" hidden></button>
+          </span>
+        </td>
+        <td data-label="Made"><time data-cell="made"></time></td>
+      </tr>
+    </template>
+
+    <footer class="bf-foot">
+      <span>Bona Fide: refundable good-faith deposits for open source.</span>
+      <a href="{{network.explorerUrl}}/address/{{network.escrow}}" target="_blank" rel="noopener">Escrow contract</a>
+      <a href="{{network.explorerUrl}}/address/{{network.router}}" target="_blank" rel="noopener">Forfeit router</a>
+      {{#if links.source}}<a href="{{links.source}}">Source code</a>{{/if}}
+    </footer>
+    {{> scripts}}
+  </body>
+</html>

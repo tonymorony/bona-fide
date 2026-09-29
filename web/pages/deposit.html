@@ -1,0 +1,490 @@
+<!doctype html>
+<html lang="en" data-state="loading">
+  <head>
+    {{> head}}
+    <title>Refundable Deposit · Bona Fide</title>
+  </head>
+  <body>
+    {{> icons}}
+    <header class="bf-top">
+      <a class="bf-brand" href="/">{{> lockup}}</a>
+      <div class="end">{{> network-tag}} {{> wallet-pill}}</div>
+    </header>
+    {{> noscript}}
+
+    <main class="page checkout">
+      <!-- The rules, before anything else -->
+      <section class="rules" aria-labelledby="deposit-title" data-hide="loading bad-link chain-error not-set-up">
+        <p class="eyebrow">
+          <svg class="icon"><use href="#i-repo"></use></svg><a data-href="repo-page" data-text="repo"></a>
+        </p>
+        <h1 id="deposit-title">Refundable Deposit</h1>
+        <p class="item-line">For <a data-href="item-url" data-text="item"></a></p>
+        <p class="amount"><span data-text="amount-number"></span><span class="unit">USDC</span></p>
+        <p class="tag accent terms-start" data-show="not-live">
+          <svg class="icon"><use href="#i-clock"></use></svg><span>These terms start on <time data-time="starts-at"></time></span>
+        </p>
+
+        <h2 class="section-title">How you get it back</h2>
+        <ul class="outcomes">
+          <li>
+            <span class="ico ok"><svg class="icon md"><use href="#i-check"></use></svg></span>
+            <div>
+              <div class="when"><span data-kind="pr">Merged or accepted</span><span data-kind="issue">Accepted</span></div>
+              <div class="detail">Bona Fide sends the Refund.</div>
+            </div>
+            <div class="back"><span data-text="amount"></span><small>back to you</small></div>
+          </li>
+          <li>
+            <span class="ico"><svg class="icon md"><use href="#i-clock"></use></svg></span>
+            <div>
+              <div class="when">
+                <span data-kind="pr">Not merged within <span data-text="timeout"></span></span
+                ><span data-kind="issue">Not accepted within <span data-text="timeout"></span></span>
+              </div>
+              <div class="detail">
+                <span data-text="timeout"></span> is this repo's Timeout. After it, Bona Fide sends the Refund, and anyone else can too, you included.
+              </div>
+            </div>
+            <div class="back"><span data-text="amount"></span><small>back to you</small></div>
+          </li>
+          <li data-if="forfeits">
+            <span class="ico accent"><svg class="icon md"><use href="#i-scale"></use></svg></span>
+            <div>
+              <div class="when">Bad faith, signed by a Maintainer</div>
+              <div class="detail"><span data-text="forfeited"></span> {{forfeits.purpose}}. It's never more than half.</div>
+            </div>
+            <div class="back"><span data-text="refunded-after-forfeit"></span><small>back to you</small></div>
+          </li>
+        </ul>
+        <p class="promise">
+          <svg class="icon md"><use href="#i-lock"></use></svg>
+          <span>Nobody else gets any of it: not the Maintainers, and not Bona Fide.</span>
+        </p>
+        <p class="hint mt-12" data-if="new-terms">
+          <svg class="icon"><use href="#i-info"></use></svg>
+          <span>This repo's terms change on <time data-time="new-terms-at"></time>, or shortly after. A Deposit made before then keeps the terms above.</span>
+        </p>
+        <p class="fine">
+          An escrow contract on Arc holds your Deposit. Nobody can change its rules, and these terms are fixed for your
+          Deposit once you make it.
+          <a href="{{network.explorerUrl}}/address/{{network.escrow}}" target="_blank" rel="noopener">Read the contract</a>
+        </p>
+      </section>
+
+      <!-- The payment panel: one card per state -->
+      <div class="pay">
+        <section class="card" data-show="loading" aria-live="polite">
+          <div class="waiting">
+            <span class="spinner" aria-hidden="true"></span>
+            <div>
+              <strong>Reading this repo's terms</strong>
+              <p class="muted">From the escrow contract on Arc.</p>
+            </div>
+          </div>
+        </section>
+
+        <section class="card" data-show="bad-link" aria-labelledby="bad-link-title">
+          <div class="result">
+            <div class="big warn"><svg class="icon"><use href="#i-alert"></use></svg></div>
+            <h2 id="bad-link-title">This link is incomplete</h2>
+            <p>Open the deposit page from the Bona Fide check on your PR, or from its comment on your issue.</p>
+          </div>
+        </section>
+
+        <section class="card" data-show="chain-error" aria-labelledby="chain-error-title">
+          <div class="result">
+            <div class="big warn"><svg class="icon"><use href="#i-alert"></use></svg></div>
+            <h2 id="chain-error-title">Can't reach Arc right now</h2>
+            <p>This page couldn't read the Deposit terms. Check your connection, then try again.</p>
+          </div>
+          <button class="btn primary block mt-20" type="button" data-action="reload">Try again</button>
+        </section>
+
+        <section class="card" data-show="not-set-up" aria-labelledby="not-set-up-title">
+          <div class="result">
+            <div class="big info"><svg class="icon"><use href="#i-clock"></use></svg></div>
+            <h2 id="not-set-up-title">Nothing to pay</h2>
+            <p><span data-text="repo"></span> doesn't take Deposits yet.</p>
+          </div>
+          <div class="stack mt-20">
+            <p class="explain"><span data-text="Item"></span> needs no Deposit for now. If it needs one later, its check will ask.</p>
+            <a class="btn secondary block" data-href="item-url"><span>Back to <span data-text="item"></span></span></a>
+          </div>
+        </section>
+
+        <section class="card" data-show="not-live" aria-labelledby="not-live-title">
+          <div class="result">
+            <div class="big info"><svg class="icon"><use href="#i-clock"></use></svg></div>
+            <h2 id="not-live-title">Nothing to pay yet</h2>
+            <p><span data-text="repo"></span> starts taking Deposits on <time data-time="starts-at"></time>, or shortly after.</p>
+          </div>
+          <div class="stack mt-20">
+            <p class="explain">Until then, <span data-text="item"></span> needs no Deposit. If it needs one later, its check will ask.</p>
+            <a class="btn secondary block" data-href="item-url"><span>Back to <span data-text="item"></span></span></a>
+          </div>
+        </section>
+
+        <section class="card" data-show="not-connected" aria-labelledby="pay-title">
+          <h2 id="pay-title">Pay the Deposit</h2>
+          <p class="muted">Pay from any wallet that holds <span data-text="amount"></span> on {{network.name}}.</p>
+          <div class="stack mt-20">
+            <button class="btn primary block" type="button" data-action="connect">
+              <svg class="icon md"><use href="#i-wallet"></use></svg>Connect wallet
+            </button>
+            <p class="hint">
+              <svg class="icon"><use href="#i-eye"></use></svg>
+              <span>Your wallet address becomes public and linked to <span data-text="item"></span>. Use a fresh address if that matters to you.</span>
+            </p>
+          </div>
+          {{#if links.source}}
+          <hr class="divider" />
+          <p class="hint">
+            <svg class="icon"><use href="#i-agent"></use></svg>
+            <span>Working with an AI agent? It can make the Deposit itself. <a href="{{links.source}}/blob/main/agent/README.md">How agents deposit</a></span>
+          </p>
+          {{/if}}
+        </section>
+
+        <section class="card" data-show="wrong-network" aria-labelledby="network-title">
+          <h2 id="network-title">Pay the Deposit</h2>
+          <div class="stack mt-16">
+            {{> wallet-row}}
+            <div class="alert warn">
+              <svg class="icon md"><use href="#i-alert"></use></svg>
+              <div>
+                <strong>Switch to {{network.name}}</strong>
+                <p>Your wallet is on <span data-text="wallet-network"></span>. The Deposit is made on {{network.name}}, where USDC also pays the network fee.</p>
+              </div>
+            </div>
+            <button class="btn primary block" type="button" data-action="switch-network">Switch to {{network.name}}</button>
+            <p class="inline-note" data-text="network-note" data-if="network-note" role="status"></p>
+            <p class="hint">
+              <svg class="icon"><use href="#i-info"></use></svg>
+              <span>If your wallet doesn't know {{network.name}} yet, it asks to add it first.</span>
+            </p>
+          </div>
+        </section>
+
+        <section class="card" data-show="low-balance" aria-labelledby="balance-title">
+          <h2 id="balance-title">Pay the Deposit</h2>
+          <div class="stack mt-16">
+            {{> wallet-row}}
+            <div class="alert warn">
+              <svg class="icon md"><use href="#i-alert"></use></svg>
+              <div>
+                <strong>Not enough USDC</strong>
+                <p>
+                  The Deposit is <span data-text="amount"></span>, and this wallet has <span data-text="balance"></span> on
+                  {{network.name}}. Add at least <span data-text="shortfall"></span>, then check again.
+                </p>
+                {{#if links.getUsdc}}<p><a href="{{links.getUsdc}}" target="_blank" rel="noopener">Get test USDC</a></p>{{/if}}
+              </div>
+            </div>
+            <button class="btn primary block" type="button" disabled><span>Sign and deposit <span data-text="amount"></span></span></button>
+            <button class="btn secondary block" type="button" data-action="check-balance">Check again</button>
+          </div>
+        </section>
+
+        <section class="card" data-show="ready" aria-labelledby="ready-title">
+          <h2 id="ready-title">Pay the Deposit</h2>
+          <div class="stack mt-16">
+            {{> wallet-row}}
+            <p class="explain">
+              You sign one permission: the escrow may take exactly <strong data-text="amount"></strong> from this wallet,
+              once, for <span data-text="item"></span>. It expires after 10 minutes. Bona Fide sends it to the escrow and
+              pays the network fee.
+            </p>
+            <div class="alert warn" data-if="amount-changed">
+              <svg class="icon md"><use href="#i-info"></use></svg>
+              <div>
+                <strong>The Deposit here is now <span data-text="amount"></span></strong>
+                <p>This repo's terms changed before your signature was sent, so nothing was paid. Sign again to pay the new amount.</p>
+              </div>
+            </div>
+            <button class="btn primary block" type="button" data-action="sign"><span>Sign and deposit <span data-text="amount"></span></span></button>
+            <p class="inline-note" data-text="ready-note" data-if="ready-note" role="status"></p>
+            <p class="link-row"><button class="link-button" type="button" data-action="two-step">Pay with two transactions instead</button></p>
+            <p class="hint">
+              <svg class="icon"><use href="#i-refund"></use></svg>
+              <span>Refunds always go back to <span data-text="account-short"></span>, the wallet that pays.</span>
+            </p>
+            <p class="hint">
+              <svg class="icon"><use href="#i-info"></use></svg>
+              <span>A smart wallet that hasn't made a transaction on {{network.name}} yet can't sign this. Pay with two transactions instead.</span>
+            </p>
+          </div>
+        </section>
+
+        <section class="card" data-show="signing submitted unconfirmed" aria-labelledby="progress-title">
+          <h2 id="progress-title">Pay the Deposit</h2>
+          <div class="stack mt-16">
+            <ol class="progress" data-show="signing">
+              <li class="current">Sign</li>
+              <li>Send</li>
+              <li>Confirmed</li>
+            </ol>
+            <ol class="progress" data-show="submitted unconfirmed">
+              <li class="done">Signed</li>
+              <li class="current">Sending</li>
+              <li>Confirmed</li>
+            </ol>
+
+            <div class="waiting" data-show="signing" aria-live="polite">
+              <span class="spinner" aria-hidden="true"></span>
+              <div>
+                <strong>Waiting for your signature</strong>
+                <p class="muted">Check your wallet. It shows a signature request from USDC called ReceiveWithAuthorization.</p>
+              </div>
+            </div>
+            <details open data-show="signing">
+              <summary>What to check in your wallet</summary>
+              <dl class="rows compact mt-8">
+                <div><dt><code>to</code></dt><dd><span data-text="escrow-short"></span><small>The Bona Fide escrow</small></dd></div>
+                <div>
+                  <dt><code>value</code></dt>
+                  <dd><span data-text="value-units"></span><small><span data-text="amount"></span>, counted in millionths</small></dd>
+                </div>
+                <div>
+                  <dt><code>validBefore</code></dt>
+                  <dd><span data-text="valid-before-unix"></span><small><time data-time="valid-before"></time></small></dd>
+                </div>
+              </dl>
+            </details>
+            <button class="btn secondary block" type="button" data-show="signing" data-action="cancel-signing">Cancel</button>
+
+            <div class="waiting" data-show="submitted" aria-live="polite">
+              <span class="spinner" aria-hidden="true"></span>
+              <div>
+                <strong>Sending your Deposit</strong>
+                <p class="muted">Bona Fide is sending it to the escrow on {{network.name}}. This usually takes a few seconds.</p>
+              </div>
+            </div>
+            <div class="waiting" data-show="unconfirmed" aria-live="polite">
+              <span class="spinner" aria-hidden="true" data-if="still-checking"></span>
+              <div>
+                <strong data-if="still-checking">Waiting for {{network.name}} to confirm it</strong>
+                <strong data-if="gave-up">Not confirmed yet</strong>
+                <p class="muted" data-if="still-checking">Your Deposit was sent. Don't sign again: this page checks for it.</p>
+                <p class="muted" data-if="gave-up">
+                  Look at its transaction on the explorer before you try again. If it went through, the check on
+                  <span data-text="item"></span> is already green.
+                </p>
+                <p class="mt-8"><a data-href="tx-url" target="_blank" rel="noopener">View the transaction</a></p>
+              </div>
+            </div>
+            <button class="btn secondary block" type="button" data-show="unconfirmed" data-if="gave-up" data-action="check-deposit">Check again</button>
+            <p class="hint" data-show="submitted unconfirmed">
+              <svg class="icon"><use href="#i-info"></use></svg>
+              <span>You can close this page. The check on <span data-text="item"></span> turns green when the Deposit lands.</span>
+            </p>
+          </div>
+        </section>
+
+        <section class="card" data-show="two-step-approve two-step-deposit" aria-labelledby="two-step-title">
+          <h2 id="two-step-title">Pay with two transactions</h2>
+          <div class="stack mt-16">
+            {{> wallet-row}}
+            <ol class="tx-steps">
+              <li class="current" data-show="two-step-approve">
+                <span class="num">1</span>
+                <div>
+                  <strong>Approve <span data-text="amount"></span></strong><small>Lets the escrow take exactly <span data-text="amount"></span> from this wallet.</small>
+                </div>
+              </li>
+              <li class="done" data-show="two-step-deposit">
+                <span class="num"><svg class="icon"><use href="#i-check"></use></svg></span>
+                <div>
+                  <strong>Approved <span data-text="amount"></span></strong>
+                  <small data-if="approve-tx"><a data-href="approve-tx-url" data-text="approve-tx-short" target="_blank" rel="noopener"></a></small>
+                  <small data-if="approved-before">Already approved</small>
+                </div>
+              </li>
+              <li data-show="two-step-approve">
+                <span class="num">2</span>
+                <div><strong>Deposit <span data-text="amount"></span></strong><small>The escrow takes it and holds it for <span data-text="item"></span>.</small></div>
+              </li>
+              <li class="current" data-show="two-step-deposit">
+                <span class="num">2</span>
+                <div><strong>Deposit <span data-text="amount"></span></strong><small>Confirm the Deposit in your wallet.</small></div>
+              </li>
+            </ol>
+            <button class="btn primary block" type="button" data-show="two-step-approve" data-action="approve" data-busy-label="Waiting for your wallet"><span>Approve <span data-text="amount"></span></span></button>
+            <button class="btn primary block" type="button" data-show="two-step-deposit" data-action="deposit" data-busy-label="Waiting for your wallet"><span>Deposit <span data-text="amount"></span></span></button>
+            <p class="inline-note" data-text="two-step-note" data-if="two-step-note" role="status"></p>
+            <p class="link-row" data-show="two-step-approve" data-if="relay"><button class="link-button" type="button" data-action="one-signature">Pay with one signature instead</button></p>
+            <p class="hint">
+              <svg class="icon"><use href="#i-info"></use></svg>
+              <span>You pay two small network fees in USDC. This works for smart wallets that haven't been used on {{network.name}} yet: the first transaction sets them up.</span>
+            </p>
+          </div>
+        </section>
+
+        <section class="card" data-show="expired" aria-labelledby="expired-title">
+          <h2 id="expired-title">Pay the Deposit</h2>
+          <div class="stack mt-16">
+            {{> wallet-row}}
+            <div class="alert error">
+              <svg class="icon md"><use href="#i-x-circle"></use></svg>
+              <div>
+                <strong>Signature expired</strong>
+                <p>A signature works for 10 minutes, and this one ran out before it was sent. No USDC left your wallet.</p>
+              </div>
+            </div>
+            <button class="btn primary block" type="button" data-action="sign">Sign again</button>
+            <p class="hint">
+              <svg class="icon"><use href="#i-info"></use></svg>
+              <span>Keeps happening? <button class="link-button" type="button" data-action="two-step">Pay with two transactions</button> instead.</span>
+            </p>
+          </div>
+        </section>
+
+        <section class="card" data-show="cant-sign" aria-labelledby="cant-sign-title">
+          <h2 id="cant-sign-title">Pay the Deposit</h2>
+          <div class="stack mt-16">
+            {{> wallet-row}}
+            <div class="alert warn">
+              <svg class="icon md"><use href="#i-alert"></use></svg>
+              <div>
+                <strong>This wallet can't sign the Deposit</strong>
+                <p>
+                  It's a smart wallet that hasn't made a transaction on {{network.name}} yet, and USDC can only check
+                  signatures from wallets that have. No USDC left your wallet.
+                </p>
+              </div>
+            </div>
+            <button class="btn primary block" type="button" data-action="two-step">Pay with two transactions</button>
+            <p class="hint">
+              <svg class="icon"><use href="#i-info"></use></svg>
+              <span>The first transaction sets the wallet up on {{network.name}}.</span>
+            </p>
+          </div>
+        </section>
+
+        <section class="card" data-show="problem" aria-labelledby="problem-title">
+          <h2 id="problem-title">Pay the Deposit</h2>
+          <div class="stack mt-16">
+            {{> wallet-row}}
+            <div class="alert warn">
+              <svg class="icon md"><use href="#i-alert"></use></svg>
+              <div>
+                <strong data-text="problem-title"></strong>
+                <p data-text="problem-body"></p>
+                <p data-if="problem-tx"><a data-href="problem-tx-url" target="_blank" rel="noopener">View the transaction</a></p>
+                <p class="detail" data-text="problem-detail" data-if="problem-detail"></p>
+              </div>
+            </div>
+            <button class="btn primary block" type="button" data-action="retry" data-if="retry" data-text="retry-label"></button>
+            <p class="link-row" data-if="offer-two-step"><button class="link-button" type="button" data-action="two-step">Pay with two transactions instead</button></p>
+            <button class="btn primary block" type="button" data-action="two-step" data-if="two-step-only">Pay with two transactions</button>
+          </div>
+        </section>
+
+        <section class="card" data-show="confirmed" aria-labelledby="confirmed-title">
+          <div class="result" role="status">
+            <div class="big"><svg class="icon"><use href="#i-check"></use></svg></div>
+            <h2 id="confirmed-title">Deposit made</h2>
+            <p><span data-text="deposit-amount"></span> is in escrow for <span data-text="item"></span>.</p>
+          </div>
+          <dl class="rows mt-20">
+            <div><dt>Paid from</dt><dd><a data-href="depositor-url" data-text="depositor-short" target="_blank" rel="noopener"></a></dd></div>
+            <div>
+              <dt>Full refund</dt>
+              <dd>
+                <span data-kind="pr">When it's merged or accepted.</span><span data-kind="issue">When it's accepted.</span>
+                If it isn't, from <time data-time="deadline"></time>.
+              </dd>
+            </div>
+            <div data-if="tx">
+              <dt>Transaction</dt>
+              <dd><a data-href="tx-url" data-text="tx-short" target="_blank" rel="noopener"></a><small>On the {{network.name}} explorer</small></dd>
+            </div>
+          </dl>
+          <div class="stack mt-20">
+            <a class="btn primary block" data-href="item-url"><span>Back to <span data-text="item"></span></span></a>
+            <p class="hint">
+              <svg class="icon"><use href="#i-info"></use></svg>
+              <span>The check updates within seconds. If Bona Fide hasn't refunded it by <time data-time="deadline"></time>, you can send the Refund yourself from this page.</span>
+            </p>
+          </div>
+        </section>
+
+        <section class="card" data-show="already-active" aria-labelledby="active-title">
+          <div class="result">
+            <div class="big info"><svg class="icon"><use href="#i-shield"></use></svg></div>
+            <h2 id="active-title">Already paid</h2>
+            <p><span data-text="Item"></span> already has an active Deposit.</p>
+          </div>
+          <dl class="rows mt-20">
+            <div><dt>Amount</dt><dd data-text="deposit-amount"></dd></div>
+            <div><dt>Paid from</dt><dd><a data-href="depositor-url" data-text="depositor-short" target="_blank" rel="noopener"></a></dd></div>
+            <div>
+              <dt>Full refund</dt>
+              <dd>
+                <span data-kind="pr">When it's merged or accepted.</span><span data-kind="issue">When it's accepted.</span>
+                If it isn't, from <time data-time="deadline"></time>.
+              </dd>
+            </div>
+          </dl>
+          <div class="stack mt-16">
+            <p class="hint" data-if="paid-by-another">
+              <svg class="icon"><use href="#i-info"></use></svg>
+              <span>It was paid from another wallet, not <span data-text="account-short"></span>. Its Refund goes back to the wallet that paid.</span>
+            </p>
+            <p class="hint">
+              <svg class="icon"><use href="#i-info"></use></svg>
+              <span>No other Deposit can be made for <span data-text="item"></span> until this one is refunded or forfeited.</span>
+            </p>
+            <a class="btn secondary block" data-href="item-url"><span>Back to <span data-text="item"></span></span></a>
+          </div>
+        </section>
+
+        <section class="card" data-show="timed-out" aria-labelledby="timed-out-title">
+          <div class="result">
+            <div class="big warn"><svg class="icon"><use href="#i-clock"></use></svg></div>
+            <h2 id="timed-out-title">The Timeout has passed</h2>
+            <p>It ended on <time data-time="deadline"></time>. The Deposit can't be forfeited now, and anyone can refund it in full.</p>
+          </div>
+          <dl class="rows mt-20">
+            <div><dt>Amount</dt><dd data-text="deposit-amount"></dd></div>
+            <div><dt>Paid from</dt><dd><a data-href="depositor-url" data-text="depositor-short" target="_blank" rel="noopener"></a></dd></div>
+          </dl>
+          <div class="stack mt-16">
+            <button class="btn primary block" type="button" data-action="refund" data-busy-label="Waiting for your wallet">
+              <svg class="icon md"><use href="#i-refund"></use></svg><span>Refund <span data-text="deposit-amount"></span> to <span data-text="depositor-short"></span></span></button>
+            <p class="inline-note" data-text="refund-note" data-if="refund-note" role="status"></p>
+            <p class="hint">
+              <svg class="icon"><use href="#i-info"></use></svg>
+              <span>Bona Fide usually sends it within a minute of the Timeout. Anyone can send it, and it always goes to the wallet that paid. You pay the network fee, in USDC.</span>
+            </p>
+          </div>
+        </section>
+
+        <section class="card" data-show="refunded" aria-labelledby="refunded-title">
+          <div class="result" role="status">
+            <div class="big"><svg class="icon"><use href="#i-check"></use></svg></div>
+            <h2 id="refunded-title">Refund sent</h2>
+            <p><span data-text="deposit-amount"></span> went back to <span data-text="depositor-short"></span>.</p>
+          </div>
+          <dl class="rows mt-20">
+            <div>
+              <dt>Transaction</dt>
+              <dd><a data-href="tx-url" data-text="tx-short" target="_blank" rel="noopener"></a><small>On the {{network.name}} explorer</small></dd>
+            </div>
+          </dl>
+          <a class="btn secondary block mt-16" data-href="item-url"><span>Back to <span data-text="item"></span></span></a>
+        </section>
+      </div>
+    </main>
+
+    {{> wallet-picker}}
+
+    <footer class="bf-foot">
+      <span>Bona Fide: refundable good-faith deposits for open source.</span>
+      <a href="{{network.explorerUrl}}/address/{{network.escrow}}" target="_blank" rel="noopener">Escrow contract</a>
+      <a data-href="repo-page" data-if="repo-known">Deposits in <span data-text="repo"></span></a>
+      {{#if links.source}}<a href="{{links.source}}">Source code</a>{{/if}}
+    </footer>
+    {{> scripts}}
+  </body>
+</html>
