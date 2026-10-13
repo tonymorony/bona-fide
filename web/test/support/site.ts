@@ -13,6 +13,7 @@ const TYPES: Record<string, string> = {
   ".js": "text/javascript; charset=utf-8",
   ".css": "text/css; charset=utf-8",
   ".svg": "image/svg+xml",
+  ".woff2": "font/woff2",
 };
 
 /** Answers one of the App's JSON endpoints; null sends the request on. */

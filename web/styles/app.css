@@ -41,111 +41,52 @@ html:not([data-rendered]) [data-if] {
 }
 
 :root {
-  --bg: #f5f6f8;
+  --bg: var(--page);
   --surface: #ffffff;
-  --surface-2: #f1f3f6;
-  --text: #16181d;
-  --text-2: #555d6b;
-  --border: #e2e5ea;
-  --border-strong: #c9ced6;
-  --accent: #2553d8;
-  --accent-hover: #1d46bd;
-  --accent-soft: #edf1fd;
-  --link: #1f4fd1;
-  --ok: #17803d;
-  --ok-soft: #e8f5ed;
-  --ok-border: #b9e0c7;
+  --surface-2: var(--band);
+  --text: #1d1838;
+  --text-2: #5a547a;
+  --border: var(--rule);
+  /* The edge of a control: 3:1 against white and the page. */
+  --border-strong: var(--numeral);
+  --accent: var(--ink);
+  --accent-hover: var(--ink-deep);
+  --accent-soft: var(--paper);
+  --link: var(--ink);
+  --ok: var(--green-deep);
+  --ok-soft: #e4f1ec;
+  --ok-border: #b5d6cb;
   --warn: #8a5a00;
   --warn-soft: #fdf4e3;
   --warn-border: #f0d9a8;
-  --danger: #c4282f;
-  --danger-strong: #c4282f;
-  --danger-soft: #fdeeee;
-  --danger-border: #f3c4c6;
-  --shadow: 0 1px 2px rgba(16, 24, 40, 0.05), 0 4px 12px rgba(16, 24, 40, 0.05);
-  --focus: 0 0 0 3px rgba(37, 83, 216, 0.35);
+  --danger: var(--red-deep);
+  --danger-strong: var(--red);
+  --danger-soft: #fbe9ea;
+  --danger-border: #efc2c6;
+  --shadow: 0 1px 2px rgba(43, 36, 89, 0.05), 0 14px 34px -22px rgba(43, 36, 89, 0.4);
+  --shadow-lift: 0 12px 30px -10px rgba(43, 36, 89, 0.6);
   --radius: 14px;
-  --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
-  color-scheme: light;
-}
-
-@media (prefers-color-scheme: dark) {
-  :root:not([data-theme="light"]) {
-    --bg: #0f1115;
-    --surface: #171a21;
-    --surface-2: #1e222b;
-    --text: #e9ebef;
-    --text-2: #a9b0bd;
-    --border: #2a2f3a;
-    --border-strong: #3c4350;
-    --accent: #3d66e6;
-    --accent-hover: #365ed6;
-    --accent-soft: #1a2442;
-    --link: #8fadff;
-    --ok: #4cc07a;
-    --ok-soft: #13291d;
-    --ok-border: #1f4a31;
-    --warn: #e5a93d;
-    --warn-soft: #2b2212;
-    --warn-border: #5a4214;
-    --danger: #f27a7e;
-    --danger-strong: #d13a41;
-    --danger-soft: #331819;
-    --danger-border: #6a2a2d;
-    --shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
-    --focus: 0 0 0 3px rgba(143, 173, 255, 0.4);
-    color-scheme: dark;
-  }
-}
-
-:root[data-theme="dark"] {
-  --bg: #0f1115;
-  --surface: #171a21;
-  --surface-2: #1e222b;
-  --text: #e9ebef;
-  --text-2: #a9b0bd;
-  --border: #2a2f3a;
-  --border-strong: #3c4350;
-  --accent: #3d66e6;
-  --accent-hover: #365ed6;
-  --accent-soft: #1a2442;
-  --link: #8fadff;
-  --ok: #4cc07a;
-  --ok-soft: #13291d;
-  --ok-border: #1f4a31;
-  --warn: #e5a93d;
-  --warn-soft: #2b2212;
-  --warn-border: #5a4214;
-  --danger: #f27a7e;
-  --danger-strong: #d13a41;
-  --danger-soft: #331819;
-  --danger-border: #6a2a2d;
-  --shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
-  --focus: 0 0 0 3px rgba(143, 173, 255, 0.4);
-  color-scheme: dark;
+  --mono: var(--font-mono);
 }
 
 body {
   background: var(--bg);
   color: var(--text);
-  font:
-    15px/1.55 -apple-system,
-    BlinkMacSystemFont,
-    "Segoe UI",
-    Roboto,
-    "Helvetica Neue",
-    Arial,
-    sans-serif;
+  font: 16px/1.55 var(--font-body);
   -webkit-font-smoothing: antialiased;
+  overflow-wrap: break-word;
 }
 
+/* Links are the ink of the text, so the underline marks them. */
 a {
   color: var(--link);
-  text-decoration: none;
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 3px;
 }
 
-a:hover {
-  text-decoration: underline;
+a[href]:hover {
+  color: var(--red-deep);
 }
 
 a:focus-visible,
@@ -153,15 +94,15 @@ button:focus-visible,
 summary:focus-visible,
 input:focus-visible,
 select:focus-visible {
-  outline: none;
+  outline: 3px solid var(--ink);
+  outline-offset: 2px;
   border-radius: 6px;
-  box-shadow: var(--focus);
 }
 
 code,
 .mono {
   font-family: var(--mono);
-  font-size: 0.88em;
+  font-size: 0.86em;
 }
 
 code {
@@ -190,7 +131,7 @@ h1,
 h2,
 h3 {
   margin: 0;
-  letter-spacing: -0.01em;
+  text-wrap: balance;
 }
 
 p {
@@ -205,8 +146,19 @@ p {
   justify-content: space-between;
   gap: 12px;
   max-width: 1080px;
+  height: 64px;
   margin: 0 auto;
-  padding: 18px 24px;
+  padding: 0 24px;
+}
+
+/* The bar's rule runs the width of the window, as on the landing page. */
+.bf-top::after {
+  position: absolute;
+  top: 64px;
+  left: 0;
+  width: 100%;
+  border-top: 1px solid var(--border);
+  content: "";
 }
 
 .pill {
@@ -215,10 +167,11 @@ p {
   gap: 8px;
   height: 34px;
   padding: 0 12px;
-  border: 1px solid var(--border);
+  border: 1px solid var(--rule-2);
   border-radius: 999px;
   background: var(--surface);
-  font-size: 13px;
+  font-family: var(--mono);
+  font-size: 12px;
   font-weight: 500;
   white-space: nowrap;
 }
@@ -240,7 +193,7 @@ p {
 .page {
   max-width: 1080px;
   margin: 0 auto;
-  padding: 8px 24px 64px;
+  padding: 36px 24px 72px;
 }
 
 .page.narrow {
@@ -249,37 +202,45 @@ p {
 
 .checkout {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 420px;
-  gap: 48px;
+  grid-template-columns: minmax(0, 1fr) 400px;
+  gap: 40px;
   align-items: start;
 }
 
+/* Repo and item names keep their case, so labels that carry them aren't set in capitals. */
 .eyebrow {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 8px;
-  margin-bottom: 10px;
+  margin-bottom: 12px;
   color: var(--text-2);
-  font-size: 14px;
-  font-weight: 500;
+  font-family: var(--mono);
+  font-size: 13px;
+  letter-spacing: 0.02em;
 }
 
 h1 {
-  font-size: 30px;
-  font-weight: 650;
-  line-height: 1.2;
-  letter-spacing: -0.02em;
+  font-family: var(--font-display);
+  font-size: clamp(40px, 5.4vw, 64px);
+  font-weight: 900;
+  line-height: 0.9;
+  text-transform: uppercase;
+  overflow-wrap: break-word;
 }
 
 .lede {
-  margin-top: 8px;
+  max-width: 62ch;
+  margin-top: 14px;
   color: var(--text-2);
-  font-size: 16px;
+  font-size: 17px;
 }
 
 .item-line {
-  margin-top: 6px;
+  margin-top: 10px;
   color: var(--text-2);
+  font-family: var(--mono);
+  font-size: 13px;
 }
 
 .item-line strong {
@@ -288,26 +249,31 @@ h1 {
 }
 
 .amount {
-  margin: 20px 0 24px;
-  font-size: 48px;
-  font-weight: 650;
-  line-height: 1;
-  letter-spacing: -0.03em;
+  margin: 22px 0 24px;
+  color: var(--ink);
+  font-family: var(--font-display);
+  font-size: 104px;
+  font-weight: 900;
+  line-height: 0.85;
   font-variant-numeric: tabular-nums;
 }
 
 .amount .unit {
-  margin-left: 6px;
-  color: var(--text-2);
-  font-size: 22px;
-  font-weight: 600;
-  letter-spacing: 0;
+  margin-left: 12px;
+  color: var(--green-deep);
+  font-size: 28px;
+  font-weight: 700;
+  letter-spacing: 0.16em;
 }
 
 .section-title {
   margin: 0 0 10px;
-  font-size: 15px;
-  font-weight: 650;
+  color: var(--text-2);
+  font-family: var(--mono);
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
 }
 
 /* The rules: what happens to a Deposit */
@@ -315,10 +281,7 @@ h1 {
 .outcomes {
   margin: 0;
   padding: 0;
-  overflow: hidden;
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  background: var(--surface);
+  border-top: 2px solid var(--ink);
   list-style: none;
 }
 
@@ -327,11 +290,12 @@ h1 {
   grid-template-columns: 32px minmax(0, 1fr) auto;
   gap: 14px;
   align-items: start;
-  padding: 16px 18px;
+  padding: 16px 0;
+  border-bottom: 1px solid var(--rule-2);
 }
 
-.outcomes li + li {
-  border-top: 1px solid var(--border);
+.outcomes li:last-child {
+  border-bottom: 2px solid var(--ink);
 }
 
 .outcomes .when {
@@ -345,48 +309,57 @@ h1 {
 }
 
 .outcomes .back {
-  padding-top: 5px;
-  font-weight: 600;
+  color: var(--ink);
+  font-family: var(--font-display);
+  font-size: 32px;
+  font-weight: 900;
+  line-height: 1;
   text-align: right;
+  text-transform: uppercase;
   white-space: nowrap;
   font-variant-numeric: tabular-nums;
 }
 
-.outcomes .back small {
-  display: block;
-  color: var(--text-2);
-  font-size: 12px;
-  font-weight: 500;
+/* What comes back after a Forfeit, in the red the landing page gives it. */
+.outcomes .ico.accent ~ .back {
+  color: var(--red-deep);
 }
 
+.outcomes .back small {
+  display: block;
+  margin-top: 4px;
+  color: var(--text-2);
+  font-family: var(--mono);
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.06em;
+}
+
+/* A ringed stamp around each icon. */
 .ico {
   display: grid;
   width: 32px;
   height: 32px;
   flex: none;
   place-items: center;
+  border: 1.5px solid currentColor;
   border-radius: 50%;
-  background: var(--surface-2);
   color: var(--text-2);
 }
 
 .ico.ok {
-  background: var(--ok-soft);
   color: var(--ok);
 }
 
 .ico.accent {
-  background: var(--accent-soft);
-  color: var(--link);
+  color: var(--ink);
 }
 
 .ico.warn {
-  background: var(--warn-soft);
   color: var(--warn);
 }
 
 .ico.danger {
-  background: var(--danger-soft);
   color: var(--danger);
 }
 
@@ -394,16 +367,17 @@ h1 {
   display: flex;
   gap: 12px;
   align-items: flex-start;
-  margin-top: 14px;
-  padding: 14px 16px;
+  margin-top: 18px;
+  padding: 16px 18px;
   border-radius: 12px;
-  background: var(--accent-soft);
-  font-weight: 500;
+  background: var(--ink);
+  color: var(--on-ink);
+  font-weight: 600;
 }
 
 .promise .icon {
   margin-top: 3px;
-  color: var(--link);
+  color: var(--mint);
 }
 
 .fine {
@@ -419,8 +393,8 @@ h1 {
 /* Cards and panels */
 
 .card {
-  padding: 24px;
-  border: 1px solid var(--border);
+  padding: 26px;
+  border: 1px solid var(--rule-2);
   border-radius: 16px;
   background: var(--surface);
   box-shadow: var(--shadow);
@@ -431,13 +405,17 @@ h1 {
 }
 
 .card h2 {
-  font-size: 18px;
-  font-weight: 650;
+  font-family: var(--font-display);
+  font-size: 28px;
+  font-weight: 800;
+  letter-spacing: 0.01em;
+  line-height: 1;
+  text-transform: uppercase;
 }
 
 .card h2 + p,
 .card h2 + .muted {
-  margin-top: 4px;
+  margin-top: 8px;
 }
 
 .muted {
@@ -457,11 +435,11 @@ h1 {
   gap: 8px;
   align-items: flex-start;
   color: var(--text-2);
-  font-size: 13px;
+  font-size: 13.5px;
 }
 
 .hint .icon {
-  margin-top: 2px;
+  margin-top: 3px;
 }
 
 .divider {
@@ -477,16 +455,18 @@ h1 {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 8px;
-  min-height: 48px;
-  padding: 0 20px;
-  border: 1px solid transparent;
-  border-radius: 11px;
-  font: inherit;
-  font-size: 15px;
-  font-weight: 600;
+  gap: 10px;
+  min-height: 50px;
+  padding: 0 22px;
+  border: 0;
+  border-radius: 10px;
+  font: 600 16px/1.2 var(--font-body);
   text-align: center;
+  text-decoration: none;
   cursor: pointer;
+  transition:
+    box-shadow 0.2s ease,
+    transform 0.2s ease;
 }
 
 .btn:hover {
@@ -498,37 +478,50 @@ h1 {
   width: 100%;
 }
 
-.btn.primary {
+.btn.primary,
+a.btn.primary:hover {
   background: var(--accent);
-  color: #ffffff;
+  color: var(--on-ink);
 }
 
-.btn.primary:hover {
-  background: var(--accent-hover);
+.btn.primary:not([disabled], [aria-disabled="true"]):hover {
+  box-shadow: var(--shadow-lift);
+  transform: translateY(-1px);
 }
 
-.btn.secondary {
-  border-color: var(--border-strong);
+.btn.secondary,
+a.btn.secondary:hover {
   background: var(--surface);
-  color: var(--text);
+  color: var(--ink);
+  box-shadow: inset 0 0 0 1.5px var(--ink);
 }
 
-.btn.ghost {
-  min-height: 40px;
+.btn.secondary:not([disabled], [aria-disabled="true"]):hover {
+  background: var(--surface-2);
+}
+
+.btn.ghost,
+a.btn.ghost:hover {
+  min-height: 44px;
   background: transparent;
-  color: var(--link);
+  color: var(--ink);
 }
 
-.btn.danger {
+.btn.ghost:hover {
+  background: var(--surface-2);
+}
+
+.btn.danger,
+a.btn.danger:hover {
   background: var(--danger-strong);
   color: #ffffff;
 }
 
 .btn.small {
-  min-height: 34px;
-  padding: 0 12px;
+  min-height: 36px;
+  padding: 0 14px;
   border-radius: 9px;
-  font-size: 13px;
+  font-size: 14px;
 }
 
 .btn[disabled],
@@ -543,7 +536,15 @@ h1 {
   background: none;
   color: var(--link);
   font: inherit;
+  font-weight: 600;
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 3px;
   cursor: pointer;
+}
+
+.link-button:hover {
+  color: var(--red-deep);
 }
 
 /* Connected wallet */
@@ -558,16 +559,18 @@ h1 {
   background: var(--surface-2);
 }
 
+/* The certificate's holographic thread, as the wallet's badge. */
 .wallet .avatar {
   width: 32px;
   height: 32px;
   flex: none;
   border-radius: 50%;
-  background: conic-gradient(from 40deg, #f2994a, #9b51e0, #2d9cdb, #27ae60, #f2994a);
+  background: conic-gradient(from 40deg, #ff9ad5, #9ad0ff, #a8ffcf, #fff59a, #ffb38a, #ff9ad5);
+  box-shadow: inset 0 0 0 1.5px var(--ink);
 }
 
 .wallet .avatar.other {
-  background: conic-gradient(from 200deg, #eb5757, #f2c94c, #56ccf2, #bb6bd9, #eb5757);
+  background: conic-gradient(from 200deg, #ffb38a, #fff59a, #9ad0ff, #ff9ad5, #ffb38a);
 }
 
 .wallet .who {
@@ -575,6 +578,8 @@ h1 {
 }
 
 .wallet .addr {
+  font-family: var(--mono);
+  font-size: 14px;
   font-weight: 600;
   font-variant-numeric: tabular-nums;
 }
@@ -589,37 +594,38 @@ h1 {
   text-align: right;
 }
 
+/* Statuses are stamps: an outline in the status's ink, set in the mono face. */
 .tag {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  padding: 2px 9px;
+  padding: 3px 10px;
+  border: 1.5px solid currentColor;
   border-radius: 999px;
-  background: var(--ok-soft);
   color: var(--ok);
-  font-size: 12px;
-  font-weight: 600;
+  font-family: var(--mono);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  line-height: 1.4;
+  text-transform: uppercase;
   white-space: nowrap;
 }
 
 .tag.warn {
-  background: var(--warn-soft);
   color: var(--warn);
 }
 
 .tag.danger {
-  background: var(--danger-soft);
   color: var(--danger);
 }
 
 .tag.neutral {
-  background: var(--surface-2);
   color: var(--text-2);
 }
 
 .tag.accent {
-  background: var(--accent-soft);
-  color: var(--link);
+  color: var(--ink);
 }
 
 /* Payment choices */
@@ -644,15 +650,17 @@ h1 {
   grid-template-columns: 20px minmax(0, 1fr);
   gap: 12px;
   padding: 14px;
-  border: 1px solid var(--border);
+  border: 1px solid var(--rule-2);
   border-radius: 12px;
   background: var(--surface);
   color: inherit;
+  text-decoration: none;
   cursor: pointer;
 }
 
 .choice:hover {
   border-color: var(--border-strong);
+  color: inherit;
   text-decoration: none;
 }
 
@@ -689,11 +697,14 @@ h1 {
   display: inline-block;
   margin-left: 6px;
   padding: 1px 8px;
+  border: 1.5px solid currentColor;
   border-radius: 999px;
-  background: var(--accent-soft);
-  color: var(--link);
-  font-size: 12px;
-  font-weight: 600;
+  color: var(--green-deep);
+  font-family: var(--mono);
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
   vertical-align: 1px;
 }
 
@@ -701,7 +712,7 @@ h1 {
   padding: 14px 16px;
   border-radius: 12px;
   background: var(--surface-2);
-  font-size: 14px;
+  font-size: 14.5px;
 }
 
 /* Alerts */
@@ -765,7 +776,10 @@ h1 {
   margin: 0;
   padding: 0;
   list-style: none;
-  font-size: 13px;
+  font-family: var(--mono);
+  font-size: 12px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
 }
 
 .progress li {
@@ -789,7 +803,7 @@ h1 {
 
 .progress li.current {
   color: var(--text);
-  font-weight: 600;
+  font-weight: 700;
 }
 
 .progress li.current::before {
@@ -872,6 +886,11 @@ h1 {
   color: var(--link);
 }
 
+.tx-steps .num,
+.setup-steps li .num {
+  font-family: var(--mono);
+}
+
 .tx-steps li.done .num {
   border-color: var(--ok);
   background: var(--ok);
@@ -908,7 +927,21 @@ h1 {
 }
 
 .rows dt {
+  padding-top: 3px;
   color: var(--text-2);
+  font-family: var(--mono);
+  font-size: 11.5px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+/* A field's name, such as validBefore, keeps its case. */
+.rows dt code {
+  padding: 0;
+  background: none;
+  font-size: 12.5px;
+  letter-spacing: 0;
+  text-transform: none;
 }
 
 .rows dd {
@@ -938,18 +971,22 @@ h1 {
 
 .result .big {
   display: grid;
-  width: 56px;
-  height: 56px;
-  margin: 4px auto 14px;
+  width: 64px;
+  height: 64px;
+  margin: 4px auto 16px;
   place-items: center;
+  border: 2px solid currentColor;
   border-radius: 50%;
   background: var(--ok-soft);
   color: var(--ok);
+  box-shadow:
+    0 0 0 4px var(--surface),
+    0 0 0 5px var(--rule-2);
 }
 
 .result .big.info {
-  background: var(--accent-soft);
-  color: var(--link);
+  background: var(--seal-bg);
+  color: var(--ink);
 }
 
 .result .big.warn {
@@ -958,16 +995,16 @@ h1 {
 }
 
 .result .big svg {
-  width: 26px;
-  height: 26px;
+  width: 28px;
+  height: 28px;
 }
 
 .result h2 {
-  font-size: 22px;
+  font-size: 34px;
 }
 
 .result p {
-  margin-top: 6px;
+  margin-top: 8px;
   color: var(--text-2);
 }
 
@@ -980,7 +1017,7 @@ h1 {
   display: grid;
   place-items: center;
   padding: 16px;
-  background: rgba(15, 17, 21, 0.5);
+  background: rgba(29, 24, 56, 0.55);
 }
 
 .dialog {
@@ -988,12 +1025,16 @@ h1 {
   padding: 22px;
   border-radius: 18px;
   background: var(--surface);
-  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.3);
+  box-shadow: 0 30px 70px -20px rgba(29, 24, 56, 0.6);
 }
 
 .dialog h2 {
-  margin-bottom: 14px;
-  font-size: 18px;
+  margin-bottom: 16px;
+  font-family: var(--font-display);
+  font-size: 28px;
+  font-weight: 800;
+  line-height: 1;
+  text-transform: uppercase;
 }
 
 .wallet-option {
@@ -1002,7 +1043,7 @@ h1 {
   align-items: center;
   width: 100%;
   padding: 14px;
-  border: 1px solid var(--border);
+  border: 1px solid var(--rule-2);
   border-radius: 12px;
   background: var(--surface);
   color: inherit;
@@ -1034,13 +1075,15 @@ h1 {
 .bf-foot {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px 20px;
+  gap: 8px 22px;
   max-width: 1080px;
   margin: 0 auto;
-  padding: 20px 24px 32px;
+  padding: 22px 24px 36px;
   border-top: 1px solid var(--border);
   color: var(--text-2);
-  font-size: 13px;
+  font-family: var(--mono);
+  font-size: 12px;
+  line-height: 1.6;
 }
 
 .page.narrow + .bf-foot {
@@ -1049,8 +1092,6 @@ h1 {
 
 .bf-foot a {
   color: var(--text-2);
-  text-decoration: underline;
-  text-underline-offset: 0.2em;
 }
 
 /* Setup steps */
@@ -1113,12 +1154,12 @@ pre.typed {
   overflow: auto;
   border-radius: 10px;
   background: var(--surface-2);
-  font: 12.5px/1.5 var(--mono);
+  font: 12.5px/1.6 var(--mono);
 }
 
 details summary {
   color: var(--link);
-  font-weight: 500;
+  font-weight: 600;
   cursor: pointer;
 }
 
@@ -1138,22 +1179,29 @@ details summary {
 .term span {
   display: block;
   color: var(--text-2);
-  font-size: 13px;
+  font-family: var(--mono);
+  font-size: 11.5px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
 }
 
 .term strong {
   display: block;
-  margin-top: 2px;
-  font-size: 20px;
-  font-weight: 650;
+  margin-top: 6px;
+  color: var(--ink);
+  font-family: var(--font-display);
+  font-size: 36px;
+  font-weight: 900;
+  line-height: 1;
+  text-transform: uppercase;
   font-variant-numeric: tabular-nums;
 }
 
 .term small {
   display: block;
-  margin-top: 2px;
+  margin-top: 6px;
   color: var(--text-2);
-  font-size: 12px;
+  font-size: 12.5px;
 }
 
 .callout {
@@ -1162,7 +1210,7 @@ details summary {
   align-items: flex-start;
   margin-top: 16px;
   padding: 16px 18px;
-  border: 1px solid var(--border);
+  border: 1px solid var(--rule-2);
   border-radius: 14px;
   background: var(--surface);
 }
@@ -1181,19 +1229,20 @@ details summary {
 
 .split {
   display: flex;
+  gap: 2px;
   height: 14px;
   margin: 16px 0 14px;
   overflow: hidden;
   border-radius: 999px;
-  background: var(--surface-2);
+  background: var(--surface);
 }
 
 .split .to-fund {
-  background: var(--accent);
+  background: var(--red);
 }
 
 .split .to-depositor {
-  background: var(--border-strong);
+  background: var(--ink);
 }
 
 .legend {
@@ -1219,11 +1268,11 @@ details summary {
 }
 
 .swatch.fund {
-  background: var(--accent);
+  background: var(--red);
 }
 
 .swatch.depositor {
-  background: var(--border-strong);
+  background: var(--ink);
 }
 
 .confirm {
@@ -1231,7 +1280,7 @@ details summary {
   gap: 12px;
   align-items: flex-start;
   padding: 14px 16px;
-  border: 1px solid var(--border);
+  border: 1px solid var(--border-strong);
   border-radius: 12px;
   background: var(--surface);
   cursor: pointer;
@@ -1259,14 +1308,20 @@ details summary {
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  padding: 6px 12px;
-  border: 1px solid var(--ok-border);
+  padding: 6px 14px;
+  border: 1.8px solid currentColor;
   border-radius: 999px;
-  background: var(--ok-soft);
   color: var(--ok);
-  font-size: 13px;
-  font-weight: 600;
+  font-family: var(--mono);
+  font-size: 11.5px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
   white-space: nowrap;
+}
+
+.status .dot {
+  background: currentColor;
 }
 
 .two-col {
@@ -1288,17 +1343,22 @@ details summary {
 }
 
 .stat .n {
-  font-size: 28px;
-  font-weight: 650;
-  line-height: 1.1;
-  letter-spacing: -0.02em;
+  color: var(--ink);
+  font-family: var(--font-display);
+  font-size: 48px;
+  font-weight: 900;
+  line-height: 0.95;
+  text-transform: uppercase;
   font-variant-numeric: tabular-nums;
 }
 
 .stat .l {
-  margin-top: 4px;
+  margin-top: 6px;
   color: var(--text-2);
-  font-size: 13px;
+  font-family: var(--mono);
+  font-size: 11.5px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
 }
 
 .stat.wide {
@@ -1324,11 +1384,14 @@ details summary {
 
 .table th {
   padding: 10px 12px;
-  border-bottom: 1px solid var(--border);
+  border-bottom: 2px solid var(--ink);
   color: var(--text-2);
-  font-size: 13px;
+  font-family: var(--mono);
+  font-size: 11px;
   font-weight: 500;
+  letter-spacing: 0.08em;
   text-align: left;
+  text-transform: uppercase;
   white-space: nowrap;
 }
 
@@ -1375,25 +1438,33 @@ details summary {
   align-items: start;
 }
 
+/* What waits for Protocol Guild, on the certificate's paper. */
 .balance {
-  padding: 18px;
+  padding: 20px;
   border-radius: 14px;
-  background: var(--surface-2);
+  background: linear-gradient(135deg, var(--paper), var(--paper-2) 55%, var(--paper-3));
+  box-shadow: inset 0 0 0 1px var(--rule-2);
 }
 
 .balance > span {
   display: block;
   color: var(--text-2);
-  font-size: 13px;
+  font-family: var(--mono);
+  font-size: 11.5px;
   font-weight: 500;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
 }
 
 .balance strong {
   display: block;
-  margin: 2px 0 2px;
-  font-size: 34px;
-  font-weight: 650;
-  letter-spacing: -0.02em;
+  margin: 6px 0 4px;
+  color: var(--ink);
+  font-family: var(--font-display);
+  font-size: 56px;
+  font-weight: 900;
+  line-height: 0.95;
+  text-transform: uppercase;
   font-variant-numeric: tabular-nums;
 }
 
@@ -1439,11 +1510,20 @@ details summary {
 
 @media (max-width: 860px) {
   .bf-top {
-    padding: 14px 16px;
+    padding: 0 16px;
+  }
+
+  .bf-brand {
+    font-size: 21px;
+  }
+
+  .bf-brand .mark svg {
+    width: 34px;
+    height: 34px;
   }
 
   .page {
-    padding: 4px 16px 48px;
+    padding: 24px 16px 56px;
   }
 
   .checkout {
@@ -1472,33 +1552,37 @@ details summary {
     order: -1;
   }
 
-  h1 {
-    font-size: 25px;
+  .amount {
+    margin: 18px 0 20px;
+    font-size: 84px;
   }
 
-  .amount {
-    margin: 16px 0 20px;
-    font-size: 40px;
+  .amount .unit {
+    font-size: 24px;
   }
 
   .card {
     padding: 20px;
   }
 
+  .card h2 {
+    font-size: 26px;
+  }
+
   .outcomes li {
     grid-template-columns: 32px minmax(0, 1fr);
-    padding: 14px;
+    padding: 14px 0;
   }
 
   .outcomes .back {
     grid-column: 2;
-    padding-top: 0;
+    font-size: 28px;
     text-align: left;
   }
 
   .outcomes .back small {
     display: inline;
-    margin-left: 4px;
+    margin-left: 6px;
   }
 
   .rows > div,
@@ -1561,12 +1645,20 @@ details summary {
   .table td[data-label]::before {
     content: attr(data-label) ": ";
     color: var(--text-2);
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    font-family: var(--font-body);
     font-size: 14px;
   }
 
   .bf-foot {
     padding: 20px 16px 28px;
+  }
+
+  .stat .n {
+    font-size: 40px;
+  }
+
+  .balance strong {
+    font-size: 46px;
   }
 
   .hide-phone {
@@ -1617,7 +1709,103 @@ details summary {
   min-width: 0;
 }
 
-/* The deposit page */
+/* The deposit page: the terms are the certificate being issued. Its paper, frame, waves and seal are
+   the landing page's; the text and the stamps are the page's own. */
+
+.cert {
+  position: relative;
+  overflow: hidden;
+  padding: 46px 42px 38px 50px;
+  border-radius: 18px;
+  background: linear-gradient(135deg, var(--paper), var(--paper-2) 55%, var(--paper-3));
+  box-shadow:
+    0 40px 70px -46px rgba(43, 36, 89, 0.6),
+    0 0 0 1px var(--rule-2);
+}
+
+.cert::before {
+  position: absolute;
+  inset: 0;
+  background: url("../landing/brand/guilloche-waves.svg") center / cover no-repeat;
+  opacity: 0.4;
+  content: "";
+  pointer-events: none;
+}
+
+.cert-frame {
+  position: absolute;
+  inset: 14px 14px 14px 24px;
+  border: 1.5px solid var(--ink);
+  pointer-events: none;
+}
+
+.cert-frame::after {
+  position: absolute;
+  inset: 5px;
+  border: 0.6px solid var(--ink);
+  content: "";
+}
+
+/* The holographic thread down the certificate's edge. */
+.cert-holo {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: 10px;
+  pointer-events: none;
+}
+
+.cert-holo::before,
+.cert-holo::after {
+  position: absolute;
+  inset: 0;
+  content: "";
+}
+
+.cert-holo::before {
+  background: linear-gradient(180deg, #ff9ad5, #9ad0ff, #a8ffcf, #fff59a, #ffb38a, #ff9ad5);
+  opacity: 0.85;
+  animation: holo 6s linear infinite;
+}
+
+.cert-holo::after {
+  background: repeating-linear-gradient(0deg, rgba(255, 255, 255, 0.35) 0 3px, transparent 3px 9px);
+}
+
+@keyframes holo {
+  to {
+    filter: hue-rotate(360deg);
+  }
+}
+
+.cert-seal {
+  position: absolute;
+  top: 34px;
+  right: 34px;
+  width: 132px;
+  aspect-ratio: 1;
+  background:
+    url("../landing/brand/guilloche-rosette.svg") center / contain no-repeat,
+    radial-gradient(circle, var(--seal-bg) 0 60%, transparent 61%);
+  opacity: 0.9;
+  pointer-events: none;
+}
+
+.cert > :where(:not(.cert-frame, .cert-holo, .cert-seal)) {
+  position: relative;
+}
+
+/* The title keeps clear of the seal. */
+.cert h1 {
+  max-width: calc(100% - 150px);
+  color: var(--ink);
+  font-size: clamp(40px, 4.6vw, 58px);
+}
+
+.cert .fine {
+  color: var(--text-2);
+}
 
 .item-line a {
   font-weight: 600;
@@ -1625,6 +1813,7 @@ details summary {
 
 .terms-start {
   margin: -8px 0 20px;
+  white-space: normal;
 }
 
 .stack > .choices + *,
@@ -1648,6 +1837,50 @@ details summary {
   color: var(--text-2);
   font-size: 13px;
   overflow-wrap: anywhere;
+}
+
+@media (max-width: 860px) {
+  .cert {
+    padding: 38px 28px 30px 38px;
+  }
+
+  .cert-seal {
+    top: 28px;
+    right: 26px;
+    width: 96px;
+  }
+
+  .cert h1 {
+    max-width: calc(100% - 110px);
+  }
+}
+
+/* On a phone the seal is small, so the title's longest word stays whole beside it. */
+@media (max-width: 480px) {
+  .cert-seal {
+    width: 64px;
+  }
+
+  .cert h1 {
+    max-width: calc(100% - 72px);
+    font-size: 38px;
+  }
+}
+
+/* Motion stops when asked: the thread's shimmer and the buttons' lift. The spinner keeps turning,
+   since it is the only sign that something is still in progress. */
+@media (prefers-reduced-motion: reduce) {
+  .cert-holo::before {
+    animation: none;
+  }
+
+  .btn {
+    transition: none;
+  }
+
+  .btn.primary:hover {
+    transform: none;
+  }
 }
 
 /* The wallet picker */
@@ -1700,7 +1933,7 @@ pre.example {
   overflow: auto;
   border-radius: 10px;
   background: var(--surface-2);
-  font: 12.5px/1.5 var(--mono);
+  font: 12.5px/1.6 var(--mono);
 }
 
 /* The repo page's table */
@@ -1779,6 +2012,17 @@ pre.example {
   margin-top: 8px;
 }
 
+/* A fact's label can name a file, such as VOUCHED.td, so it keeps its case. */
+.decision-facts.rows > div {
+  grid-template-columns: 210px minmax(0, 1fr);
+}
+
+.decision-facts dt {
+  font-size: 12px;
+  letter-spacing: 0.02em;
+  text-transform: none;
+}
+
 .decision-facts dd {
   overflow-wrap: anywhere;
 }
@@ -1804,19 +2048,25 @@ pre.example {
 }
 
 @media (max-width: 860px) {
+  .decision-facts.rows > div {
+    grid-template-columns: 1fr;
+  }
+
   .noscript {
     margin: 16px;
   }
 }
 
 .status.pending {
-  border-color: var(--warn-border);
-  background: var(--warn-soft);
   color: var(--warn);
 }
 
+/* A repo's name is a link that reads as the heading, in its own case. */
 h1 a.plain {
   color: inherit;
+  text-decoration: none;
+  text-transform: none;
+  overflow-wrap: anywhere;
 }
 
 /* The Bounty page's forms */
@@ -1855,7 +2105,7 @@ h1 a.plain {
   min-width: 0;
   min-height: 44px;
   padding: 0 12px;
-  border: 1px solid var(--border-strong);
+  border: 1.5px solid var(--border-strong);
   border-radius: 10px;
   background: var(--surface);
   color: var(--text);
@@ -1880,5 +2130,4 @@ h1 a.plain {
 /* Headings the page moves focus to, for screen readers, show no focus ring. */
 [tabindex="-1"]:focus {
   outline: none;
-  box-shadow: none;
 }

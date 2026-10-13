@@ -5,7 +5,8 @@ import { expect, test } from "vitest";
 import { buildPages } from "../build.ts";
 import { mainnet, testnet } from "../networks.ts";
 
-async function built(network = testnet, landing = true) {
+// The landing page shows mainnet, so a build that copies it is a mainnet build.
+async function built(network = mainnet, landing = true) {
   const outDir = await mkdtemp(join(tmpdir(), "bona-fide-pages-"));
   const files = await buildPages({ network, outDir, landing });
   return { outDir, files, page: (name: string) => readFile(join(outDir, name), "utf8") };
@@ -24,13 +25,58 @@ test("the build writes the five pages as plain files, with the landing page at t
     expect.arrayContaining(["deposit.html", "verdict.html", "setup.html", "repo.html", "bounties.html", "index.html"]),
   );
   expect(files.filter((file) => file.startsWith("assets/") && file.endsWith(".css"))).toHaveLength(1);
-  expect(files.filter((file) => file.startsWith("assets/") && file.endsWith(".svg"))).toHaveLength(1);
+}, 60_000);
+
+test("the stylesheet's fonts and drawings are copied into the build, with the fonts' licence", async () => {
+  const { outDir, files } = await built(mainnet, false);
+  const assets = files.filter((file) => file.startsWith("assets/"));
+  const css = await readFile(
+    join(
+      outDir,
+      assets.find((file) => file.endsWith(".css"))!,
+    ),
+    "utf8",
+  );
+
+  for (const name of ["big-shoulders-display", "hanken-grotesk", "azeret-mono"]) {
+    const font = assets.find((file) => new RegExp(`^assets/${name}-[0-9a-f]{10}\\.woff2$`).test(file));
+    expect(font, name).toBeDefined();
+    expect(css).toContain(`url("${font!.slice("assets/".length)}")`);
+    expect(await readFile(join(outDir, font!))).toEqual(
+      await readFile(join(import.meta.dirname, "../landing/fonts", `${name}.woff2`)),
+    );
+  }
+  for (const name of ["guilloche-waves", "guilloche-rosette"]) {
+    const drawing = assets.find((file) => new RegExp(`^assets/${name}-[0-9a-f]{10}\\.svg$`).test(file));
+    expect(drawing, name).toBeDefined();
+    expect(css).toContain(`url("${drawing!.slice("assets/".length)}")`);
+  }
+  expect(await readFile(join(outDir, "assets/OFL.txt"), "utf8")).toContain("SIL OPEN FONT LICENSE");
+  // Every file the stylesheet names is in the build: nothing points outside assets/.
+  for (const [, url] of css.matchAll(/url\("([^"]+)"\)/g)) expect(assets).toContain(`assets/${url}`);
+}, 60_000);
+
+test("the pages have one theme, light, whatever the system's setting", async () => {
+  const { outDir, files, page } = await built(mainnet, false);
+  const css = await readFile(
+    join(
+      outDir,
+      files.find((file) => file.endsWith(".css"))!,
+    ),
+    "utf8",
+  );
+
+  expect(css).not.toMatch(/prefers-color-scheme|data-theme/);
+  expect(css).toMatch(/color-scheme: light;/);
+  for (const name of ["deposit.html", "verdict.html", "setup.html", "repo.html", "bounties.html"]) {
+    expect(await page(name)).toContain('<meta name="color-scheme" content="light" />');
+  }
 }, 60_000);
 
 test("the landing page's files are copied unchanged", async () => {
   const { outDir } = await built();
 
-  for (const name of ["index.html", "config.js", "landing.js", "landing.css", "brand/hero-light.svg"]) {
+  for (const name of ["index.html", "config.js", "landing.js", "landing.css", "tilt.js", "brand/built-on-arc.svg"]) {
     const source = await readFile(join(import.meta.dirname, "../landing", name));
     expect(await readFile(join(outDir, name))).toEqual(source);
   }
@@ -38,8 +84,8 @@ test("the landing page's files are copied unchanged", async () => {
 
 test("a build stops when the landing page shows another network than the pages", async () => {
   await expect(
-    buildPages({ network: { ...testnet, chainId: 1 }, outDir: await mkdtemp(join(tmpdir(), "x-")) }),
-  ).rejects.toThrow(/landing page shows "testnet"/);
+    buildPages({ network: { ...mainnet, chainId: 1 }, outDir: await mkdtemp(join(tmpdir(), "x-")) }),
+  ).rejects.toThrow(/landing page shows "mainnet"/);
 });
 
 test("each page loads only files from the build: no CDN, no tracker", async () => {
@@ -61,14 +107,15 @@ test("the scripts carry the network's settings and bundle viem: they fetch no co
     await Promise.all(files.filter((f) => f.endsWith(".js")).map((f) => readFile(join(outDir, f), "utf8")))
   ).join("\n");
 
-  expect(code).toContain(testnet.escrow);
-  expect(code).toContain(testnet.router);
+  expect(code).toContain(mainnet.escrow);
+  expect(code).toContain(mainnet.router);
   expect(code).not.toMatch(/\bimport\(\s*["']https?:/);
   expect(code).not.toMatch(/from\s*["']https?:/);
 }, 60_000);
 
-test("a mainnet build stops while the mainnet contracts have no addresses", async () => {
-  await expect(buildPages({ network: mainnet, outDir: await mkdtemp(join(tmpdir(), "x-")) })).rejects.toThrow(
+test("a build stops while the network's contracts have no addresses", async () => {
+  const network = { ...mainnet, escrow: "" as const, router: "" as const };
+  await expect(buildPages({ network, outDir: await mkdtemp(join(tmpdir(), "x-")) })).rejects.toThrow(
     /Arc has no escrow address yet[\s\S]*Arc has no router address yet/,
   );
 });
@@ -108,15 +155,8 @@ test("a build stops if a WalletConnect project ID is set, since its SDK isn't bu
 });
 
 test("testnet pages send Forfeits to the test recipient, and mainnet pages to Protocol Guild", async () => {
-  const test = await built();
-  const main = await built(
-    {
-      ...mainnet,
-      escrow: "0x05283F2c7D94D66669227Cecf75abBbd024771A7",
-      router: "0xae079DC6536c270d2743c0721cfC41c94E12ca9f",
-    },
-    false,
-  );
+  const test = await built(testnet, false);
+  const main = await built(mainnet, false);
 
   const testnetText = [await test.page("deposit.html"), await test.page("repo.html"), await test.page("setup.html")];
   const mainnetText = [await main.page("deposit.html"), await main.page("repo.html"), await main.page("setup.html")];
@@ -128,13 +168,29 @@ test("testnet pages send Forfeits to the test recipient, and mainnet pages to Pr
   expect(mainnetText[0]).not.toContain(">Testnet<");
 }, 60_000);
 
-test("the placeholder mark comes from web/brand, so the real identity is one change", async () => {
+test("mainnet's deposit page says how to get USDC on Arc, with the card button marked as coming", async () => {
+  const main = await (await built(mainnet, false)).page("deposit.html");
+  const test = await (await built(testnet, false)).page("deposit.html");
+
+  expect(main).toMatch(/<button class="btn secondary block" type="button" disabled>Buy USDC with a card: coming soon</);
+  expect(main).toMatch(/withdraw USDC from an exchange on the Arc network/);
+  expect(main).toContain('<a href="https://portal.arc.io" target="_blank" rel="noopener">Arc Portal</a>');
+  expect(test).not.toContain("Buy USDC with a card");
+  expect(test).toContain("Get test USDC");
+}, 60_000);
+
+test("the mark in the top bar comes from web/brand, and is the landing page's seal", async () => {
   const { page, files, outDir } = await built();
   const mark = (await readFile(new URL("../brand/mark.svg", import.meta.url), "utf8")).trim();
 
   expect(await page("deposit.html")).toContain(mark);
-  const markFile = files.find((f) => f.endsWith(".svg"))!;
-  expect((await readFile(join(outDir, markFile), "utf8")).trim()).toBe(mark);
+  expect(mark).toBe((await readFile(new URL("../landing/brand/mark.svg", import.meta.url), "utf8")).trim());
+  expect(mark).not.toMatch(/prefers-color-scheme/);
+  const favicon = files.find((file) => /^assets\/favicon-[0-9a-f]{10}\.svg$/.test(file))!;
+  expect(await readFile(join(outDir, favicon), "utf8")).toBe(
+    await readFile(new URL("../landing/brand/favicon.svg", import.meta.url), "utf8"),
+  );
+  expect(await page("deposit.html")).toContain(`<link rel="icon" href="${favicon}" type="image/svg+xml" />`);
 }, 60_000);
 
 test("each page preloads the chunks its script imports, so they load at once instead of one after another", async () => {

@@ -10,7 +10,7 @@ import type { Decision } from "../../app/src/ports.ts";
 import { keeperHarness } from "../../app/test/support/keeper.ts";
 import type { Anvil } from "../../app/test/support/anvil.ts";
 import { buildPages } from "../build.ts";
-import { DESKTOP, PHONE, startChrome, type Chrome, type Page, type Viewport } from "./support/chrome.ts";
+import { asWritten, DESKTOP, PHONE, startChrome, type Chrome, type Page, type Viewport } from "./support/chrome.ts";
 import { startAppRelay, startSite } from "./support/site.ts";
 import { startStack, type Stack } from "./support/stack.ts";
 import { BINDING, createTestWallet, INJECTED } from "./support/test-wallet.ts";
@@ -213,7 +213,7 @@ beforeAll(async () => {
   seedDecisions();
   stack = await startStack();
   const dir = await mkdtemp(join(tmpdir(), "bona-fide-site-"));
-  await buildPages({ network: stack.network, outDir: dir });
+  await buildPages({ network: stack.network, outDir: dir, landing: false });
   const relayerKey = await stack.gasKey();
   relayer = privateKeyToAccount(relayerKey).address;
   app = await startAppRelay({
@@ -358,6 +358,10 @@ test("too little USDC, a refused signature and a smart wallet that can't sign ye
   await connect(page, "low-balance");
   await frame(page, "deposit-low-balance-1280");
   expect(await page.text()).toContain("Add at least 0.60 USDC");
+  expect(await page.text()).toContain("Buy USDC with a card: coming soon");
+  expect(await page.text()).toMatch(
+    /withdraw USDC from an exchange on the Arc Testnet \(local\) network, or bring it from another chain\s+in Arc Portal/,
+  );
 
   const funded = await walletPage(await stack.account());
   await funded.page.open(site.url("deposit.html?repo=acme/widgets&kind=pr&number=20"));
@@ -633,7 +637,7 @@ test("the repo page shows a Record Exemption: the record read, the witnesses, an
   await frame(page, "repo-decisions-waive-1280");
 
   const [waived, flagged] = await page.evaluate<string[]>(
-    `[...document.querySelectorAll("[data-decisions] > li")].slice(0, 2).map((li) => li.innerText)`,
+    asWritten(`[...document.querySelectorAll("[data-decisions] > li")].slice(0, 2).map((li) => li.innerText)`),
   );
   expect(waived).toContain("Issue #31");
   expect(waived).toContain("Record Exemption");
@@ -699,6 +703,10 @@ test("a private repo's decisions don't show on its page", async () => {
   await page.close();
 }, 60_000);
 
+const LIGHT_BACKGROUND = "rgb(246, 244, 249)";
+const FONTS = ["Big Shoulders Display", "Hanken Grotesk"];
+const LOADED_FONTS = `document.fonts.ready.then(() => [...document.fonts].filter((font) => font.status === "loaded").map((font) => font.family.replaceAll('"', "")))`;
+
 const PAGES: [string, string, string][] = [
   ["deposit", "deposit.html?repo=Acme/Widgets&kind=pr&number=30", "not-connected"],
   ["deposit-active", "deposit.html?repo=acme/widgets&kind=issue&number=8", "timed-out"],
@@ -723,8 +731,11 @@ test.each([
       await page.waitFor(
         `!document.querySelector("[data-rows]") || !document.body.innerText.includes("Reading Deposits")`,
       );
+      // One theme: on a dark system the page stays light, in the landing page's typefaces.
+      expect(await page.evaluate<string[]>(LOADED_FONTS)).toEqual(expect.arrayContaining(FONTS));
       await frame(page, `${name}-${state}-${width}${scheme === "dark" ? "-dark" : ""}`);
       expect(await page.overflow(), `${name} scrolls sideways at ${width} px`).toBeLessThanOrEqual(0);
+      expect(await page.evaluate<string>("getComputedStyle(document.body).backgroundColor")).toBe(LIGHT_BACKGROUND);
     }
     expect(page.errors).toEqual([]);
     expect(page.requests.filter((url) => !allowed.some((origin) => url.startsWith(origin)))).toEqual([]);

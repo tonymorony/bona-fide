@@ -20,13 +20,12 @@ npm run build -- mainnet      # Arc mainnet
 ```
 
 The build writes `dist/`: the five pages and `dist/assets/`, which holds their scripts (viem bundled
-in), the stylesheet and the mark. [`deploy/deploy.sh`](../deploy/README.md) publishes `web/dist` as
-it finds it.
+in), the stylesheet, and the fonts and drawings the stylesheet names, each under a hashed name.
+[`deploy/deploy.sh`](../deploy/README.md) publishes `web/dist` as it finds it.
 
 One build serves one network, set in [`networks.ts`](networks.ts): its chain id and RPC, the escrow,
 the forfeit router, USDC, the explorer, and how the pages name where Forfeits go. The build stops
-while the network's escrow or router address is missing, as mainnet's are until the contracts are
-deployed there. `bountyFactory` and `bountyFactoryFromBlock` name the Bounty wallet factory and its
+while the network's escrow or router address is missing. `bountyFactory` and `bountyFactoryFromBlock` name the Bounty wallet factory and its
 deploy block. Empty, as on both networks until it is deployed, the build goes on: the Bounty page
 says Bounties aren't available on the network yet, and the setup and repo pages leave them out.
 
@@ -114,8 +113,19 @@ time zone, with UTC in a tooltip.
 
 ## The brand
 
-The mark and wordmark in each page's top bar come from [`brand/`](brand): `mark.svg` (also the
-favicon), `lockup.html` and `brand.css`. Replacing those files replaces the identity everywhere.
+The pages share the landing page's Certificate design, and have one theme, light.
+
+- **Identity:** the mark and wordmark in each page's top bar come from [`brand/`](brand): `mark.svg`
+  (the landing page's seal), `lockup.html` and `brand.css`, which also holds the palette and the three
+  typefaces. Replacing those files replaces the identity everywhere. The tab's icon is
+  `landing/brand/favicon.svg`.
+- **Shared files:** the stylesheets name the landing page's fonts (`landing/fonts/`) and its guilloche
+  drawings (`landing/brand/`) by their path in the repo, as `url("../landing/…")`. The build copies
+  each into `dist/assets/`, with the fonts' licence as `assets/OFL.txt`, so the pages load nothing
+  from the landing page's folders and work without it.
+- **The certificate:** on the deposit page, the terms are the certificate being issued: the paper,
+  frame, waves and seal are drawn behind the page's own text. Everywhere else, statuses are stamps and
+  amounts are set in the display face.
 
 ## Tests
 

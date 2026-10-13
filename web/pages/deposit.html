@@ -14,7 +14,10 @@
 
     <main class="page checkout">
       <!-- The rules, before anything else -->
-      <section class="rules" aria-labelledby="deposit-title" data-hide="loading bad-link chain-error not-set-up">
+      <section class="rules cert" aria-labelledby="deposit-title" data-hide="loading bad-link chain-error not-set-up">
+        <div class="cert-frame" aria-hidden="true"></div>
+        <div class="cert-holo" aria-hidden="true"></div>
+        <div class="cert-seal" aria-hidden="true"></div>
         <p class="eyebrow">
           <svg class="icon"><use href="#i-repo"></use></svg><a data-href="repo-page" data-text="repo"></a>
         </p>
@@ -181,6 +184,15 @@
                 {{#if links.getUsdc}}<p><a href="{{links.getUsdc}}" target="_blank" rel="noopener">Get test USDC</a></p>{{/if}}
               </div>
             </div>
+            {{#if links.portal}}
+            <button class="btn secondary block" type="button" disabled>Buy USDC with a card: coming soon</button>
+            <p class="hint">
+              <span>
+                Until then, withdraw USDC from an exchange on the {{network.name}} network, or bring it from another chain
+                in <a href="{{links.portal}}" target="_blank" rel="noopener">Arc Portal</a>.
+              </span>
+            </p>
+            {{/if}}
             <button class="btn primary block" type="button" disabled><span>Sign and deposit <span data-text="amount"></span></span></button>
             <button class="btn secondary block" type="button" data-action="check-balance">Check again</button>
           </div>

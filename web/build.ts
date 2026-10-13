@@ -3,12 +3,13 @@
 //   node build.ts            Arc testnet
 //   node build.ts mainnet    Arc mainnet: stops while its contract addresses are missing
 //
-// Everything a page loads is in dist/: its script (viem bundled in), the stylesheet and the mark.
+// Everything a page loads is in dist/: its script (viem bundled in), the stylesheet, the mark, and the
+// fonts and drawings the stylesheet names.
 // The landing page's static files (landing/) are copied to the root of dist/, beside the pages.
 
 import { createHash } from "node:crypto";
 import { cp, mkdir, readdir, readFile, rm, writeFile } from "node:fs/promises";
-import { join } from "node:path";
+import { basename, extname, join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { rolldown } from "rolldown";
 import { networks } from "./networks.ts";
@@ -18,7 +19,7 @@ const HERE = fileURLToPath(new URL(".", import.meta.url));
 export const PAGES = ["deposit", "verdict", "setup", "repo", "bounties"] as const;
 
 const read = (path: string) => readFile(join(HERE, path), "utf8");
-const shortHash = (content: string) => createHash("sha256").update(content).digest("hex").slice(0, 10);
+const shortHash = (content: string | Buffer) => createHash("sha256").update(content).digest("hex").slice(0, 10);
 
 function escapeHtml(text: string): string {
   return text.replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;").replaceAll('"', "&quot;");
@@ -95,7 +96,7 @@ export async function buildPages({
   await rm(outDir, { recursive: true, force: true });
   await mkdir(join(outDir, "assets"), { recursive: true });
   const written: string[] = [];
-  const write = async (path: string, content: string) => {
+  const write = async (path: string, content: string | Buffer) => {
     await writeFile(join(outDir, path), content);
     written.push(path);
   };
@@ -137,18 +138,35 @@ export async function buildPages({
     return [...seen].map((file) => `<link rel="modulepreload" href="assets/${file}" />`).join("\n");
   };
 
-  const css = `${await read("brand/brand.css")}\n${await read("styles/app.css")}`;
+  // The stylesheet names the landing page's fonts and drawings by their path in the repo. Each is
+  // copied into assets/ under a hashed name, beside the stylesheet, which then points at the copy.
+  const shared = new Map<string, string>();
+  let css = `${await read("brand/brand.css")}\n${await read("styles/app.css")}`;
+  for (const [, path] of css.matchAll(/url\("\.\.\/(landing\/[\w./-]+)"\)/g)) {
+    if (shared.has(path!)) continue;
+    const content = await readFile(join(HERE, path!));
+    const name = `${basename(path!, extname(path!))}-${shortHash(content)}${extname(path!)}`;
+    await write(`assets/${name}`, content);
+    shared.set(path!, name);
+  }
+  css = css.replace(/url\("\.\.\/(landing\/[\w./-]+)"\)/g, (_, path: string) => `url("${shared.get(path)!}")`);
+  // The fonts' licence travels with the copies.
+  if ([...shared.keys()].some((path) => path.startsWith("landing/fonts/"))) {
+    await write("assets/OFL.txt", await read("landing/fonts/OFL.txt"));
+  }
   const cssPath = `assets/app-${shortHash(css)}.css`;
   await write(cssPath, css);
   const mark = (await read("brand/mark.svg")).trim();
-  const markPath = `assets/mark-${shortHash(mark)}.svg`;
-  await write(markPath, `${mark}\n`);
+  // The tab's icon is the landing page's: the seal, drawn to hold at 16 px.
+  const favicon = await read("landing/brand/favicon.svg");
+  const faviconPath = `assets/favicon-${shortHash(favicon)}.svg`;
+  await write(faviconPath, favicon);
 
   for (const page of PAGES) {
     const html = await fillTemplate(await read(`pages/${page}.html`), network, {
       mark,
       "asset:css": cssPath,
-      "asset:mark": markPath,
+      "asset:favicon": faviconPath,
       "page-script": `assets/${scripts.get(page)!}`,
       "page-preloads": preloadsOf(scripts.get(page)!),
     });

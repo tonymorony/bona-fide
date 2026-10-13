@@ -7,7 +7,7 @@ import { bountyCalls, createBountyReader } from "../src/bounty.ts";
 import { publicClientFor } from "../src/chain.ts";
 import { repoIdOf } from "../src/keys.ts";
 import { buildPages } from "../build.ts";
-import { DESKTOP, PHONE, startChrome, type Chrome, type Page, type Viewport } from "./support/chrome.ts";
+import { asWritten, DESKTOP, PHONE, startChrome, type Chrome, type Page, type Viewport } from "./support/chrome.ts";
 import { startSite } from "./support/site.ts";
 import { startStack, type Stack } from "./support/stack.ts";
 import { BINDING, createTestWallet, INJECTED } from "./support/test-wallet.ts";
@@ -414,7 +414,9 @@ test("the repo page shows the Bounties from chain, links the Maintainer to manag
   await page.waitFor(`document.querySelectorAll("[data-decisions] > li").length === 2`, "the decisions");
   await page.waitFor(`!document.body.innerText.includes("Reading Deposits")`);
   await frame(page, "repo-bounties-1280");
-  const section = await page.evaluate<string>(`document.querySelector('[aria-labelledby="bounties-title"]').innerText`);
+  const section = await page.evaluate<string>(
+    asWritten(`document.querySelector('[aria-labelledby="bounties-title"]').innerText`),
+  );
   expect(section).toContain("Issue #12");
   expect(section).toContain("80 USDC");
   expect(section).toContain(`Paid\nto ${payee.slice(0, 6)}`);
@@ -423,7 +425,7 @@ test("the repo page shows the Bounties from chain, links the Maintainer to manag
   expect(section).not.toContain("Issue #13");
   expect(section).not.toContain("Manage Bounties");
   const decided = await page.evaluate<string[]>(
-    `[...document.querySelectorAll("[data-decisions] > li")].map((li) => li.innerText)`,
+    asWritten(`[...document.querySelectorAll("[data-decisions] > li")].map((li) => li.innerText)`),
   );
   expect(decided[0]).toContain("Issue #12");
   expect(decided[0]).toContain("Bounty held for PR #52");
@@ -497,6 +499,10 @@ test("a network without a factory, a repo not set up, a wrong network and a brok
   await other.page.close();
 }, 90_000);
 
+const LIGHT_BACKGROUND = "rgb(246, 244, 249)";
+const FONTS = ["Big Shoulders Display", "Hanken Grotesk"];
+const LOADED_FONTS = `document.fonts.ready.then(() => [...document.fonts].filter((font) => font.status === "loaded").map((font) => font.family.replaceAll('"', "")))`;
+
 const PAGES: [string, string, string][] = [
   ["bounties-view", "bounties.html?repo=Acme/Bounties", "view"],
   ["bounties-none", "bounties.html?repo=Acme/Impostor", "no-wallet"],
@@ -515,8 +521,11 @@ test.each([
       await page.open(site.url(path), viewport, scheme);
       await page.waitForState(state);
       await page.waitFor(`!document.body.innerText.includes("Reading")`);
+      // One theme: on a dark system the page stays light, in the landing page's typefaces.
+      expect(await page.evaluate<string[]>(LOADED_FONTS)).toEqual(expect.arrayContaining(FONTS));
       await frame(page, `${name}-${state}-${width}${scheme === "dark" ? "-dark" : ""}`);
       expect(await page.overflow(), `${name} scrolls sideways at ${width} px`).toBeLessThanOrEqual(0);
+      expect(await page.evaluate<string>("getComputedStyle(document.body).backgroundColor")).toBe(LIGHT_BACKGROUND);
     }
     expect(page.errors).toEqual([]);
     expect(page.requests.filter((url) => ![site.origin, stack.url].some((origin) => url.startsWith(origin)))).toEqual(

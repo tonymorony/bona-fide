@@ -163,7 +163,7 @@ export async function startStack() {
       bindingProof: "/binding-proof",
       bountyPayout: "/bounty/payout",
     },
-    links: { getUsdc: "https://faucet.circle.com", source: "", installApp: "" },
+    links: { getUsdc: "https://faucet.circle.com", portal: "https://portal.arc.io", source: "", installApp: "" },
     walletConnectProjectId: "",
   };
 

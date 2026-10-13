@@ -11,6 +11,19 @@ const STEP_TIMEOUT_MS = 20_000;
 
 type Message = { id?: number; method?: string; params?: any; sessionId?: string; result?: any; error?: any };
 
+/**
+ * Wraps an expression that reads `innerText`, so it returns the text as written. The pages set
+ * labels and stamps in capitals with CSS, and `innerText` would return those capitals.
+ */
+export function asWritten(expression: string): string {
+  return `(() => {
+    const style = document.createElement("style");
+    style.textContent = "*, *::before, *::after { text-transform: none !important; }";
+    document.head.append(style);
+    try { return ${expression}; } finally { style.remove(); }
+  })()`;
+}
+
 export interface Viewport {
   width: number;
   height: number;
@@ -253,9 +266,9 @@ export async function startChrome() {
           return clicked;
         },
 
-        /** The text of the visible parts of the page. */
+        /** The text of the visible parts of the page, as written. */
         text(): Promise<string> {
-          return evaluate<string>("document.body.innerText");
+          return evaluate<string>(asWritten("document.body.innerText"));
         },
 
         /** How far the page is wider than the viewport: 0 means no sideways scroll. */
