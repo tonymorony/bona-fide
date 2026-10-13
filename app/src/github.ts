@@ -168,8 +168,14 @@ export function createGitHub({ appId, app, installation }: GitHubOptions): GitHu
         ...(detailsUrl ? { details_url: detailsUrl } : {}),
         ...(check.externalId ? { external_id: check.externalId } : {}),
       };
-      if (existing) await octokit.rest.checks.update({ ...repoParams(repo), check_run_id: existing.id, ...fields });
-      else await octokit.rest.checks.create({ ...repoParams(repo), name: CHECK_NAME, head_sha: headSha, ...fields });
+      // GitHub ignores an update that puts a finished run back in progress, and says nothing. A new run
+      // of the same name takes the finished one's place on the commit.
+      const reopens = check.conclusion === "pending" && existing?.status === "completed";
+      if (existing && !reopens) {
+        await octokit.rest.checks.update({ ...repoParams(repo), check_run_id: existing.id, ...fields });
+      } else {
+        await octokit.rest.checks.create({ ...repoParams(repo), name: CHECK_NAME, head_sha: headSha, ...fields });
+      }
     },
 
     // GitHub lists a repo's PRs among its issues, so one page holds the most recently updated of both.

@@ -167,6 +167,41 @@ test("a check that waits for a Deposit stays in progress, so GitHub doesn't show
   expect(sent[1]?.body).not.toHaveProperty("completed_at");
 });
 
+test("a finished run that must wait again is replaced by a new run: GitHub won't put it back in progress", async () => {
+  const { github, sent } = fakeApi({
+    [`GET ${API}/commits/abc123/check-runs`]: {
+      status: 200,
+      body: { total_count: 1, check_runs: [{ id: 77, name: "Bona Fide", status: "completed" }] },
+    },
+    [`POST ${API}/check-runs`]: { status: 201, body: { id: 78 } },
+  });
+
+  await github.setCheck(REPO, "abc123", { conclusion: "pending", title: "T", summary: "S" });
+
+  expect(sent.map((s) => `${s.method} ${s.path}`)).toEqual([
+    `GET ${API}/commits/abc123/check-runs`,
+    `POST ${API}/check-runs`,
+  ]);
+  expect(sent[1]?.body).toMatchObject({ name: "Bona Fide", head_sha: "abc123", status: "in_progress" });
+});
+
+test("a run still in progress is updated in place while it keeps waiting", async () => {
+  const { github, sent } = fakeApi({
+    [`GET ${API}/commits/abc123/check-runs`]: {
+      status: 200,
+      body: { total_count: 1, check_runs: [{ id: 77, name: "Bona Fide", status: "in_progress" }] },
+    },
+    [`PATCH ${API}/check-runs/77`]: { status: 200, body: { id: 77 } },
+  });
+
+  await github.setCheck(REPO, "abc123", { conclusion: "pending", title: "T2", summary: "S2" });
+
+  expect(sent.map((s) => `${s.method} ${s.path}`)).toEqual([
+    `GET ${API}/commits/abc123/check-runs`,
+    `PATCH ${API}/check-runs/77`,
+  ]);
+});
+
 test("a later check on the same commit updates the App's run", async () => {
   const { github, sent } = fakeApi({
     [`GET ${API}/commits/abc123/check-runs`]: {
