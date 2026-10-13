@@ -11,6 +11,9 @@ RUN npm ci --omit=dev --omit=optional --ignore-scripts --no-audit --no-fund && r
 
 COPY app/src ./src
 
+# The decision log's volume: a new volume takes this directory's owner, so the App can write to it.
+RUN mkdir /data && chown node:node /data
+
 USER node
 EXPOSE 3000
 HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \

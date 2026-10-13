@@ -1,7 +1,9 @@
 import { parseEventLogs, type Hex } from "viem";
 import { escrowAbi, routerAbi } from "../abi.ts";
 import type { RepoTerms, Terms } from "../chain.ts";
-import { delay, percent, shortAddress, shortDate, timeout, usdc, utcTime } from "../format.ts";
+import { decisionWords } from "../decisions.ts";
+import { readDecisions, type Decision, type DecisionsOutcome } from "../endpoints.ts";
+import { delay, localTime, percent, shortAddress, shortDate, timeout, usdc, utcTime } from "../format.ts";
 import { readRepoHistory, type DepositRow, type RepoHistory } from "../history.ts";
 import { repoIdOf } from "../keys.ts";
 import { explorerAddress, explorerTx, itemName, itemUrl, readRepoLink } from "../link.ts";
@@ -36,9 +38,13 @@ let showAll = false;
 let refundSent: { row: DepositRow; txHash: Hex } | null = null;
 let flushed: { amount: bigint; txHash: Hex } | null = null;
 let actionNote = "";
+/** The App's decision log for the repo; null while it is read. */
+let decisions: DecisionsOutcome | null = null;
 const busy = new Set<string>();
 const rowsBody = document.querySelector<HTMLTableSectionElement>("[data-rows]")!;
 const rowTemplate = document.querySelector<HTMLTemplateElement>("template[data-row]")!;
+const decisionList = document.querySelector<HTMLOListElement>("[data-decisions]")!;
+const decisionTemplate = document.querySelector<HTMLTemplateElement>("template[data-decision]")!;
 
 const session = startSession(() => paint());
 
@@ -138,6 +144,16 @@ function paint(): void {
     view.text["flushed-amount"] = usdc(flushed.amount);
     view.hrefs["flush-tx-url"] = explorerTx(network, flushed.txHash);
   }
+  // A log that can't be read says so: its counts are never shown as zeros.
+  view.flags["decisions-loading"] = repo !== null && decisions === null;
+  view.flags["decisions-failed"] = decisions?.kind === "unavailable";
+  if (decisions?.kind === "ok") {
+    view.flags["decisions-ready"] = true;
+    view.flags["has-decisions"] = decisions.decisions.length > 0;
+    view.flags["no-decisions"] = decisions.decisions.length === 0;
+    view.text["decided-count"] = String(decisions.counts.decided);
+    view.text["escalated-count"] = String(decisions.counts.escalated);
+  }
   view.text["action-note"] = actionNote;
   view.flags["action-note"] = actionNote !== "";
   for (const action of busy) view.busy.add(action);
@@ -189,6 +205,71 @@ function drawRows(deposits: DepositRow[]): void {
     return row;
   });
   rowsBody.replaceChildren(...rows);
+}
+
+// The log's text comes from the App and, through the model, from Contributors: it goes into the
+// page as text only.
+function drawDecisions(list: Decision[]): void {
+  const items = list.map((d) => {
+    const li = decisionTemplate.content.firstElementChild!.cloneNode(true) as HTMLLIElement;
+    const cell = (name: string) => li.querySelector<HTMLElement>(`[data-cell="${name}"]`)!;
+    const words = decisionWords(d);
+    const item = cell("item") as HTMLAnchorElement;
+    item.textContent = itemName(d.item.kind, d.item.number, { capital: true });
+    item.href = itemUrl({ repo: repo!, kind: d.item.kind, number: d.item.number });
+    cell("kind").textContent = words.kind;
+    const outcome = cell("outcome");
+    outcome.textContent = words.outcome;
+    outcome.classList.add(d.outcome === "decided" ? "accent" : "neutral");
+    const at = cell("at") as HTMLTimeElement;
+    at.dateTime = d.at.toISOString();
+    at.textContent = localTime(d.at);
+    at.title = utcTime(d.at);
+    const suggestion = cell("suggestion");
+    suggestion.textContent = words.suggestion ?? "";
+    suggestion.hidden = words.suggestion === null;
+    const reasons = cell("reasons");
+    reasons.replaceChildren(
+      ...(d.suggestion?.reasons ?? []).map((reason) => {
+        const line = document.createElement("li");
+        line.textContent = reason;
+        return line;
+      }),
+    );
+    reasons.hidden = reasons.childElementCount === 0;
+    const witnesses = cell("witnesses");
+    witnesses.replaceChildren(
+      ...d.witnesses.map((witness) => {
+        const row = document.createElement("div");
+        const name = document.createElement("dt");
+        const value = document.createElement("dd");
+        name.textContent = witness.name;
+        value.textContent = witness.value;
+        row.append(name, value);
+        return row;
+      }),
+    );
+    witnesses.hidden = d.witnesses.length === 0;
+    cell("done").textContent = words.done;
+    const tx = cell("tx") as HTMLAnchorElement;
+    if (d.txHash) tx.href = explorerTx(network, d.txHash);
+    else tx.remove();
+    for (const name of ["read", "cost"] as const) {
+      cell(name).textContent = words[name] ?? "";
+      cell(name).hidden = words[name] === null;
+    }
+    return li;
+  });
+  decisionList.replaceChildren(...items);
+}
+
+async function loadDecisions(): Promise<void> {
+  if (!repo) return;
+  decisions = null;
+  paint();
+  decisions = await readDecisions(repo, (input, init) => fetch(input, init));
+  if (decisions.kind === "ok") drawDecisions(decisions.decisions);
+  paint();
 }
 
 async function load(): Promise<void> {
@@ -295,6 +376,7 @@ async function flush(): Promise<void> {
 onAction((action, element) => {
   if (action === "reload") return location.reload();
   if (action === "reload-history") return void loadHistory();
+  if (action === "reload-decisions") return void loadDecisions();
   if (action === "show-all") {
     showAll = true;
     return paint();
@@ -306,3 +388,4 @@ onAction((action, element) => {
 if (repo) document.title = `${repo} · Bona Fide Deposits`;
 paint();
 void load();
+void loadDecisions();

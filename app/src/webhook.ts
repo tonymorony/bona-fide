@@ -70,6 +70,7 @@ function repoOf(payload: Payload): Repo {
     owner: payload.repository.owner.login,
     name: payload.repository.name,
     installationId: payload.installation.id,
+    private: payload.repository.private,
   };
 }
 

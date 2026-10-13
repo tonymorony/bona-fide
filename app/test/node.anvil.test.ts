@@ -1,4 +1,7 @@
 import { spawn } from "node:child_process";
+import { mkdtemp, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { afterAll, beforeAll, expect, test } from "vitest";
 import { freePort, startAnvil, type Anvil } from "./support/anvil.ts";
 import { DEPOSIT_PAGE, SETUP_PAGE } from "./support/harness.ts";
@@ -13,8 +16,9 @@ beforeAll(async () => {
 afterAll(() => anvil?.stop());
 
 /** Runs `src/node.ts` against the local chain and waits until it listens. */
-async function startNode() {
+async function startNode(env: Record<string, string> = {}) {
   const port = await freePort();
+  const decisions = join(await mkdtemp(join(tmpdir(), "bona-fide-node-")), "decisions.jsonl");
   const server = spawn(process.execPath, ["src/node.ts"], {
     env: {
       ...process.env,
@@ -28,6 +32,8 @@ async function startNode() {
       DEPOSIT_PAGE_URL: DEPOSIT_PAGE,
       SETUP_PAGE_URL: SETUP_PAGE,
       ANTHROPIC_API_KEY: "",
+      DECISIONS_PATH: decisions,
+      ...env,
     },
     stdio: ["ignore", "pipe", "pipe"],
   });
@@ -63,6 +69,46 @@ test("the Node server answers a health check without a signature", async () => {
 
     expect(response.status).toBe(200);
     expect(await response.text()).toBe("ok\n");
+  } finally {
+    node.stop();
+  }
+}, 30_000);
+
+test("the Node server serves the decision log it reads back on start, and never a private repo's", async () => {
+  const path = join(await mkdtemp(join(tmpdir(), "bona-fide-node-")), "decisions.jsonl");
+  const decision = {
+    id: "a",
+    at: "2026-09-01T00:00:00.000Z",
+    repo: "Acme/Widgets",
+    private: false,
+    item: { kind: "pr", number: 7 },
+    serial: "3",
+    type: "early-refund",
+    inputs: { source: "webhook pull_request closed" },
+    suggestion: null,
+    witnesses: [{ name: "Merged", value: "yes" }],
+    action: "refunded",
+    txHash: `0x${"ab".repeat(32)}`,
+    outcome: "decided",
+    cost: null,
+  };
+  const secret = { ...decision, id: "b", repo: "acme/secret", private: true };
+  await writeFile(path, `${JSON.stringify(decision)}\n${JSON.stringify(secret)}\n{"torn":`);
+  const node = await startNode({ DECISIONS_PATH: path });
+  try {
+    const response = await fetch(`${node.url}/decisions?repo=acme/widgets`);
+    const hidden = await fetch(`${node.url}/decisions?repo=acme/secret`);
+    const malformed = await fetch(`${node.url}/decisions?repo=nope`);
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get("access-control-allow-origin")).toBe("*");
+    const { private: _, ...published } = decision;
+    expect(await response.json()).toEqual({ counts: { decided: 1, escalated: 0 }, decisions: [published] });
+    expect(await hidden.json()).toEqual({ counts: { decided: 0, escalated: 0 }, decisions: [] });
+    expect(malformed.status).toBe(400);
+    expect(node.output()).toContain(
+      `Decision log: 2 decisions read from ${path}. Skipped 1 line that isn't a decision.`,
+    );
   } finally {
     node.stop();
   }

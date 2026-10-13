@@ -6,7 +6,7 @@ Caddy, on one origin. You deploy with one command from your machine.
 ## How it fits together
 
 ```
-                ┌─ /webhook, /relay/*, /forfeit, /binding-proof, /health ─> App container (127.0.0.1:8930)
+                ┌─ /webhook, /relay/*, /forfeit, /binding-proof, /decisions, /health ─> App container (127.0.0.1:8930)
 client ─443─> Caddy
                 └─ everything else ─> static pages in /opt/bona-fide/site/pages
 ```
@@ -17,7 +17,7 @@ Caddy gets the site's TLS certificate and caps request bodies at 1 MB. The App l
 | File in `deploy/` | What it is |
 |---|---|
 | `Dockerfile` | The App's image: production dependencies only, runs as `node`, checks `/health` |
-| `docker-compose.yml` | The `bona-fide-app` service: port 8930 on 127.0.0.1, settings from `.env`, restarts unless stopped, read-only filesystem, no capabilities, 512 MB of memory |
+| `docker-compose.yml` | The `bona-fide-app` service: port 8930 on 127.0.0.1, settings from `.env`, restarts unless stopped, read-only filesystem except the `bona-fide-data` volume, no capabilities, 512 MB of memory |
 | `Caddyfile.bonafide` | The site block. Its first line is the site's host name: change it to run your own instance |
 | `.env.example` | Every setting the App reads, with a line on each |
 | `deploy.sh` | The command you run from your machine |
@@ -137,11 +137,27 @@ ssh <ssh host> 'cd /opt/bona-fide && docker compose logs -f --tail=100'
 ```
 
 With triage on, each triage decision is one JSON line with `"event":"triage"`; `grep '"event":"triage"'`
-picks them out. The App logs its errors in full, and an RPC error can include the RPC's URL. If `RPC_URL` holds an
+picks them out.
+
+The App logs its errors in full, and an RPC error can include the RPC's URL. If `RPC_URL` holds an
 API key, don't share the logs as they are. `docker compose config` prints every value in `.env`, so
 don't run it where others can see.
 
 Caddy's own logs: `journalctl -u caddy` for the host service, or `docker logs <container>`.
+
+## The decision log
+
+The App keeps its [decision log](../app/README.md#decision-log) in `/data/decisions.jsonl` on the
+`bona-fide-data` Docker volume, so it survives deploys, rebuilds and restarts; `docker-compose.yml`
+sets `DECISIONS_PATH` to it. It holds private repos' decisions too, though the App never serves
+those. To read it or back it up:
+
+```shell
+ssh <ssh host> 'docker exec bona-fide-app tail -n 20 /data/decisions.jsonl'
+ssh <ssh host> 'docker exec bona-fide-app cat /data/decisions.jsonl' > decisions.jsonl
+```
+
+`docker compose down -v` deletes the volume and the log with it; `docker compose down` keeps it.
 
 ## Restart
 

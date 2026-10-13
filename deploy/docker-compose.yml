@@ -12,6 +12,10 @@ services:
     env_file: .env
     environment:
       PORT: "3000"
+      DECISIONS_PATH: /data/decisions.jsonl
+    # The decision log outlives the container. The rest of the filesystem is read-only.
+    volumes:
+      - bona-fide-data:/data
     # Loopback only: Caddy on this host is the one way in.
     ports:
       - "127.0.0.1:8930:3000"
@@ -25,6 +29,9 @@ services:
       options:
         max-size: 10m
         max-file: "3"
+
+volumes:
+  bona-fide-data:
 
 # A fixed name, so a Caddy that runs in a container can join this network.
 networks:

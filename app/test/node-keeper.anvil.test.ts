@@ -5,7 +5,7 @@ import { afterAll, beforeAll, expect, test } from "vitest";
 import { createKeeperEscrow, keeperAccount } from "../src/keeper/escrow.ts";
 import { keyOf, repoIdOf } from "../src/keys.ts";
 import { freePort, type Anvil } from "./support/anvil.ts";
-import { DEPOSIT_PAGE, SETUP_PAGE } from "./support/harness.ts";
+import { DEPOSIT_PAGE, scratchDecisionsPath, SETUP_PAGE } from "./support/harness.ts";
 import { SIGN_PAGE, startKeeperAnvil } from "./support/keeper.ts";
 import { REPO, SECRET } from "./support/webhooks.ts";
 
@@ -33,6 +33,7 @@ function startHost(env: Record<string, string>) {
       SETUP_PAGE_URL: SETUP_PAGE,
       SIGN_PAGE_URL: SIGN_PAGE,
       ANTHROPIC_API_KEY: "",
+      DECISIONS_PATH: scratchDecisionsPath(),
       ...env,
     },
     stdio: ["ignore", "pipe", "pipe"],

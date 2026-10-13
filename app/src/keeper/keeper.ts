@@ -2,14 +2,29 @@ import { getAddress, isAddress, isAddressEqual, type Address, type Hex } from "v
 import { parse } from "yaml";
 import type { Verdict } from "../app.ts";
 import { CLOCK_SKEW_SECONDS, CONFIG_PATH, parseConfig } from "../config.ts";
-import { depositLink } from "../copy.ts";
+import { depositLink, usdc } from "../copy.ts";
+import { newDecision } from "../decisions/log.ts";
 import { keyOf, repoIdOf, type Kind } from "../keys.ts";
 import { ACCEPTED, BAD_FAITH } from "../labels.ts";
-import { fullName, type Binding, type Chain, type GitHub, type Item } from "../ports.ts";
+import {
+  fullName,
+  type Binding,
+  type Chain,
+  type DecisionLog,
+  type GitHub,
+  type Item,
+  type Witness,
+} from "../ports.ts";
 import { cooldown, REVERT_COOLDOWN_MS } from "../relay/rate-limit.ts";
 import { itemFields } from "../webhook.ts";
 import { badFaithNote, NOUNS } from "./copy.ts";
-import { EscrowRejection, TransactionReverted, type BindingStatus, type KeeperEscrow } from "./escrow.ts";
+import {
+  EscrowRejection,
+  TransactionReverted,
+  type BindingStatus,
+  type EscrowDeposit,
+  type KeeperEscrow,
+} from "./escrow.ts";
 import { bindingDigest, forfeitDigest } from "./signatures.ts";
 
 export interface KeeperDeps {
@@ -19,6 +34,9 @@ export interface KeeperDeps {
   github: GitHub;
   /** The page where a Maintainer signs a Forfeit. It takes the same query as the deposit page. */
   signPageUrl: string;
+  /** Keeps each early Refund made because the item was accepted, for the repo page. */
+  decisions?: DecisionLog;
+  now?: () => Date;
 }
 
 /** Why the Keeper won't do what a request asks, with the HTTP status that says so. */
@@ -66,12 +84,61 @@ export interface Keeper {
   bindRepo(proof: BindingProof): Promise<BindingStatus>;
 }
 
-export function createKeeper({ escrow, chain, github, signPageUrl }: KeeperDeps): Keeper {
+export function createKeeper({
+  escrow,
+  chain,
+  github,
+  signPageUrl,
+  decisions,
+  now = () => new Date(),
+}: KeeperDeps): Keeper {
   const keyFor = (item: Item) => keyOf(repoIdOf(fullName(item.repo)), item.kind, item.number);
   const afterRevert = cooldown(REVERT_COOLDOWN_MS, Date.now);
 
-  async function refund(item: Item): Promise<void> {
-    await escrow.refund(keyFor(item));
+  // A Maintainer accepted the item. The Refund names the Deposit read, so the one logged is the
+  // one refunded; a redelivery finds it refunded and logs nothing.
+  async function refundAccepted(item: Item, source: string, witnesses: Witness[]): Promise<void> {
+    const key = keyFor(item);
+    const deposit = await escrow.depositOf(key);
+    if (deposit.status !== "active") return;
+    await refundAndLog(item, key, deposit, source, witnesses);
+  }
+
+  async function refundAndLog(
+    item: Item,
+    key: Hex,
+    deposit: EscrowDeposit,
+    source: string,
+    witnesses: Witness[],
+  ): Promise<void> {
+    const txHash = await escrow.refund(key, deposit.serial);
+    if (!txHash) return;
+    const decision = newDecision(
+      {
+        repo: fullName(item.repo),
+        private: item.repo.private !== false,
+        item: { kind: item.kind, number: item.number },
+        serial: String(deposit.serial),
+        type: "early-refund",
+        inputs: { source },
+        suggestion: null,
+        witnesses: [
+          { name: "Deposit", value: `Serial ${deposit.serial}: ${usdc(deposit.amount)} from ${deposit.depositor}` },
+          ...witnesses,
+        ],
+        action: "refunded",
+        txHash,
+        outcome: "decided",
+        cost: null,
+      },
+      now(),
+    );
+    try {
+      decisions?.append(decision);
+    } catch (error) {
+      // The Refund is made: a log that fails mustn't fail the delivery.
+      console.error("decision log failed:", error);
+    }
   }
 
   // The label is only a request: the Deposit moves when the Maintainer signs.
@@ -86,8 +153,14 @@ export function createKeeper({ escrow, chain, github, signPageUrl }: KeeperDeps)
     async onWebhook(event, payload) {
       const item = itemOf(event, payload);
       if (!item) return;
-      if (payload.action === "closed" && accepted(payload)) await refund(item);
-      if (payload.action === "labeled" && payload.label?.name === ACCEPTED) await refund(item);
+      const source = `webhook ${event} ${payload.action}`;
+      if (payload.action === "closed" && accepted(payload)) await refundAccepted(item, source, closeWitnesses(payload));
+      if (payload.action === "labeled" && payload.label?.name === ACCEPTED) {
+        await refundAccepted(item, source, [
+          { name: "Label", value: ACCEPTED },
+          { name: "Labelled by", value: `@${payload.sender?.login}` },
+        ]);
+      }
       if (payload.action === "labeled" && payload.label?.name === BAD_FAITH) await askForSignature(item);
     },
 
@@ -98,9 +171,9 @@ export function createKeeper({ escrow, chain, github, signPageUrl }: KeeperDeps)
       const key = keyFor(item);
       const deposit = await escrow.depositOf(key);
       if (deposit.status !== "active") return;
-      if (verdict.kind === "accepted" || verdict.kind === "exempt" || verdict.kind === "denounced") {
-        return void (await escrow.refund(key));
-      }
+      if (verdict.kind === "accepted") return refundAndLog(item, key, deposit, "check", acceptanceWitnesses(verdict));
+      // Not a decision: the Deposit wasn't needed, so it goes back.
+      if (verdict.kind === "exempt" || verdict.kind === "denounced") return void (await escrow.refund(key));
       // Made before the item was opened: the check ignores it, and it keeps the Contributor from
       // depositing. Only that Deposit: a newer one, made after the item opened, counts.
       if (!(await chain.depositSince(key, countsFrom(item)))) await escrow.refund(key, deposit.serial);
@@ -211,6 +284,28 @@ function itemOf(event: string | null, payload: any): Item | null {
   if (event === "pull_request") return { ...itemFields(payload, pr), kind: "pr", headSha: pr.head.sha };
   if (event === "issues") return { ...itemFields(payload, payload.issue), kind: "issue" };
   return null;
+}
+
+/** The facts behind an acceptance the check found: the label, or an approval. */
+function acceptanceWitnesses(verdict: Extract<Verdict, { kind: "accepted" }>): Witness[] {
+  const accepted = verdict.approver
+    ? { name: "Approved by", value: `@${verdict.approver}, with ${verdict.access ?? "write"} access` }
+    : { name: "Label", value: ACCEPTED };
+  return [accepted, { name: "Marked bad faith", value: "no" }];
+}
+
+function closeWitnesses(closed: any): Witness[] {
+  if (closed.pull_request) {
+    const by = closed.pull_request.merged_by?.login ?? closed.sender?.login;
+    return [
+      { name: "Merged", value: "yes" },
+      { name: "Merged by", value: `@${by}` },
+    ];
+  }
+  return [
+    { name: "Closed as", value: "completed" },
+    { name: "Closed by", value: `@${closed.sender.login}, not the author` },
+  ];
 }
 
 // Only someone with write access can merge. Anyone can close their own issue as completed, so that

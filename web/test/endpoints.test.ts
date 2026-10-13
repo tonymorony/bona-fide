@@ -1,5 +1,5 @@
 import { expect, test } from "vitest";
-import { askKeeperToBind, relayDeposit, sendVerdict, type Fetch } from "../src/endpoints.ts";
+import { askKeeperToBind, readDecisions, relayDeposit, sendVerdict, type Fetch } from "../src/endpoints.ts";
 
 const TX = `0x${"ab".repeat(32)}`;
 const WALLET = "0x5aAeb6053F3E94C9b9A09f33669435E7Ef1BeAed";
@@ -177,4 +177,64 @@ test("a Binding proof goes to /binding-proof on the page's own origin", async ()
 
   expect(sent[0]!.url).toBe("/binding-proof");
   expect(JSON.parse(String(sent[0]!.init.body))).toEqual(proof);
+});
+
+const decision = {
+  id: "3f1c",
+  at: "2026-09-01T12:00:00.000Z",
+  repo: "Acme/Widgets",
+  item: { kind: "pr", number: 7 },
+  serial: "3",
+  type: "triage",
+  inputs: { titleChars: 24, bodyChars: 12, bodyLeftOut: 0 },
+  suggestion: { verdict: "accept", reasons: ["It fixes the typo it names."] },
+  witnesses: [{ name: "Labels", value: "none" }],
+  action: "noted-accept",
+  txHash: null,
+  outcome: "decided",
+  cost: { model: "claude-opus-5", inputTokens: 1200, outputTokens: 80, usd: 0.008 },
+};
+
+test("the decision log is read with a GET to /decisions on the page's own origin", async () => {
+  const { fetch, sent } = answering(200, { counts: { decided: 1, escalated: 0 }, decisions: [decision] });
+
+  const outcome = await readDecisions("Acme/Widgets", fetch);
+
+  expect(sent[0]!.url).toBe("/decisions?repo=Acme%2FWidgets");
+  expect(sent[0]!.init.method ?? "GET").toBe("GET");
+  expect(outcome).toEqual({
+    kind: "ok",
+    counts: { decided: 1, escalated: 0 },
+    decisions: [{ ...decision, at: new Date(decision.at) }],
+  });
+});
+
+test("an empty log is read as no decisions, not as a failure", async () => {
+  const { fetch } = answering(200, { counts: { decided: 0, escalated: 0 }, decisions: [] });
+
+  expect(await readDecisions("acme/widgets", fetch)).toEqual({
+    kind: "ok",
+    counts: { decided: 0, escalated: 0 },
+    decisions: [],
+  });
+});
+
+test.each([
+  ["no answer", null],
+  ["a 500", answering(500, "").fetch],
+  ["a 429", answering(429, { error: "Too many requests. Try again in 60 s." }, { "retry-after": "60" }).fetch],
+  ["HTML from a proxy", answering(200, "<html>Bad gateway</html>").fetch],
+  ["counts that aren't numbers", answering(200, { counts: { decided: "1", escalated: 0 }, decisions: [] }).fetch],
+  ["no list", answering(200, { counts: { decided: 0, escalated: 0 } }).fetch],
+  [
+    "a decision out of shape",
+    answering(200, { counts: { decided: 1, escalated: 0 }, decisions: [{ ...decision, witnesses: "none" }] }).fetch,
+  ],
+  [
+    "a malformed transaction hash",
+    answering(200, { counts: { decided: 1, escalated: 0 }, decisions: [{ ...decision, txHash: "javascript:x" }] })
+      .fetch,
+  ],
+])("%s makes the log unavailable, never an empty one", async (_, fetch) => {
+  expect(await readDecisions("acme/widgets", fetch ?? failing)).toEqual({ kind: "unavailable" });
 });

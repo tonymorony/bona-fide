@@ -1,5 +1,18 @@
 export { createApp, type App, type AppDeps, type Exemption } from "./app.ts";
 export { CONFIG_PATH, DEFAULTS, parseConfig, type Config, type ParsedConfig } from "./config.ts";
+export {
+  createDecisionLog,
+  decisionCost,
+  KEPT_PER_REPO,
+  newDecision,
+  type DecisionLogOptions,
+} from "./decisions/log.ts";
+export {
+  createDecisionRoutes,
+  DECISIONS_ENDPOINT,
+  LATEST as LATEST_DECISIONS,
+  type DecisionRoutesOptions,
+} from "./decisions/routes.ts";
 export { createEscrowChain, escrowAbi, type EscrowChainOptions } from "./escrow.ts";
 export { CHECK_NAME, createGitHub, quietLog, type GitHubOptions } from "./github.ts";
 export { keyOf, KINDS, kindCode, repoIdOf, type Kind } from "./keys.ts";

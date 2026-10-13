@@ -232,11 +232,64 @@ JSON schema for the answer (`verdict` and `reasons`), and at most 16,000 output 
 Anthropic's server-side fallbacks on (`fallbacks: "default"`), a request the model declines is
 retried on Anthropic's default fallback model; a decline that stands gives no suggestion.
 
-**The decision log.** Each decision is one JSON line in the App's log, with `"event": "triage"`: the
-repo, kind, number, Serial and author; the sizes of what the model read and how much was cut; the
-model that answered, its verdict and reasons; the action (`noted-accept`, `drafted-verdict`,
+**The log line.** Each time triage runs, the App's log gets one JSON line with `"event": "triage"`:
+the repo, kind, number, Serial and author; the sizes of what the model read and how much was cut;
+the model that answered, its verdict and reasons; the action (`noted-accept`, `drafted-verdict`,
 `silent`, `skipped: …` or `failed: …`); and the input and output tokens. A failure names its kind,
-such as `failed: rate limited`, never the error's text.
+such as `failed: rate limited`, never the error's text. Each time the model was asked, the decision
+also goes into the [decision log](#decision-log).
+
+## Decision log
+
+The App records each decision it makes, or leaves to the Maintainer, so anyone can check why money
+moved or didn't. Each public repo's page shows the log and the counts, read from
+[`GET /decisions`](#get-decisions).
+
+**What is recorded.**
+
+- **Triage,** each time the model was asked: what it suggested and why, and what the App did.
+- **Early Refunds on acceptance:** the Keeper refunds a Deposit because the PR was merged, the issue
+  was closed as completed by someone other than its author, the `bona-fide:ok` label was added, or
+  someone with write, maintain or admin access approved the PR.
+
+Each decision has an id, a time, the repo and the PR or issue, the Deposit's Serial, and:
+
+| Field | What it holds |
+|---|---|
+| `type` | `triage` or `early-refund`. `waive`, `pay` and `hold` are kept for decisions the App doesn't make yet |
+| `inputs` | A summary of what was read: for triage, the sizes of the title, body, file list and diff and how much of each was cut; for a Refund, where it was found, such as `webhook pull_request closed` or `check`. Never the item's text |
+| `suggestion` | The model's verdict and reasons, as plain lines with links removed, or null when no model suggested anything |
+| `witnesses` | The facts checked, as `{name, value}`: the Deposit and who paid it, the Exemption status, the labels (read again after the model answered), who merged, closed or approved and with what access |
+| `action` | What was done: `noted-accept`, `drafted-verdict`, `silent`, `skipped: a Maintainer decided`, `failed: <kind>` or `refunded`. Never an error's text |
+| `txHash` | The Refund's transaction, when money moved |
+| `outcome` | `decided` or `escalated`, below |
+| `cost` | The model, its input and output tokens, and an estimate in USD from its list price (`claude-opus-5`: $5 in and $25 out per million tokens), or null when the model has no price on file |
+
+**Decided or escalated.** A decision is `decided` when the App acted on its own: an early Refund,
+or a note suggesting the Maintainer accept the item. It is `escalated` when the App left it to the
+Maintainer: a draft bad-faith verdict, an unsure model, a model that declined or failed, or a
+Maintainer who decided while the model read.
+
+**What is never recorded.** Refunds at the Timeout, and Refunds of a Deposit the check doesn't count
+(one made before its item was opened, or on an item that is exempt or whose Contributor is
+denounced): those decide nothing. Nor triage that never asked the model: triage off, a Maintainer's
+label already on the item, a Deposit triaged before, or a GitHub failure before the model was asked,
+which the next check tries again. No item text and no error text is ever recorded.
+
+**Private repos.** Each decision records whether GitHub says the repo is private, from the webhook's
+or the installation's repository data; when that isn't known, it counts as private. A private repo's
+decisions are kept, but never served: `GET /decisions` answers for it exactly as for a repo with no
+decisions, so it doesn't show the repo exists. A repo that turns private hides everything it had; one
+that turns public shows only the decisions made since.
+
+**Storage.** The Node host appends each decision as one JSON line to `DECISIONS_PATH`
+(`data/decisions.jsonl` in its working directory by default), created with the first decision and
+readable by its owner only. On start it reads the whole file back; a line that isn't a decision,
+such as one torn by a crash mid-write, is skipped and counted in the start-up line, and the next
+decision starts a line of its own. Memory keeps the counts of every repo and its latest 50 decisions
+(`KEPT_PER_REPO` in `src/decisions/log.ts`). If a decision can't be written, the host logs the error
+and still serves it until a restart; it never fails the Refund or the note. The file isn't rotated.
+The log sits behind the `DecisionLog` port in `src/ports.ts`, so another host can keep it elsewhere.
 
 ## GitHub App permissions and events
 
@@ -269,12 +322,12 @@ npm ci
 npm start
 ```
 
-`npm start` runs `src/node.ts`: an HTTP server for GitHub's webhooks, a watcher that polls the
-escrow for Deposits, and, with `KEEPER_PRIVATE_KEY` set, [the Keeper](#the-keeper) and its
+`npm start` runs `src/node.ts`: an HTTP server for GitHub's webhooks and
+[`GET /decisions`](#get-decisions), a watcher that polls the escrow for Deposits, and, with `KEEPER_PRIVATE_KEY` set, [the Keeper](#the-keeper) and its
 [endpoints](#endpoints). With `RELAYER_PRIVATE_KEY` set, it also runs the
 [deposit relay](#post-relaydeposit), and with `ANTHROPIC_API_KEY` set as well as the Keeper's key,
-[triage](#triage). It is the only file that uses Node: everything `src/index.ts` exports also
-bundles for a Workers-style runtime. Triage's Claude reviewer, `src/triage/claude.ts`, isn't among
+[triage](#triage). It and the decision file it opens, `src/decisions/file.ts`, are the only files
+that use Node: everything `src/index.ts` exports also bundles for a Workers-style runtime. Triage's Claude reviewer, `src/triage/claude.ts`, isn't among
 those exports: Anthropic's SDK looks for Node's globals when they exist, and the bundle check allows
 none, so a host imports it directly.
 
@@ -301,6 +354,7 @@ The host reads these environment variables:
 | `RELAYER_PRIVATE_KEY` | unset | Signs and pays the gas for relayed Deposits. It may be the Keeper's key |
 | `ANTHROPIC_API_KEY` | unset | Turns [triage](#triage) on, with the Keeper. Sends each PR's or issue's text and diff to Anthropic's API |
 | `TRIAGE_MODEL` | `claude-opus-5` | The Claude model triage asks |
+| `DECISIONS_PATH` | `data/decisions.jsonl` | The [decision log](#decision-log)'s JSONL file. Put it on storage that outlives the process |
 | `TRUST_PROXY` | unset | `1` makes the per-IP limits count the rightmost `X-Forwarded-For` address instead of the connection's. Set it only behind a reverse proxy that overwrites `X-Forwarded-For`; see [Limits](#limits) |
 
 The Keeper's address needs a little USDC on Arc for gas, and nothing more: no Deposit or Forfeit can
@@ -309,7 +363,7 @@ reach it.
 ## Endpoints
 
 With the Keeper on, the host serves `POST /forfeit` and `POST /binding-proof` next to the
-webhook. Both take and return JSON. A refusal is `{"error": "…"}` with status 400 (the request is
+webhook, and it always serves [`GET /decisions`](#get-decisions). Both take and return JSON. A refusal is `{"error": "…"}` with status 400 (the request is
 wrong), 404 (nothing to act on), 409 (the on-chain state doesn't allow it) or 429 (try again after
 `Retry-After` seconds; see [Limits](#limits)).
 
@@ -417,6 +471,41 @@ The Keeper doesn't store nonces, so a proof works until its deadline; keep the d
 Sending a proof again proposes what `bona-fide.yml` says at that moment, and sends nothing if that
 Binding is already pending or active.
 
+### `GET /decisions`
+
+Served whenever the App runs, with or without the Keeper. `GET /decisions?repo=owner/name` answers a
+public repo's [decision log](#decision-log): the counts of decisions made and left to the
+Maintainer, and its latest 50 decisions, the newest first. A decision has the fields above, without
+`private`.
+
+```json
+{
+  "counts": { "decided": 12, "escalated": 3 },
+  "decisions": [
+    {
+      "id": "…",
+      "at": "2026-09-01T12:00:00.000Z",
+      "repo": "octocat/hello-world",
+      "item": { "kind": "pr", "number": 7 },
+      "serial": "3",
+      "type": "early-refund",
+      "inputs": { "source": "webhook pull_request closed" },
+      "suggestion": null,
+      "witnesses": [{ "name": "Merged by", "value": "@octocat" }],
+      "action": "refunded",
+      "txHash": "0x…",
+      "outcome": "decided",
+      "cost": null
+    }
+  ]
+}
+```
+
+A private repo, or one with no decisions, answers `{"counts": {"decided": 0, "escalated": 0},
+"decisions": []}`. A `repo` that isn't owner/name gets 400. It is read-only and takes no
+credentials, so it allows any origin and answers a CORS preflight; any method other than `GET` gets
+405. Answers aren't cached.
+
 ### `POST /relay/deposit`
 
 With `RELAYER_PRIVATE_KEY` set, the host relays a Contributor's one-signature Deposit (an EIP-3009
@@ -434,8 +523,8 @@ and the host closes the connection without reading the rest. GitHub's deliveries
 App acts on are far smaller.
 
 Each client IP may send 10 requests a minute to `POST /forfeit` and `POST /binding-proof` together,
-and 10 to `POST /relay/deposit`; the relay also takes 30 a minute per repo. Every `POST` counts,
-well-formed or not. Past a limit the answer is `429` with `Retry-After`.
+10 to `POST /relay/deposit`, and 30 to `GET /decisions`; the relay also takes 30 a minute per repo.
+Every request counts, well-formed or not. Past a limit the answer is `429` with `Retry-After`.
 
 Behind a reverse proxy every connection comes from the proxy, so all clients would share one
 address's limits. With `TRUST_PROXY=1` the host counts each request against the rightmost

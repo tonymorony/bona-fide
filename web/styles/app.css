@@ -1726,6 +1726,68 @@ pre.example {
   font-weight: 600;
 }
 
+/* The repo page's decision log */
+
+.decisions {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.decision {
+  padding: 14px 0;
+  border-top: 1px solid var(--border);
+  font-size: 14px;
+}
+
+.decision-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 10px;
+}
+
+.decision-item {
+  color: var(--text);
+  font-weight: 600;
+}
+
+.decision-time {
+  margin-left: auto;
+  color: var(--text-2);
+  font-size: 13px;
+}
+
+.decision p {
+  margin: 8px 0 0;
+  overflow-wrap: anywhere;
+}
+
+.decision-suggestion {
+  font-weight: 500;
+}
+
+.decision-reasons {
+  margin: 4px 0 0;
+  padding-left: 20px;
+  color: var(--text-2);
+  overflow-wrap: anywhere;
+}
+
+.decision-facts {
+  margin-top: 8px;
+}
+
+.decision-facts dd {
+  overflow-wrap: anywhere;
+}
+
+.decision .decision-meta {
+  margin-top: 4px;
+  color: var(--text-2);
+  font-size: 13px;
+}
+
 .progress-line {
   display: flex;
   gap: 12px;

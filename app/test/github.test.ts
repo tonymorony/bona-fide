@@ -435,19 +435,21 @@ test("labels are added, and removing one that is gone is fine", async () => {
   expect(sent[0]?.body).toEqual({ labels: ["bona-fide:deposit-required"] });
 });
 
-test("a repoId is traced to an installed repo", async () => {
+test("a repoId is traced to an installed repo, with whether it is private", async () => {
   const { github } = fakeApi({
     "GET /app/installations": { status: 200, body: [{ id: 1 }] },
     "GET /installation/repositories": {
       status: 200,
       body: {
         total_count: 1,
-        repositories: [{ name: "Hello-World", full_name: "Codertocat/Hello-World", owner: { login: "Codertocat" } }],
+        repositories: [
+          { name: "Hello-World", full_name: "Codertocat/Hello-World", owner: { login: "Codertocat" }, private: true },
+        ],
       },
     },
   });
 
-  expect(await github.findRepo(repoIdOf("codertocat/hello-world"))).toEqual(REPO);
+  expect(await github.findRepo(repoIdOf("codertocat/hello-world"))).toEqual({ ...REPO, private: true });
   expect(await github.findRepo(repoIdOf("someone/else"))).toBeNull();
 });
 

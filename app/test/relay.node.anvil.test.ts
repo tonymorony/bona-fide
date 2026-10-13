@@ -3,7 +3,7 @@ import type { Hex } from "viem";
 import { generatePrivateKey, privateKeyToAccount } from "viem/accounts";
 import { afterAll, beforeAll, expect, test } from "vitest";
 import { freePort, startAnvil, type Anvil } from "./support/anvil.ts";
-import { DEPOSIT_PAGE, SETUP_PAGE } from "./support/harness.ts";
+import { DEPOSIT_PAGE, scratchDecisionsPath, SETUP_PAGE } from "./support/harness.ts";
 import { relayKit, type RelayKit } from "./support/relay.ts";
 import { SECRET } from "./support/webhooks.ts";
 
@@ -33,6 +33,7 @@ async function startApp(env: Record<string, string>) {
       DEPOSIT_PAGE_URL: DEPOSIT_PAGE,
       SETUP_PAGE_URL: SETUP_PAGE,
       ANTHROPIC_API_KEY: "",
+      DECISIONS_PATH: scratchDecisionsPath(),
       ...env,
     },
     stdio: ["ignore", "pipe", "pipe"],

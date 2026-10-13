@@ -1,10 +1,14 @@
 import type { Verdict } from "../app.ts";
 import type { Config } from "../config.ts";
-import { depositLink, triageAcceptNote, triageDraftNote } from "../copy.ts";
+import { depositLink, triageAcceptNote, triageDraftNote, usdc } from "../copy.ts";
+import { decisionCost, newDecision } from "../decisions/log.ts";
 import type { Kind } from "../keys.ts";
 import { ACCEPTED, BAD_FAITH, WAIVER } from "../labels.ts";
 import {
   fullName,
+  type Decision,
+  type DecisionLog,
+  type Deposit,
   type GitHub,
   type Item,
   type ItemContent,
@@ -73,6 +77,8 @@ export interface TriageDeps {
   signPageUrl: string;
   /** Hears every decision, such as to log it. */
   record(decision: TriageDecision): void;
+  /** Keeps each decision made after asking the model, for the repo page. */
+  decisions?: DecisionLog;
   now?: () => Date;
 }
 
@@ -88,11 +94,20 @@ export interface Triage {
 
 // Triage only writes a note. Whatever the model answers, it never adds a label, refunds or
 // forfeits: a Refund needs a Maintainer's acceptance, and a Forfeit the Maintainer's signature.
-export function createTriage({ github, reviewer, signPageUrl, record, now = () => new Date() }: TriageDeps): Triage {
+export function createTriage({
+  github,
+  reviewer,
+  signPageUrl,
+  record,
+  decisions,
+  now = () => new Date(),
+}: TriageDeps): Triage {
   const triaged = new Set<string>();
   const running = new Map<string, Promise<void>>();
 
-  async function decide(item: Item, serial: bigint, config: Config): Promise<Outcome> {
+  // `seen` collects what the decision log keeps beyond the log line: the reasons as plain text,
+  // and the labels read again after the model answered.
+  async function decide(item: Item, serial: bigint, config: Config, seen: Seen): Promise<Outcome> {
     const none = { inputs: null, model: null, verdict: null, reasons: [], usage: null };
     if (!config.triage) return { ...none, action: OFF };
     if (settledByMaintainer(item.labels)) return { ...none, action: DECIDED };
@@ -112,12 +127,14 @@ export function createTriage({ github, reviewer, signPageUrl, record, now = () =
     const answered = { inputs, model: review.model, usage };
     const suggestion = review.suggestion;
     if (!suggestion) return { ...answered, verdict: null, reasons: [], action: "silent" };
-    const reasons = cleanReasons(suggestion.reasons);
+    seen.reasons = plainReasons(suggestion.reasons);
+    const reasons = seen.reasons.map(markdownSafe);
     const decided = { ...answered, verdict: suggestion.verdict, reasons };
     if (suggestion.verdict === "unsure" || reasons.length === 0) return { ...decided, action: "silent" };
 
     // A Maintainer may have decided while the model read.
     const current = await github.getItem(item.repo, item.kind, item.number);
+    seen.labelsAfter = current?.labels ?? null;
     if (!current || settledByMaintainer(current.labels)) return { ...decided, action: DECIDED };
     if (suggestion.verdict === "accept") {
       await github.addNote(item.repo, item.number, marker, triageAcceptNote(item.kind, reasons));
@@ -128,17 +145,18 @@ export function createTriage({ github, reviewer, signPageUrl, record, now = () =
     return { ...decided, action: "drafted-verdict" };
   }
 
-  async function run(item: Item, serial: bigint, config: Config, id: string): Promise<void> {
+  async function run(item: Item, deposit: Deposit, config: Config, id: string): Promise<void> {
     const facts: Facts = {
       repo: fullName(item.repo),
       kind: item.kind,
       number: item.number,
-      serial: String(serial),
+      serial: String(deposit.serial),
       author: item.author,
     };
+    const seen: Seen = { reasons: [], labelsAfter: undefined };
     let decision: TriageDecision;
     try {
-      decision = { ...facts, ...(await decide(item, serial, config)), at: now().toISOString() };
+      decision = { ...facts, ...(await decide(item, deposit.serial, config, seen)), at: now().toISOString() };
     } catch (error) {
       // GitHub failed: nothing was posted, so the next check of the item tries again.
       const reason = error instanceof Error ? error.message : String(error);
@@ -153,15 +171,17 @@ export function createTriage({ github, reviewer, signPageUrl, record, now = () =
       triaged.add(id);
     }
     safely(() => record(decision));
+    // Only a decision the model was asked about: a skip before that decided nothing.
+    if (decision.inputs !== null) safely(() => decisions?.append(logged(item, deposit, decision, seen)));
   }
 
   return {
     async afterVerdict(item, verdict, config) {
       if (verdict.kind !== "deposited") return;
-      const serial = verdict.deposit.serial;
-      const id = `${fullName(item.repo)}#${item.kind}${item.number}:${serial}`.toLowerCase();
+      const deposit = verdict.deposit;
+      const id = `${fullName(item.repo)}#${item.kind}${item.number}:${deposit.serial}`.toLowerCase();
       if (triaged.has(id) || running.has(id)) return;
-      const work = run(item, serial, config, id).finally(() => running.delete(id));
+      const work = run(item, deposit, config, id).finally(() => running.delete(id));
       running.set(id, work);
     },
 
@@ -173,6 +193,55 @@ export function createTriage({ github, reviewer, signPageUrl, record, now = () =
 
 type Facts = Pick<TriageDecision, "repo" | "kind" | "number" | "serial" | "author">;
 type Outcome = Omit<TriageDecision, keyof Facts | "at">;
+
+interface Seen {
+  /** The model's reasons as plain lines, before they're made safe for GitHub. */
+  reasons: string[];
+  /** The item's labels once the model answered; undefined if they weren't read again. */
+  labelsAfter: string[] | null | undefined;
+}
+
+// A note suggesting acceptance is the App acting on its own. Everything else was left to the
+// Maintainer: a draft verdict, a model unsure, declining or failing, or a Maintainer deciding first.
+function logged(item: Item, deposit: Deposit, decision: TriageDecision, seen: Seen): Decision {
+  const witnesses = [
+    {
+      name: "Deposit",
+      value: `Serial ${deposit.serial}: ${usdc(deposit.amount)} from ${deposit.depositor}, counted by the check`,
+    },
+    { name: "Exemption", value: "none" },
+    { name: "Labels", value: labelList(item.labels) },
+    { name: "Triage in bona-fide.yml", value: "on" },
+  ];
+  if (seen.labelsAfter !== undefined) {
+    const after = seen.labelsAfter === null ? "the item is gone" : labelList(seen.labelsAfter);
+    witnesses.push({ name: "Labels after the model answered", value: after });
+  }
+  return newDecision(
+    {
+      repo: decision.repo,
+      private: item.repo.private !== false,
+      item: { kind: item.kind, number: item.number },
+      serial: decision.serial,
+      type: "triage",
+      inputs: decision.inputs,
+      suggestion: decision.verdict ? { verdict: decision.verdict, reasons: seen.reasons } : null,
+      witnesses,
+      action: decision.action,
+      txHash: null,
+      outcome: decision.action === "noted-accept" ? "decided" : "escalated",
+      cost:
+        decision.model && decision.usage
+          ? decisionCost(decision.model, decision.usage.inputTokens, decision.usage.outputTokens)
+          : null,
+    },
+    new Date(decision.at),
+  );
+}
+
+function labelList(labels: string[]): string {
+  return labels.length > 0 ? labels.join(", ") : "none";
+}
 
 /** The hidden marker a triage note starts with. It names the Deposit, so each is triaged once. */
 export function markerFor(serial: bigint): string {
@@ -225,24 +294,27 @@ function inputsOf(request: ReviewRequest): TriageDecision["inputs"] {
   };
 }
 
-// The model read text anyone can write, so its answer is untrusted too. In the note a reason is
-// one plain line: it can't ping anyone, link anywhere, or carry HTML.
-function cleanReasons(reasons: string[]): string[] {
+// The model read text anyone can write, so its answer is untrusted too. A reason is one plain line
+// with no links; in the note it also can't ping anyone or carry HTML.
+function plainReasons(reasons: string[]): string[] {
   return reasons
-    .map(cleanReason)
+    .map(plainReason)
     .filter((reason) => reason !== "")
     .slice(0, MAX_REASONS);
 }
 
-function cleanReason(reason: string): string {
+function plainReason(reason: string): string {
   const line = reason
     .replace(/\s+/g, " ")
     .replace(/!?\[([^\]]*)\]\([^)]*\)/g, "$1")
     .replace(/\b(?:[a-z][a-z0-9+.-]*:\/\/|www\.)[^\s)\]>]*/gi, "(link removed)")
     .trim();
-  const short = line.length > MAX_REASON_CHARS ? `${line.slice(0, MAX_REASON_CHARS - 1).trimEnd()}…` : line;
+  return line.length > MAX_REASON_CHARS ? `${line.slice(0, MAX_REASON_CHARS - 1).trimEnd()}…` : line;
+}
+
+function markdownSafe(line: string): string {
   return (
-    short
+    line
       .replace(/&/g, "&amp;")
       .replace(/</g, "&lt;")
       .replace(/>/g, "&gt;")

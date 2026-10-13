@@ -29,10 +29,10 @@ export class FakeGitHub implements GitHub {
   latency = 0;
   private readonly broken = new Map<string, number>();
 
-  addRepo(fullName: string, installationId = 1): RepoState {
+  addRepo(fullName: string, installationId = 1, isPrivate = false): RepoState {
     const [owner = "", name = ""] = fullName.split("/");
     const state: RepoState = {
-      repo: { owner, name, installationId },
+      repo: { owner, name, installationId, private: isPrivate },
       files: new Map(),
       permissions: new Map(),
       mergedAuthors: new Set(),

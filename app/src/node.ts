@@ -4,6 +4,7 @@
 // With RELAYER_PRIVATE_KEY set, it also relays signed Deposits at POST /relay/deposit.
 // With ANTHROPIC_API_KEY set as well as the Keeper's key, triage asks Claude about each item that
 // holds a Deposit.
+// It keeps the decision log in the JSONL file at DECISIONS_PATH and serves it at GET /decisions.
 // Start it with `node src/node.ts`; Node 24 runs the TypeScript directly.
 
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
@@ -14,6 +15,8 @@ import { createPublicClient, createWalletClient, http, type Address } from "viem
 import { createApp } from "./app.ts";
 import { clientIpOf } from "./client-ip.ts";
 import { MAX_JSON_BODY_BYTES, MAX_WEBHOOK_BODY_BYTES } from "./config.ts";
+import { DEFAULT_DECISIONS_PATH, openDecisionFile } from "./decisions/file.ts";
+import { createDecisionRoutes, DECISIONS_ENDPOINT } from "./decisions/routes.ts";
 import { createEscrowChain } from "./escrow.ts";
 import { createGitHub, quietLog } from "./github.ts";
 import { createBindingActivator } from "./keeper/activator.ts";
@@ -26,6 +29,10 @@ import { createClaudeReviewer, DEFAULT_TRIAGE_MODEL } from "./triage/claude.ts";
 import { createTriage, decisionLine } from "./triage/triage.ts";
 import { createDepositWatcher, pollDeposits } from "./watcher.ts";
 import { createWebhookHandler } from "./webhook.ts";
+
+function count(n: number, unit: string): string {
+  return `${n} ${unit}${n === 1 ? "" : "s"}`;
+}
 
 function env(name: string): string {
   const value = process.env[name];
@@ -57,6 +64,16 @@ const chain = createEscrowChain({
   fromBlock: BigInt(process.env.ESCROW_FROM_BLOCK ?? "0"),
 });
 
+const decisionsPath = process.env.DECISIONS_PATH || DEFAULT_DECISIONS_PATH;
+const decisionFile = await openDecisionFile(decisionsPath);
+const decisions = decisionFile.log;
+const { loaded, skipped } = decisionFile;
+const notDecisions = skipped === 1 ? "1 line that isn't a decision" : `${skipped} lines that aren't decisions`;
+console.log(
+  `Decision log: ${count(loaded, "decision")} read from ${decisionsPath}.` +
+    (skipped > 0 ? ` Skipped ${notDecisions}.` : ""),
+);
+
 const account = process.env.KEEPER_PRIVATE_KEY ? keeperAccount(process.env.KEEPER_PRIVATE_KEY) : null;
 const keeperEscrow =
   account &&
@@ -65,7 +82,8 @@ const keeperEscrow =
     account,
     escrow: env("ESCROW_ADDRESS") as Address,
   });
-const keeper = keeperEscrow && createKeeper({ escrow: keeperEscrow, chain, github, signPageUrl: env("SIGN_PAGE_URL") });
+const keeper =
+  keeperEscrow && createKeeper({ escrow: keeperEscrow, chain, github, signPageUrl: env("SIGN_PAGE_URL"), decisions });
 console.log(
   account
     ? `Keeper ${account.address} signs refunds, relayed Forfeits and Bindings.`
@@ -82,6 +100,7 @@ const triage =
         reviewer: createClaudeReviewer({ client: new Anthropic({ apiKey: anthropicKey }), model: triageModel }),
         signPageUrl: env("SIGN_PAGE_URL"),
         record: (decision) => console.log(decisionLine(decision)),
+        decisions,
       })
     : undefined;
 if (triage) console.log(`Triage asks ${triageModel} about each PR and issue that holds a Deposit.`);
@@ -124,10 +143,14 @@ if (!["", "0", "1"].includes(process.env.TRUST_PROXY ?? "")) {
 const trustProxy = process.env.TRUST_PROXY === "1";
 if (trustProxy) console.log("Per-IP limits count the rightmost X-Forwarded-For address (TRUST_PROXY=1).");
 
-function route(request: Request, clientIp: string): Promise<Response> {
-  if (new URL(request.url).pathname === RELAY_DEPOSIT_PATH) {
+const decisionRoutes = createDecisionRoutes(decisions);
+
+async function route(request: Request, clientIp: string): Promise<Response> {
+  const path = new URL(request.url).pathname;
+  if (path === DECISIONS_ENDPOINT) return (await decisionRoutes(request, clientIp))!;
+  if (path === RELAY_DEPOSIT_PATH) {
     if (relay) return relay(request, clientIp);
-    return Promise.resolve(Response.json({ error: "This App doesn't relay Deposits." }, { status: 404 }));
+    return Response.json({ error: "This App doesn't relay Deposits." }, { status: 404 });
   }
   return handle(request, clientIp);
 }

@@ -5,6 +5,8 @@ export interface Repo {
   owner: string;
   name: string;
   installationId: number;
+  /** Whether GitHub says the repo is private. Unknown counts as private: its decisions are never published. */
+  private?: boolean;
 }
 
 export function fullName(repo: Repo): string {
@@ -187,4 +189,65 @@ export interface Review {
 export interface Reviewer {
   /** Rejects with ReviewFailed when the model can't be reached or errs. */
   review(request: ReviewRequest): Promise<Review>;
+}
+
+/**
+ * What the decision log records: triage's suggestions and the Keeper's early Refunds. `waive`, `pay`
+ * and `hold` are kept for decisions the App doesn't make yet.
+ */
+export type DecisionType = "triage" | "early-refund" | "waive" | "pay" | "hold";
+
+/**
+ * "decided": the App acted on its own, such as an early Refund or a note suggesting acceptance.
+ * "escalated": the App left it to the Maintainer, such as a draft bad-faith verdict, an unsure
+ * model, or a model that declined or failed.
+ */
+export type DecisionOutcome = "decided" | "escalated";
+
+/** A fact the App checked before it acted, such as who approved the PR. */
+export interface Witness {
+  name: string;
+  value: string;
+}
+
+/** What asking the model cost. `usd` is an estimate from list prices, or null for a model without one. */
+export interface DecisionCost {
+  model: string;
+  inputTokens: number;
+  outputTokens: number;
+  usd: number | null;
+}
+
+/** One decision the App made or left to the Maintainer, and why: what anyone can check on the repo page. */
+export interface Decision {
+  id: string;
+  /** ISO 8601. */
+  at: string;
+  /** owner/name, in GitHub's case. */
+  repo: string;
+  /** Whether the repo was private. A private repo's decisions are kept, but never published. */
+  private: boolean;
+  item: { kind: Kind; number: number };
+  /** The Deposit's Serial, as a decimal string, if one is involved. */
+  serial: string | null;
+  type: DecisionType;
+  /** A summary of what was read, such as sizes and cuts. Never the item's text. */
+  inputs: Record<string, string | number | boolean> | null;
+  /** The model's suggestion with its reasons as plain lines, or null when no model suggested anything. */
+  suggestion: { verdict: Suggestion; reasons: string[] } | null;
+  witnesses: Witness[];
+  /** What the App did, such as "refunded", "noted-accept" or "failed: rate limited". Never an error's text. */
+  action: string;
+  /** The transaction, when money moved. */
+  txHash: Hex | null;
+  outcome: DecisionOutcome;
+  cost: DecisionCost | null;
+}
+
+/** Where decisions are kept. What it answers is what may be published: nothing from a private repo. */
+export interface DecisionLog {
+  append(decision: Decision): void;
+  /** Up to `max` of the repo's latest published decisions, the newest first. */
+  latest(repo: string, max: number): Decision[];
+  counts(repo: string): Record<DecisionOutcome, number>;
 }

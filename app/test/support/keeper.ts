@@ -1,10 +1,12 @@
 import { createPublicClient, createWalletClient, http, type Address, type Hex } from "viem";
 import { generatePrivateKey, privateKeyToAccount } from "viem/accounts";
 import { createApp } from "../../src/app.ts";
+import { createDecisionLog } from "../../src/decisions/log.ts";
 import { createEscrowChain } from "../../src/escrow.ts";
 import { createKeeperEscrow, type KeeperEscrow } from "../../src/keeper/escrow.ts";
 import { createKeeper } from "../../src/keeper/keeper.ts";
 import { createKeeperRoutes } from "../../src/keeper/routes.ts";
+import type { Decision } from "../../src/ports.ts";
 import { createWebhookHandler } from "../../src/webhook.ts";
 import { startAnvil, type Anvil } from "./anvil.ts";
 import { FakeGitHub } from "./fake-github.ts";
@@ -40,7 +42,10 @@ export function keeperHarness(anvil: Anvil, keeperKey: `0x${string}`, options: H
   const client = createPublicClient({ transport: http(anvil.url) });
   const chain = createEscrowChain({ client, escrow: anvil.escrow, fromBlock: anvil.deployBlock });
   const escrow = wrap(createKeeperEscrow({ client, account: privateKeyToAccount(keeperKey), escrow: anvil.escrow }));
-  const keeper = createKeeper({ escrow, chain, github, signPageUrl: SIGN_PAGE });
+  /** Every decision appended to the log, private repos' included. */
+  const logged: Decision[] = [];
+  const log = createDecisionLog({ write: (decision) => logged.push(decision) });
+  const keeper = createKeeper({ escrow, chain, github, signPageUrl: SIGN_PAGE, decisions: log });
   const app = createApp({
     github,
     chain,
@@ -54,7 +59,7 @@ export function keeperHarness(anvil: Anvil, keeperKey: `0x${string}`, options: H
   const routes = (request: Request, clientIp = CLIENT_IP) => keeperRoutes(request, clientIp);
   const post = (path: string, body: unknown) =>
     routes(new Request(`https://app.example${path}`, { method: "POST", body: JSON.stringify(body) }));
-  return { github, chain, escrow, keeper, app, deliver, routes, post };
+  return { github, chain, escrow, keeper, app, deliver, routes, post, log, logged };
 }
 
 /** The EIP-712 Forfeit a Maintainer signs, signed by one of anvil's unlocked accounts. */

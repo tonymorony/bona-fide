@@ -4,6 +4,9 @@ import { join } from "node:path";
 import { privateKeyToAccount } from "viem/accounts";
 import type { Hex } from "viem";
 import { afterAll, beforeAll, expect, test } from "vitest";
+import { createDecisionLog } from "../../app/src/decisions/log.ts";
+import { createDecisionRoutes } from "../../app/src/decisions/routes.ts";
+import type { Decision } from "../../app/src/ports.ts";
 import { keeperHarness } from "../../app/test/support/keeper.ts";
 import type { Anvil } from "../../app/test/support/anvil.ts";
 import { buildPages } from "../build.ts";
@@ -24,6 +27,11 @@ let keeper: ReturnType<typeof keeperHarness>;
 let relayer: Hex;
 /** Answers POST /relay/deposit instead of the App, while set. */
 let relayStub: ((body: any) => Promise<Response | null> | Response | null) | null = null;
+/** What GET /decisions answers: the App's log, an empty one, or a failure, as when the App is down. */
+let decisionsMode: "log" | "empty" | "down" = "log";
+const decisionLog = createDecisionLog();
+const emptyLog = createDecisionLog();
+const REFUND_TX = `0x${"5e".repeat(32)}` as const;
 /** The bona-fide.yml GitHub shows for a repo; missing repos get a 404. */
 const githubFiles = new Map<string, string>();
 /** Where to save a frame of each checked state: set SCREENSHOTS to a folder. */
@@ -49,7 +57,93 @@ const github = {
   },
 };
 
+function seedDecisions() {
+  const base = {
+    repo: "Acme/Widgets",
+    private: false,
+    serial: "1",
+    inputs: null,
+    suggestion: null,
+    txHash: null,
+    cost: null,
+  } as const;
+  const logged: Omit<Decision, "id">[] = [
+    {
+      ...base,
+      at: "2026-09-01T09:00:00.000Z",
+      item: { kind: "issue", number: 8 },
+      type: "triage",
+      inputs: { titleChars: 31, bodyChars: 1_840, bodyLeftOut: 0 },
+      suggestion: {
+        verdict: "bad-faith",
+        reasons: ["It links to a <img src=x onerror=alert(1)> casino.", "The body has nothing to do with Widgets."],
+      },
+      witnesses: [
+        {
+          name: "Deposit",
+          value: "Serial 1: 1 USDC from 0x5aAeb6053F3E94C9b9A09f33669435E7Ef1BeAed, counted by the check",
+        },
+        { name: "Exemption", value: "none" },
+        { name: "Labels", value: "none" },
+        { name: "Triage in bona-fide.yml", value: "on" },
+        { name: "Labels after the model answered", value: "none" },
+      ],
+      action: "drafted-verdict",
+      outcome: "escalated",
+      cost: { model: "claude-opus-5", inputTokens: 2_310, outputTokens: 142, usd: 0.0151 },
+    },
+    {
+      ...base,
+      at: "2026-09-02T10:30:00.000Z",
+      item: { kind: "pr", number: 21 },
+      type: "triage",
+      inputs: {
+        titleChars: 24,
+        bodyChars: 12,
+        bodyLeftOut: 0,
+        files: 1,
+        filesLeftOut: 0,
+        diffChars: 54,
+        diffLeftOut: 0,
+      },
+      suggestion: { verdict: "accept", reasons: ["It fixes the typo it names."] },
+      witnesses: [{ name: "Labels", value: "none" }],
+      action: "noted-accept",
+      outcome: "decided",
+      cost: { model: "claude-opus-5", inputTokens: 1_200, outputTokens: 80, usd: 0.008 },
+    },
+    {
+      ...base,
+      at: "2026-09-02T11:00:00.000Z",
+      item: { kind: "pr", number: 22 },
+      type: "triage",
+      inputs: { titleChars: 10, bodyChars: 0, bodyLeftOut: 0 },
+      witnesses: [{ name: "Labels", value: "none" }],
+      action: "failed: rate limited",
+      outcome: "escalated",
+    },
+    {
+      ...base,
+      at: "2026-09-03T08:15:00.000Z",
+      item: { kind: "pr", number: 21 },
+      type: "early-refund",
+      inputs: { source: "check" },
+      witnesses: [
+        { name: "Deposit", value: "Serial 2: 1 USDC from 0x5aAeb6053F3E94C9b9A09f33669435E7Ef1BeAed" },
+        { name: "Approved by", value: "@mo, with write access" },
+        { name: "Marked bad faith", value: "no" },
+      ],
+      action: "refunded",
+      txHash: REFUND_TX,
+      outcome: "decided",
+    },
+  ];
+  logged.forEach((decision, i) => decisionLog.append({ id: `seeded-${i}`, ...decision }));
+  decisionLog.append({ ...logged[0]!, id: "secret", repo: "Acme/Secret", private: true });
+}
+
 beforeAll(async () => {
+  seedDecisions();
   stack = await startStack();
   const dir = await mkdtemp(join(tmpdir(), "bona-fide-site-"));
   await buildPages({ network: stack.network, outDir: dir });
@@ -67,6 +161,10 @@ beforeAll(async () => {
     dir,
     relayUrl: app.url,
     endpoint: async (request) => {
+      if (new URL(request.url).pathname === "/decisions") {
+        if (decisionsMode === "down") return new Response("<html>502 Bad Gateway</html>", { status: 502 });
+        return createDecisionRoutes(decisionsMode === "log" ? decisionLog : emptyLog)(request, "127.0.0.1");
+      }
       if (new URL(request.url).pathname === "/relay/deposit" && relayStub) {
         return await relayStub(JSON.parse(await request.clone().text()));
       }
@@ -422,6 +520,81 @@ test("the repo page lists the Deposits, refunds a timed-out one, and sends the r
   expect(page.errors).toEqual([]);
   await page.close();
 }, 90_000);
+
+test("the repo page shows the decision log: the counts, and what was suggested, checked and done", async () => {
+  const page = await chrome.newPage({ intercept: github });
+  const decisions = `document.querySelectorAll("[data-decisions] > li").length`;
+
+  await page.open(site.url("repo.html?repo=Acme/Widgets"));
+  await page.waitFor(`${decisions} === 4`, "the decisions");
+  await page.waitFor(`!document.body.innerText.includes("Reading Deposits")`);
+  await frame(page, "repo-decisions-1280");
+
+  const text = await page.text();
+  expect(text).toMatch(/2\s+Decided by Bona Fide/);
+  expect(text).toMatch(/2\s+Left to the Maintainer/);
+  expect(text).toContain("Suggested: likely bad faith");
+  expect(text).toContain("It links to a <img src=x onerror=alert(1)> casino.");
+  expect(text).toContain("Posted a draft bad-faith verdict for the Maintainer. Nothing was forfeited.");
+  expect(text).toContain("Suggested: good-faith work");
+  expect(text).toContain("Posted a note suggesting the Maintainer accept it.");
+  expect(text).toContain("The model couldn't be asked (rate limited). Nothing was posted.");
+  expect(text).toContain("Approved by");
+  expect(text).toContain("@mo, with write access");
+  expect(text).toContain("Refunded the Deposit in full to its Depositor.");
+  expect(text).toContain("claude-opus-5: 2,310 tokens in, 142 out, about $0.0151");
+  expect(await page.evaluate(`document.querySelectorAll("[data-decisions] img").length`)).toBe(0);
+  const order = await page.evaluate<string[]>(
+    `[...document.querySelectorAll("[data-decisions] [data-cell=item]")].map((a) => a.textContent)`,
+  );
+  expect(order).toEqual(["PR #21", "PR #22", "PR #21", "Issue #8"]);
+  const links = await page.evaluate<string[]>(
+    `[...document.querySelectorAll("[data-decisions] a")].map((a) => a.href)`,
+  );
+  expect(links).toContain("https://github.com/Acme/Widgets/pull/21");
+  expect(links).toContain(`${stack.network.explorerUrl}/tx/${REFUND_TX}`);
+  expect(page.errors).toEqual([]);
+  await page.close();
+}, 60_000);
+
+test("with no decisions the repo page says so, and when the log can't be read it says that, not zero", async () => {
+  const page = await chrome.newPage({ intercept: github });
+  try {
+    decisionsMode = "empty";
+    await page.open(site.url("repo.html?repo=Acme/Widgets"));
+    await page.waitFor(`!document.querySelector('[data-if="no-decisions"]').hidden`, "the empty log");
+    await page.waitFor(`!document.body.innerText.includes("Reading Deposits")`);
+    await frame(page, "repo-decisions-empty-1280");
+    expect(await page.text()).toContain("No decisions here yet.");
+
+    decisionsMode = "down";
+    await page.open(site.url("repo.html?repo=Acme/Widgets"));
+    await page.waitFor(`!document.querySelector('[data-if="decisions-failed"]').hidden`, "the failure");
+    await page.waitFor(`!document.body.innerText.includes("Reading Deposits")`);
+    await frame(page, "repo-decisions-down-1280");
+    const text = await page.text();
+    expect(text).toContain("Couldn't read the decision log");
+    expect(text).not.toMatch(/Decided by Bona Fide|No decisions here yet/);
+
+    decisionsMode = "log";
+    await page.click('[data-action="reload-decisions"]');
+    await page.waitFor(`document.querySelectorAll("[data-decisions] > li").length === 4`, "the decisions");
+    expect(besides(page.errors, "/decisions")).toEqual([]);
+  } finally {
+    decisionsMode = "log";
+    await page.close();
+  }
+}, 60_000);
+
+test("a private repo's decisions don't show on its page", async () => {
+  const page = await chrome.newPage({ intercept: github });
+
+  await page.open(site.url("repo.html?repo=Acme/Secret"));
+  await page.waitFor(`!document.querySelector('[data-if="no-decisions"]').hidden`, "the empty log");
+
+  expect(await page.text()).not.toContain("Suggested:");
+  await page.close();
+}, 60_000);
 
 const PAGES: [string, string, string][] = [
   ["deposit", "deposit.html?repo=Acme/Widgets&kind=pr&number=30", "not-connected"],

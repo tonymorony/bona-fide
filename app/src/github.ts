@@ -68,7 +68,12 @@ export function createGitHub({ appId, app, installation }: GitHubOptions): GitHu
       for (const repo of await octokit.paginate(octokit.rest.apps.listReposAccessibleToInstallation, {
         per_page: 100,
       })) {
-        found.set(repoIdOf(repo.full_name), { owner: repo.owner.login, name: repo.name, installationId: id });
+        found.set(repoIdOf(repo.full_name), {
+          owner: repo.owner.login,
+          name: repo.name,
+          installationId: id,
+          private: repo.private,
+        });
       }
     }
     return found;

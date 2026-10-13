@@ -1,5 +1,5 @@
 import type { Address, Hex } from "viem";
-import type { Kind } from "./keys.ts";
+import { KINDS, type Kind } from "./keys.ts";
 import type { SignedDepositTerms } from "./typed-data.ts";
 
 /** The App's endpoints, on the pages' own origin. */
@@ -7,6 +7,7 @@ export const PATHS = {
   relayDeposit: "/relay/deposit",
   forfeit: "/forfeit",
   bindingProof: "/binding-proof",
+  decisions: "/decisions",
 } as const;
 
 export type Fetch = (input: string, init?: RequestInit) => Promise<Response>;
@@ -200,4 +201,117 @@ export async function askKeeperToBind(
   if (status === 429) return waitFor(answer);
   if (status === 413) return { kind: "too-large" };
   return { kind: "unavailable" };
+}
+
+/** One decision in the App's log, as GET /decisions answers it. Its text is untrusted: show it as text only. */
+export interface Decision {
+  id: string;
+  at: Date;
+  repo: string;
+  item: { kind: Kind; number: number };
+  serial: string | null;
+  /** "triage" or "early-refund" today; the App may add others. */
+  type: string;
+  inputs: Record<string, string | number | boolean> | null;
+  suggestion: { verdict: string; reasons: string[] } | null;
+  witnesses: { name: string; value: string }[];
+  action: string;
+  txHash: Hex | null;
+  outcome: "decided" | "escalated";
+  cost: { model: string; inputTokens: number; outputTokens: number; usd: number | null } | null;
+}
+
+export type DecisionsOutcome =
+  | { kind: "ok"; counts: { decided: number; escalated: number }; decisions: Decision[] }
+  /** No answer, or one out of shape: the page says the log couldn't be read, never that it is empty. */
+  | { kind: "unavailable" };
+
+/** Reads the repo's decision log from GET /decisions. */
+export async function readDecisions(repo: string, fetch: Fetch): Promise<DecisionsOutcome> {
+  let body: unknown;
+  try {
+    const response = await fetch(`${PATHS.decisions}?${new URLSearchParams({ repo })}`);
+    if (response.status !== 200) return { kind: "unavailable" };
+    body = await response.json();
+  } catch {
+    return { kind: "unavailable" };
+  }
+  const reply = objectIn(body);
+  const counts = objectIn(reply?.counts);
+  if (!reply || !counts || !isCount(counts.decided) || !isCount(counts.escalated) || !Array.isArray(reply.decisions)) {
+    return { kind: "unavailable" };
+  }
+  const decisions = reply.decisions.map(decisionIn);
+  if (decisions.some((d) => d === null)) return { kind: "unavailable" };
+  return {
+    kind: "ok",
+    counts: { decided: counts.decided, escalated: counts.escalated },
+    decisions: decisions as Decision[],
+  };
+}
+
+function objectIn(value: unknown): Record<string, unknown> | null {
+  return typeof value === "object" && value !== null && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : null;
+}
+
+function isCount(value: unknown): value is number {
+  return typeof value === "number" && Number.isSafeInteger(value) && value >= 0;
+}
+
+const isString = (value: unknown): value is string => typeof value === "string";
+
+function decisionIn(value: unknown): Decision | null {
+  const d = objectIn(value);
+  const item = objectIn(d?.item);
+  if (!d || !item || !KINDS.includes(item.kind as Kind) || !isCount(item.number)) return null;
+  const at = new Date(isString(d.at) ? d.at : NaN);
+  if (!isString(d.id) || !isString(d.repo) || !isString(d.type) || !isString(d.action) || isNaN(at.getTime())) {
+    return null;
+  }
+  if (d.outcome !== "decided" && d.outcome !== "escalated") return null;
+  if (d.serial !== null && !(isString(d.serial) && /^\d+$/.test(d.serial))) return null;
+  if (d.txHash !== null && !(isString(d.txHash) && HASH.test(d.txHash))) return null;
+  const inputs = d.inputs === null ? null : objectIn(d.inputs);
+  const scalar = (v: unknown) => ["string", "number", "boolean"].includes(typeof v);
+  if (d.inputs !== null && (!inputs || !Object.values(inputs).every(scalar))) return null;
+  if (!Array.isArray(d.witnesses)) return null;
+  const witnesses = d.witnesses.map(objectIn);
+  if (witnesses.some((w) => !w || !isString(w.name) || !isString(w.value))) return null;
+  const suggestion = d.suggestion === null ? null : objectIn(d.suggestion);
+  if (d.suggestion !== null) {
+    const reasons = suggestion?.reasons;
+    if (!suggestion || !isString(suggestion.verdict) || !Array.isArray(reasons) || !reasons.every(isString)) {
+      return null;
+    }
+  }
+  const cost = d.cost === null ? null : objectIn(d.cost);
+  if (d.cost !== null) {
+    const usd = cost?.usd;
+    const priced = usd === null || (typeof usd === "number" && Number.isFinite(usd) && usd >= 0);
+    if (!cost || !isString(cost.model) || !isCount(cost.inputTokens) || !isCount(cost.outputTokens) || !priced) {
+      return null;
+    }
+  }
+  return {
+    id: d.id,
+    at,
+    repo: d.repo,
+    item: { kind: item.kind as Kind, number: item.number },
+    serial: d.serial as string | null,
+    type: d.type,
+    inputs: inputs as Decision["inputs"],
+    suggestion: suggestion && { verdict: suggestion.verdict as string, reasons: suggestion.reasons as string[] },
+    witnesses: witnesses.map((w) => ({ name: w!.name as string, value: w!.value as string })),
+    action: d.action,
+    txHash: d.txHash as Hex | null,
+    outcome: d.outcome,
+    cost: cost && {
+      model: cost.model as string,
+      inputTokens: cost.inputTokens as number,
+      outputTokens: cost.outputTokens as number,
+      usd: cost.usd as number | null,
+    },
+  };
 }

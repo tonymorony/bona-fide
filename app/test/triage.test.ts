@@ -15,7 +15,7 @@ const ISSUE_OPENED_AT = Date.parse("2019-05-15T15:20:18Z");
 const SIGN_LINK = `${SIGN_PAGE}?repo=Codertocat%2FHello-World&kind=pr&number=2`;
 
 /** A harness whose PR #2 (or issue #1) holds Deposit 1, and a model that answers what the test says. */
-function deposited(kind: "pr" | "issue" = "pr", config = "") {
+function deposited(kind: "pr" | "issue" = "pr", config = "", { private: isPrivate = false } = {}) {
   const reviewer = new FakeReviewer();
   const setup = harness({ config, reviewer });
   const number = kind === "pr" ? PR : ISSUE;
@@ -29,6 +29,7 @@ function deposited(kind: "pr" | "issue" = "pr", config = "") {
       payload(kind === "pr" ? "pull_request" : "issues", overrides.action ?? "opened", {
         author: NEWCOMER,
         labels: overrides.labels ?? [],
+        private: isPrivate,
       }),
     );
   const settled = async (overrides?: { labels?: string[]; action?: string }) => {
@@ -436,6 +437,159 @@ test("a GitHub failure during triage is logged, and the next check tries again",
   await settled({ action: "synchronize" });
 
   expect(decisions.map((d) => d.action)).toEqual(["failed: GitHub: Server Error", "noted-accept"]);
+});
+
+// The decision log keeps each decision triage made after asking the model, for anyone to check on
+// the repo page.
+
+const DEPOSIT_WITNESS = { name: "Deposit", value: `Serial 1: 1 USDC from ${DEPOSITOR}, counted by the check` };
+
+test("a suggestion to accept is logged as decided, with the model's reasons, the facts checked and its cost", async () => {
+  const { reviewer, logged, settled } = deposited();
+  reviewer.answers = [answer("accept", ["It fixes the typo it names."])];
+
+  await settled();
+
+  expect(logged).toEqual([
+    {
+      id: expect.any(String),
+      at: expect.stringMatching(/^\d{4}-\d\d-\d\dT/),
+      repo: REPO,
+      private: false,
+      item: { kind: "pr", number: PR },
+      serial: "1",
+      type: "triage",
+      inputs: {
+        titleChars: 24,
+        bodyChars: 12,
+        bodyLeftOut: 0,
+        files: 1,
+        filesLeftOut: 0,
+        diffChars: 54,
+        diffLeftOut: 0,
+      },
+      suggestion: { verdict: "accept", reasons: ["It fixes the typo it names."] },
+      witnesses: [
+        DEPOSIT_WITNESS,
+        { name: "Exemption", value: "none" },
+        { name: "Labels", value: "none" },
+        { name: "Triage in bona-fide.yml", value: "on" },
+        { name: "Labels after the model answered", value: "none" },
+      ],
+      action: "noted-accept",
+      txHash: null,
+      outcome: "decided",
+      cost: { model: "claude-opus-5", inputTokens: 1_200, outputTokens: 80, usd: 0.008 },
+    },
+  ]);
+});
+
+test.each([
+  [
+    "a draft bad-faith verdict",
+    answer("bad-faith", ["Spam."]),
+    "drafted-verdict",
+    { verdict: "bad-faith", reasons: ["Spam."] },
+  ],
+  ["an unsure model", answer("unsure", ["Hard to tell."]), "silent", { verdict: "unsure", reasons: ["Hard to tell."] }],
+  [
+    "a model that declines",
+    { suggestion: null, silence: "refusal", model: "claude-opus-5", inputTokens: 900, outputTokens: 3 },
+    "silent",
+    null,
+  ],
+] as const)("%s is logged as left to the Maintainer", async (_, review, action, suggestion) => {
+  const { reviewer, logged, settled } = deposited();
+  reviewer.answers = [review];
+
+  await settled();
+
+  expect(logged).toMatchObject([{ type: "triage", action, suggestion, outcome: "escalated", txHash: null }]);
+  expect(logged[0]?.cost).toMatchObject({ model: "claude-opus-5", inputTokens: review.inputTokens });
+});
+
+test("a model that fails is logged as left to the Maintainer, with no cost and no error text", async () => {
+  const { reviewer, logged, settled } = deposited();
+  reviewer.answers = [new Error("sk-ant-secret in a message")];
+
+  await settled();
+
+  expect(logged).toMatchObject([
+    { action: "failed: unexpected error", suggestion: null, outcome: "escalated", cost: null },
+  ]);
+  expect(JSON.stringify(logged)).not.toContain("sk-ant");
+});
+
+test("the log keeps reasons as plain text for the page, not escaped for GitHub", async () => {
+  const { reviewer, logged, settled } = deposited();
+  reviewer.answers = [answer("bad-faith", ["Ask @alice\nabout <b>it</b> & see https://evil.example/x"])];
+
+  await settled();
+
+  expect(logged[0]?.suggestion?.reasons).toEqual(["Ask @alice about <b>it</b> & see (link removed)"]);
+});
+
+test("triage that never asked the model logs no decision", async () => {
+  const off = deposited("pr", "triage: off\n");
+  await off.settled();
+  const decided = deposited();
+  await decided.settled({ labels: ["bona-fide:ok"] });
+
+  expect(off.logged).toEqual([]);
+  expect(decided.logged).toEqual([]);
+});
+
+test("a GitHub failure logs no decision; the check that tries again does", async () => {
+  const { github, reviewer, logged, settled } = deposited();
+  reviewer.answers = [answer("accept")];
+  const contentOf = github.contentOf.bind(github);
+  github.contentOf = async () => {
+    github.contentOf = contentOf;
+    throw new Error("Server Error");
+  };
+
+  await settled();
+  await settled({ action: "synchronize" });
+
+  expect(logged.map((d) => d.action)).toEqual(["noted-accept"]);
+});
+
+test("a label a Maintainer adds while the model reads is a witness, and the decision is theirs", async () => {
+  const { github, reviewer, triage, deliver, logged } = deposited();
+  let answerNow = () => {};
+  reviewer.gate = new Promise((resolve) => (answerNow = resolve));
+  reviewer.answers = [answer("bad-faith")];
+
+  await deliver("pull_request", payload("pull_request", "opened", { author: NEWCOMER }));
+  await github.addLabel(HELLO_WORLD, PR, "bona-fide:ok");
+  answerNow();
+  await triage!.idle();
+
+  expect(logged).toMatchObject([{ action: "skipped: a Maintainer decided", outcome: "escalated" }]);
+  expect(logged[0]?.witnesses).toContainEqual({ name: "Labels after the model answered", value: "bona-fide:ok" });
+});
+
+test("an item in a private repo is logged as private, so it is never published", async () => {
+  const { reviewer, logged, log, settled } = deposited("issue", "", { private: true });
+  reviewer.answers = [answer("accept")];
+
+  await settled();
+
+  expect(logged).toMatchObject([{ repo: REPO, private: true, action: "noted-accept" }]);
+  expect(log.latest(REPO, 50)).toEqual([]);
+  expect(log.counts(REPO)).toEqual({ decided: 0, escalated: 0 });
+});
+
+test("an item from a repo GitHub didn't say is public is logged as private", async () => {
+  const { reviewer, logged, deliver, triage } = deposited();
+  reviewer.answers = [answer("accept")];
+  const body = payload("pull_request", "opened", { author: NEWCOMER });
+  delete body.repository.private;
+
+  await deliver("pull_request", body);
+  await triage!.idle();
+
+  expect(logged).toMatchObject([{ private: true }]);
 });
 
 function prItem(): Item {

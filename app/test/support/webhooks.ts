@@ -11,7 +11,7 @@ export const REPO = "Codertocat/Hello-World";
 export const PR = 2;
 export const ISSUE = 1;
 export const HEAD_SHA = "ec26c3e57ca3a959ca5aad62de7213c562f8c821";
-export const HELLO_WORLD: Repo = { owner: "Codertocat", name: "Hello-World", installationId: 1 };
+export const HELLO_WORLD: Repo = { owner: "Codertocat", name: "Hello-World", installationId: 1, private: false };
 export const NEWCOMER = "newcomer";
 
 export interface Overrides {
@@ -22,6 +22,8 @@ export interface Overrides {
   headSha?: string;
   /** Another "owner/name" for the repository. */
   repo?: string;
+  /** Whether GitHub says the repository is private. The recorded ones are public. */
+  private?: boolean;
 }
 
 type ItemEvent = "pull_request" | "issues";
@@ -39,6 +41,7 @@ export function payload(event: ItemEvent, action: string, o: Overrides = {}) {
     const [owner = "", name = ""] = o.repo.split("/");
     Object.assign(p.repository, { name, full_name: o.repo, owner: { ...p.repository.owner, login: owner } });
   }
+  if (o.private !== undefined) p.repository.private = o.private;
   return p;
 }
 

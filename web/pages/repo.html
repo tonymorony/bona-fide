@@ -168,6 +168,34 @@
         </p>
       </section>
 
+      <section class="card mt-16" aria-labelledby="decisions-title" data-hide="bad-link">
+        <h2 id="decisions-title">Decisions</h2>
+        <p class="muted">
+          What Bona Fide decided on its own here, what it left to the Maintainer, and the facts it checked each time.
+          Refunds at the Timeout decide nothing, so they aren't listed.
+        </p>
+        <div class="progress-line mt-16" data-if="decisions-loading" aria-live="polite">
+          <span class="spinner" aria-hidden="true"></span><span>Reading the decision log</span>
+        </div>
+        <div class="alert warn mt-16" data-if="decisions-failed" role="alert">
+          <svg class="icon md"><use href="#i-alert"></use></svg>
+          <div>
+            <strong>Couldn't read the decision log</strong>
+            <p>Bona Fide's App didn't answer, so its decisions here can't be shown. <button class="link-button" type="button" data-action="reload-decisions">Try again</button></p>
+          </div>
+        </div>
+        <div class="stats" data-if="decisions-ready">
+          <div class="stat"><div class="n" data-text="decided-count"></div><div class="l">Decided by Bona Fide</div></div>
+          <div class="stat"><div class="n" data-text="escalated-count"></div><div class="l">Left to the Maintainer</div></div>
+        </div>
+        <p class="muted mt-16" data-if="no-decisions">No decisions here yet.</p>
+        <ol class="decisions mt-16" data-decisions data-self-managed data-if="has-decisions"></ol>
+        <p class="hint mt-14" data-if="has-decisions">
+          <svg class="icon"><use href="#i-info"></use></svg>
+          <span>The latest 50, newest first. Suggestions come from an automated reviewer, and only the Maintainer's signature can forfeit a Deposit.</span>
+        </p>
+      </section>
+
       <section class="card mt-16" aria-labelledby="router-title" data-hide="bad-link">
         <h2 id="router-title">{{forfeits.heading}}</h2>
         <p class="muted">
@@ -243,6 +271,23 @@
         </td>
         <td data-label="Made"><time data-cell="made"></time></td>
       </tr>
+    </template>
+
+    <template data-decision>
+      <li class="decision">
+        <div class="decision-head">
+          <a class="decision-item" data-cell="item"></a>
+          <span data-cell="kind"></span>
+          <span class="tag" data-cell="outcome"></span>
+          <time class="decision-time" data-cell="at"></time>
+        </div>
+        <p class="decision-suggestion" data-cell="suggestion"></p>
+        <ul class="decision-reasons" data-cell="reasons"></ul>
+        <dl class="rows compact decision-facts" data-cell="witnesses"></dl>
+        <p class="decision-done"><span data-cell="done"></span> <a data-cell="tx" target="_blank" rel="noopener">View the transaction</a></p>
+        <p class="decision-meta" data-cell="read"></p>
+        <p class="decision-meta" data-cell="cost"></p>
+      </li>
     </template>
 
     <footer class="bf-foot">

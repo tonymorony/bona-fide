@@ -71,8 +71,8 @@ export interface NewTerms {
 }
 
 export type Verdict =
-  /** Accepted with the bona-fide:ok label, or by `approver`'s approval of the PR. */
-  | { kind: "accepted"; approver?: string }
+  /** Accepted with the bona-fide:ok label, or by `approver`'s approval of the PR, with the access they have. */
+  | { kind: "accepted"; approver?: string; access?: "admin" | "write" }
   | { kind: "exempt"; exemption: Exemption }
   | { kind: "denounced" }
   | { kind: "deposited"; deposit: Deposit }
@@ -110,8 +110,8 @@ export function createApp({
     if (await github.hasMergedPullRequest(item.repo, item.author)) return { kind: "exempt", exemption: "merged" };
     // An approval accepts the PR like the label does, but only as late as this: it takes GitHub
     // reads, and an exempt author needs no acceptance. A PR marked bad faith waits for the Maintainer.
-    const approver = item.kind === "pr" && !item.labels.includes(BAD_FAITH) ? await approverOf(item) : null;
-    if (approver) return { kind: "accepted", approver };
+    const approval = item.kind === "pr" && !item.labels.includes(BAD_FAITH) ? await approvalOf(item) : null;
+    if (approval) return { kind: "accepted", ...approval };
     const [deposit, binding] = await Promise.all([
       chain.depositSince(key, countsFrom(item), seen),
       chain.bindingOf(repoId),
@@ -128,10 +128,10 @@ export function createApp({
   }
 
   /** Someone with write, maintain or admin access whose latest review approves the PR, or null. */
-  async function approverOf(pr: PullRequest): Promise<string | null> {
+  async function approvalOf(pr: PullRequest): Promise<{ approver: string; access: "admin" | "write" } | null> {
     for (const login of await github.approvers(pr.repo, pr.number)) {
       const permission = await github.permissionOf(pr.repo, login);
-      if (permission === "admin" || permission === "write") return login;
+      if (permission === "admin" || permission === "write") return { approver: login, access: permission };
     }
     return null;
   }

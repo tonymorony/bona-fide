@@ -27,7 +27,8 @@ async function bodyOf(req: IncomingMessage): Promise<Buffer> {
 /**
  * The pages' origin, as Caddy lays it out in production: the built pages as static files, and the
  * App's endpoints on the same origin. `/relay/deposit` goes to `relayUrl`, the App's Node host;
- * `endpoint` can answer any request first.
+ * `endpoint` can answer any request first, and any GET of a path that isn't a file, such as
+ * `/decisions`.
  */
 export async function startSite({ dir, relayUrl, endpoint }: { dir: string; relayUrl?: string; endpoint?: Endpoint }) {
   const port = await freePort();
@@ -65,6 +66,15 @@ export async function startSite({ dir, relayUrl, endpoint }: { dir: string; rela
         });
         res.writeHead(response.status, headers).end(Buffer.from(await response.arrayBuffer()));
         return;
+      }
+      if (endpoint && !extname(url.pathname)) {
+        const response = await endpoint(new Request(url, { method: req.method }));
+        if (response) {
+          res
+            .writeHead(response.status, Object.fromEntries(response.headers))
+            .end(Buffer.from(await response.arrayBuffer()));
+          return;
+        }
       }
       const path = normalize(decodeURIComponent(url.pathname)).replace(/^(\.\.[/\\])+/, "");
       const file = join(dir, path);
