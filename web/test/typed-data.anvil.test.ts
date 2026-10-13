@@ -158,5 +158,5 @@ test("the Keeper proposes the Binding for a proof signed from the setup page's t
 });
 
 test("each page signs for its own time window: 10 minutes, 30 minutes and 1 hour", () => {
-  expect(WINDOWS).toEqual({ deposit: 600, bindingProof: 1800, verdict: 3600 });
+  expect(WINDOWS).toEqual({ deposit: 600, bindingProof: 1800, verdict: 3600, bountyFund: 600, payout: 3600 });
 });

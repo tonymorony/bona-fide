@@ -16,6 +16,10 @@ export interface Network {
   escrowFromBlock: number;
   /** The Charity router, the escrow's Forfeit sink. */
   router: Address | "";
+  /** The Bounty wallet factory. Empty: the pages say Bounties aren't available on this network yet. */
+  bountyFactory: Address | "";
+  /** The factory's deploy block: no Bounty wallet is older. */
+  bountyFactoryFromBlock: number;
   /** Where Forfeits end up, in the pages' words. */
   forfeits: {
     /** Who a flush sends to, mid-sentence: "Protocol Guild", "the test recipient". */
@@ -41,6 +45,7 @@ export interface Network {
     relayDeposit: string;
     forfeit: string;
     bindingProof: string;
+    bountyPayout: string;
   };
   /** Optional links; an empty one isn't shown. */
   links: {
@@ -67,6 +72,12 @@ export function problemsWith(network: Network): string[] {
   }
   if (!Number.isSafeInteger(network.escrowFromBlock) || network.escrowFromBlock < 0) {
     problems.push(`${network.name}'s escrowFromBlock must be the escrow's deploy block.`);
+  }
+  if (network.bountyFactory && !isAddress(network.bountyFactory)) {
+    problems.push(`${network.name}'s bountyFactory address isn't an address.`);
+  }
+  if (!Number.isSafeInteger(network.bountyFactoryFromBlock) || network.bountyFactoryFromBlock < 0) {
+    problems.push(`${network.name}'s bountyFactoryFromBlock must be the factory's deploy block.`);
   }
   if (network.walletConnectProjectId) {
     problems.push(

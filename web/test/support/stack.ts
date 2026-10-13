@@ -17,6 +17,7 @@ import {
   type LocalAccount,
 } from "viem";
 import { generatePrivateKey, privateKeyToAccount } from "viem/accounts";
+import { bountyCalls, DEFAULT_LIMITS, type BountyLimits } from "../../src/bounty.ts";
 import { keyOf, kindCode, repoIdOf, type Kind } from "../../src/keys.ts";
 import type { LiveNetwork } from "../../src/network.ts";
 import { forfeitVerdict } from "../../src/typed-data.ts";
@@ -66,8 +67,8 @@ export interface Terms {
 }
 
 /**
- * A local Arc: MockUSDC with EIP-3009, the real BonaFideEscrow, and the real CharityRouter as its
- * Forfeit sink, flushing to a mock CCTP messenger. Every key is generated for this run; the Keeper's
+ * A local Arc: MockUSDC with EIP-3009, the real BonaFideEscrow, the real CharityRouter as its
+ * Forfeit sink, flushing to a mock CCTP messenger, and the real BountyWalletFactory. Every key is generated for this run; the Keeper's
  * address is also impersonated, so these helpers can bind repos as it.
  */
 export async function startStack() {
@@ -99,6 +100,8 @@ export async function startStack() {
   const escrowArtifact = artifact("BonaFideEscrow");
   const routerArtifact = artifact("CharityRouter");
   const messengerArtifact = artifact("MockTokenMessengerV2");
+  const factoryArtifact = artifact("BountyWalletFactory");
+  const bountyWalletArtifact = artifact("BountyWallet");
 
   // One transaction at a time: anvil gives concurrent sends from one account the same nonce.
   let queue: Promise<unknown> = Promise.resolve();
@@ -128,8 +131,10 @@ export async function startStack() {
   await send(deployer!, messenger, messengerArtifact.abi, "addRemoteTokenMessenger", [6, pad("0x01")]);
   const router = await deploy(routerArtifact, [usdc, messenger, 6, pad(RECIPIENT)]);
   const escrow = await deploy(escrowArtifact, [usdc, keeper, router, BigInt(BINDING_DELAY), 50_000_000n]);
+  const factoryBlock = await client.getBlockNumber();
+  const bountyFactory = await deploy(factoryArtifact, [usdc, keeper]);
 
-  const network: LiveNetwork = {
+  const network: LiveNetwork & { bountyFactory: Address } = {
     name: "Arc Testnet (local)",
     testnet: true,
     chainId: LOCAL_CHAIN_ID,
@@ -139,6 +144,8 @@ export async function startStack() {
     escrow,
     escrowFromBlock: Number(deployBlock),
     router,
+    bountyFactory,
+    bountyFactoryFromBlock: Number(factoryBlock),
     forfeits: {
       recipient: "the test recipient",
       purpose: "goes to a test recipient on Base Sepolia",
@@ -150,10 +157,27 @@ export async function startStack() {
       url: `https://sepolia.basescan.org/address/${RECIPIENT}`,
       vests: false,
     },
-    endpoints: { relayDeposit: "/relay/deposit", forfeit: "/forfeit", bindingProof: "/binding-proof" },
+    endpoints: {
+      relayDeposit: "/relay/deposit",
+      forfeit: "/forfeit",
+      bindingProof: "/binding-proof",
+      bountyPayout: "/bounty/payout",
+    },
     links: { getUsdc: "https://faucet.circle.com", source: "", installApp: "" },
     walletConnectProjectId: "",
   };
+
+  /** Sends one of the pages' contract calls from `account`, and waits for it to succeed. */
+  async function sendAs(
+    account: LocalAccount,
+    call: { address: Address; abi: Abi; functionName: string; args: readonly unknown[] },
+  ) {
+    const own = createWalletClient({ account, chain, transport: http(url) });
+    const hash = await own.writeContract({ ...call, args: [...call.args] } as any);
+    const receipt = await client.waitForTransactionReceipt({ hash });
+    if (receipt.status !== "success") throw new Error(`${call.functionName} reverted`);
+    return receipt;
+  }
 
   async function now(): Promise<bigint> {
     return (await client.getBlock()).timestamp;
@@ -184,7 +208,11 @@ export async function startStack() {
     escrow,
     router,
     keeperKey,
+    bountyFactory,
+    keeper,
+    sendAs,
     usdcAbi: usdcArtifact.abi,
+    bountyWalletAbi: bountyWalletArtifact.abi,
     escrowAbi: escrowArtifact.abi,
     routerAbi: routerArtifact.abi,
     now,
@@ -250,6 +278,29 @@ export async function startStack() {
     /** Refunds the item's Deposit as anyone, after its Timeout. */
     refundAfterTimeout(repo: string, kind: Kind, number: number) {
       return send(deployer!, escrow, escrowArtifact.abi, "refund", [keyOf(repoIdOf(repo), kind, number)]);
+    },
+
+    /** Creates `owner`'s Bounty wallet for the repo, as the Bounty page does, and returns its address. */
+    async createBountyWallet(owner: LocalAccount, repo: string, limits: BountyLimits = DEFAULT_LIMITS) {
+      await sendAs(owner, bountyCalls.create(bountyFactory, repoIdOf(repo), limits));
+      return (await client.readContract({
+        address: bountyFactory,
+        abi: factoryArtifact.abi,
+        functionName: "walletOf",
+        args: [repoIdOf(repo), owner.address],
+      })) as Address;
+    },
+
+    /** Funds a Bounty wallet from `from` with an approval, then posts each Bounty as its owner. */
+    async fundAndPost(owner: LocalAccount, wallet: Address, amount: bigint, bounties: [number, bigint][] = []) {
+      await sendAs(owner, bountyCalls.approve(usdc, wallet, amount));
+      await sendAs(owner, bountyCalls.fund(wallet, amount));
+      for (const [issue, value] of bounties) await sendAs(owner, bountyCalls.post(wallet, issue, value));
+    },
+
+    /** Pays an open Bounty as the Keeper. */
+    keeperPay(wallet: Address, issue: number, payee: Address) {
+      return send(keeper, wallet, bountyWalletArtifact.abi, "keeperPay", [BigInt(issue), payee]);
     },
 
     flush() {

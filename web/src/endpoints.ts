@@ -7,6 +7,7 @@ export const PATHS = {
   relayDeposit: "/relay/deposit",
   forfeit: "/forfeit",
   bindingProof: "/binding-proof",
+  bountyPayout: "/bounty/payout",
   decisions: "/decisions",
 } as const;
 
@@ -44,6 +45,20 @@ export function bindingProofBody(
   signature: Hex,
 ) {
   return { ...proof, deadline: proof.deadline.toString(), signature };
+}
+
+/**
+ * The body of POST /bounty/payout: the Maintainer's signed Payout, for the Keeper to relay. `issue` is the
+ * Bounty's issue number, and `deadline` the signature's, in unix seconds.
+ */
+export function payoutBody(payout: { repo: string; issue: number; payee: Address; deadline: bigint }, signature: Hex) {
+  return {
+    repo: payout.repo,
+    issue: payout.issue,
+    payee: payout.payee,
+    deadline: Number(payout.deadline),
+    signature,
+  };
 }
 
 /** An answer with a JSON object body. Anything else (no answer, HTML from a proxy, an empty 500) is null. */
@@ -203,6 +218,34 @@ export async function askKeeperToBind(
   return { kind: "unavailable" };
 }
 
+export type PayoutOutcome =
+  | { kind: "paid"; txHash: Hex }
+  /** The Keeper won't relay it: a wrong or expired signature, no open Bounty, or no such endpoint here. */
+  | { kind: "refused"; status: 400 | 404 | 409 | 422; message: string }
+  | { kind: "wait"; seconds: number; message: string }
+  | { kind: "reverted"; txHash: Hex; message: string }
+  /** Sent, but not confirmed yet: watch the chain rather than send it again. */
+  | { kind: "unconfirmed"; txHash: Hex }
+  | { kind: "too-large" }
+  | { kind: "unavailable" };
+
+/** Sends the Maintainer's signed Payout to POST /bounty/payout, and says what came of it. */
+export async function relayPayout(body: ReturnType<typeof payoutBody>, fetch: Fetch): Promise<PayoutOutcome> {
+  const answer = await post(PATHS.bountyPayout, body, fetch);
+  if (!answer) return { kind: "unavailable" };
+  const { status, body: reply } = answer;
+  const txHash = hashIn(reply);
+  if (status === 200 && txHash) return { kind: "paid", txHash };
+  if (status === 400 || status === 404 || status === 409 || status === 422) {
+    return { kind: "refused", status, message: messageIn(reply) };
+  }
+  if (status === 429) return waitFor(answer);
+  if (status === 502 && txHash) return { kind: "reverted", txHash, message: messageIn(reply) };
+  if (status === 504 && txHash) return { kind: "unconfirmed", txHash };
+  if (status === 413) return { kind: "too-large" };
+  return { kind: "unavailable" };
+}
+
 /** One decision in the App's log, as GET /decisions answers it. Its text is untrusted: show it as text only. */
 export interface Decision {
   id: string;
@@ -210,7 +253,7 @@ export interface Decision {
   repo: string;
   item: { kind: Kind; number: number };
   serial: string | null;
-  /** "triage" or "early-refund" today; the App may add others. */
+  /** "triage", "early-refund", "waive", "pay" or "hold" today; the App may add others. */
   type: string;
   inputs: Record<string, string | number | boolean> | null;
   suggestion: { verdict: string; reasons: string[] } | null;

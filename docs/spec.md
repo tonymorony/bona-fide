@@ -160,7 +160,13 @@ sign the Payout; the App relays it at `POST /bounty/payout`. Each run reads the 
 first, so nothing is paid twice. Every Payout's note links its transaction, and each Payout or hold
 is a `pay` or `hold` decision in the decision log.
 
-**The pages (next phase).** The Bounty page, and Bounties on the repo page.
+**The pages (built).** Details are in [../web/README.md](../web/README.md#the-bounty-page).
+`bounties.html?repo=owner/name` is the Maintainer's: create the Bounty wallet with suggested limits,
+fund it, post and cancel Bounties, withdraw, change the limits and turn Keeper payouts off. With
+`&issue=N&payee=0x…` it pays one Bounty: directly with `ownerPay`, or by a signed Payout the App
+relays, which the Maintainer's wallet sends itself if the App doesn't. Without `payee`, the
+Maintainer pastes the Contributor's wallet. The repo page shows each Bounty, open or paid with its
+transaction, and the wallet's limits and balance, read from the chain.
 
 ## Scope
 

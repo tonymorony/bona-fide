@@ -1,4 +1,4 @@
-import type { Address, Hex } from "viem";
+import { getAddress, isAddress, type Address, type Hex } from "viem";
 import { KINDS, type Kind } from "./keys.ts";
 
 export interface Item {
@@ -27,6 +27,36 @@ export function readItemLink(search: string): Item | null {
   const number = NUMBER.test(text) ? Number(text) : NaN;
   if (repo === null || kind === undefined || !Number.isSafeInteger(number)) return null;
   return { repo, kind, number };
+}
+
+/**
+ * The Payout a Bounty page link names, `&issue=N&payee=0x…`: none, or one that's malformed. The App leaves
+ * the payee out when the Contributor named no wallet; a payee with a wrong EIP-55 checksum is malformed.
+ */
+export function readPayoutLink(search: string): { issue: number; payee: Address | null } | "none" | "invalid" {
+  const query = new URLSearchParams(search);
+  const issue = query.get("issue");
+  const payee = query.get("payee");
+  if (issue === null && payee === null) return "none";
+  if (issue === null || !NUMBER.test(issue) || !Number.isSafeInteger(Number(issue))) return "invalid";
+  if (payee === null || payee === "") return { issue: Number(issue), payee: null };
+  const address = readPayee(payee);
+  return address ? { issue: Number(issue), payee: address } : "invalid";
+}
+
+/** An address typed or pasted as a payee: all lowercase, or with a correct EIP-55 checksum. */
+export function readPayee(text: string): Address | null {
+  const address = text.trim();
+  return /^0x[0-9a-fA-F]{40}$/.test(address) && isAddress(address) ? getAddress(address) : null;
+}
+
+export function bountiesPageUrl(repo: string, payout?: { issue: number; payee: Address | null }): string {
+  const query = new URLSearchParams({ repo });
+  if (payout) {
+    query.set("issue", String(payout.issue));
+    if (payout.payee) query.set("payee", payout.payee);
+  }
+  return `bounties.html?${query}`;
 }
 
 export function itemUrl({ repo, kind, number }: Item): string {

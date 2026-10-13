@@ -11,15 +11,17 @@ async function built(network = testnet, landing = true) {
   return { outDir, files, page: (name: string) => readFile(join(outDir, name), "utf8") };
 }
 
-test("the build writes the four pages as plain files, with the landing page at the root", async () => {
+test("the build writes the five pages as plain files, with the landing page at the root", async () => {
   const { outDir, files } = await built();
   const top = (await readdir(outDir)).sort();
   const landingTop = await readdir(join(import.meta.dirname, "../landing"));
 
-  expect(top).toEqual(["assets", "deposit.html", "repo.html", "setup.html", "verdict.html", ...landingTop].sort());
+  expect(top).toEqual(
+    ["assets", "bounties.html", "deposit.html", "repo.html", "setup.html", "verdict.html", ...landingTop].sort(),
+  );
   expect(top).toContain("index.html");
   expect(files).toEqual(
-    expect.arrayContaining(["deposit.html", "verdict.html", "setup.html", "repo.html", "index.html"]),
+    expect.arrayContaining(["deposit.html", "verdict.html", "setup.html", "repo.html", "bounties.html", "index.html"]),
   );
   expect(files.filter((file) => file.startsWith("assets/") && file.endsWith(".css"))).toHaveLength(1);
   expect(files.filter((file) => file.startsWith("assets/") && file.endsWith(".svg"))).toHaveLength(1);
@@ -43,7 +45,7 @@ test("a build stops when the landing page shows another network than the pages",
 test("each page loads only files from the build: no CDN, no tracker", async () => {
   const { page } = await built();
 
-  for (const name of ["deposit.html", "verdict.html", "setup.html", "repo.html"]) {
+  for (const name of ["deposit.html", "verdict.html", "setup.html", "repo.html", "bounties.html"]) {
     const html = await page(name);
     const loaded = [...html.matchAll(/<(?:script|link|img)\b[^>]*\b(?:src|href)="([^"]+)"/g)].map((m) => m[1]!);
     expect(loaded.length).toBeGreaterThan(2);
@@ -70,6 +72,34 @@ test("a mainnet build stops while the mainnet contracts have no addresses", asyn
     /Arc has no escrow address yet[\s\S]*Arc has no router address yet/,
   );
 });
+
+test("a network without a Bounty wallet factory still builds, and its pages say Bounties aren't available yet", async () => {
+  const { page } = await built({ ...testnet, bountyFactory: "" }, false);
+
+  expect(await page("bounties.html")).toContain("Bounties aren't available on Arc Testnet yet");
+  expect(await page("setup.html")).not.toContain("Post Bounties on issues");
+  expect(await page("bounties.html")).not.toContain("Bounty wallet factory</a>");
+}, 60_000);
+
+test("a network's Bounty wallet factory must be an address, with its deploy block", async () => {
+  await expect(
+    buildPages({
+      network: { ...testnet, bountyFactory: "0x123" as never },
+      outDir: await mkdtemp(join(tmpdir(), "x-")),
+    }),
+  ).rejects.toThrow(/bountyFactory address isn't an address/);
+  await expect(
+    buildPages({ network: { ...testnet, bountyFactoryFromBlock: -1 }, outDir: await mkdtemp(join(tmpdir(), "x-")) }),
+  ).rejects.toThrow(/bountyFactoryFromBlock must be the factory's deploy block/);
+});
+
+test("with a factory, the setup page links the Maintainer to the Bounty page", async () => {
+  const factory = "0x0000000000000000000000000000000000000b0b";
+  const { page } = await built({ ...testnet, bountyFactory: factory, bountyFactoryFromBlock: 1 }, false);
+
+  expect(await page("setup.html")).toContain("Post Bounties on issues");
+  expect(await page("bounties.html")).toContain(`/address/${factory}`);
+}, 60_000);
 
 test("a build stops if a WalletConnect project ID is set, since its SDK isn't bundled", async () => {
   await expect(
@@ -110,7 +140,7 @@ test("the placeholder mark comes from web/brand, so the real identity is one cha
 test("each page preloads the chunks its script imports, so they load at once instead of one after another", async () => {
   const { page, outDir } = await built();
 
-  for (const name of ["deposit.html", "verdict.html", "setup.html", "repo.html"]) {
+  for (const name of ["deposit.html", "verdict.html", "setup.html", "repo.html", "bounties.html"]) {
     const html = await page(name);
     const script = /<script type="module" src="([^"]+)"/.exec(html)![1]!;
     const preloaded = [...html.matchAll(/<link rel="modulepreload" href="([^"]+)"/g)].map((m) => m[1]!);

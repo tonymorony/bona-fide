@@ -4,6 +4,7 @@ import {
   forfeitSplit,
   localDate,
   localTime,
+  parseUsdc,
   percent,
   shortAddress,
   shortDate,
@@ -82,3 +83,22 @@ test("a date without its time reads in the reader's own time zone too", () => {
   expect(localDate(new Date("2026-09-01T20:30:00Z"), "Asia/Bangkok")).toBe("2 Sep 2026");
   expect(localDate(new Date("2026-09-01T20:30:00Z"), "UTC")).toBe("1 Sep 2026");
 });
+
+test.each([
+  ["50", 50_000_000n],
+  ["12.5", 12_500_000n],
+  [" 1,000.25 ", 1_000_250_000n],
+  ["0.000001", 1n],
+  [".5", 500_000n],
+  ["7.", 7_000_000n],
+  ["0", 0n],
+])("%j typed as an amount is %s base units", (text, amount) => {
+  expect(parseUsdc(text)).toBe(amount);
+});
+
+test.each([[""], ["abc"], ["-1"], ["1.0000001"], ["1e6"], ["1.2.3"], ["0x10"], ["1 000"]])(
+  "%j isn't an amount",
+  (text) => {
+    expect(parseUsdc(text)).toBeNull();
+  },
+);

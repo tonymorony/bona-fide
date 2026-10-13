@@ -15,7 +15,7 @@ import { networks } from "./networks.ts";
 import { problemsWith, type Network } from "./src/network.ts";
 
 const HERE = fileURLToPath(new URL(".", import.meta.url));
-export const PAGES = ["deposit", "verdict", "setup", "repo"] as const;
+export const PAGES = ["deposit", "verdict", "setup", "repo", "bounties"] as const;
 
 const read = (path: string) => readFile(join(HERE, path), "utf8");
 const shortHash = (content: string) => createHash("sha256").update(content).digest("hex").slice(0, 10);

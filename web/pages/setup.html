@@ -156,6 +156,13 @@ timeout: 7 days    # how long you have to decide</pre>
               <p>Edit <code>bona-fide.yml</code> and sign a new proof here. New terms take effect <span data-text="delay"></span> later, and Deposits already made keep theirs.</p>
             </div>
           </li>
+          {{#if bountyFactory}}<li>
+            <span class="ico"><svg class="icon md"><use href="#i-send"></use></svg></span>
+            <div>
+              <strong>Post Bounties on issues</strong>
+              <p>Fund a Bounty wallet that only you control, and Bona Fide pays a Bounty when a PR that closes its issue is merged, within your limits. <a data-href="bounties-page">Set up Bounties</a></p>
+            </div>
+          </li>{{/if}}
         </ul>
       </section>
 
@@ -323,6 +330,7 @@ timeout: 7 days    # how long you have to decide</pre>
       <span>Bona Fide: refundable good-faith deposits for open source.</span>
       <a href="{{network.explorerUrl}}/address/{{network.escrow}}" target="_blank" rel="noopener">Escrow contract</a>
       <a data-href="repo-page" data-if="repo-known">Deposits in <span data-text="repo"></span></a>
+      {{#if bountyFactory}}<a data-href="bounties-page" data-if="repo-known">Bounties</a>{{/if}}
       {{#if links.source}}<a href="{{links.source}}/blob/main/app/README.md#turn-it-on-for-a-repo">Maintainer guide</a>{{/if}}
     </footer>
     {{> scripts}}

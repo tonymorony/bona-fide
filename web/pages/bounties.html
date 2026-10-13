@@ -1,0 +1,416 @@
+<!doctype html>
+<html lang="en" data-state="loading">
+  <head>
+    {{> head}}
+    <title>Bounties · Bona Fide</title>
+  </head>
+  <body>
+    {{> icons}}
+    <header class="bf-top">
+      <a class="bf-brand" href="/">{{> lockup}} <span class="area">· Maintainer</span></a>
+      <div class="end">{{> network-tag}} {{> wallet-pill}}</div>
+    </header>
+    {{> noscript}}
+
+    <main class="page narrow">
+      <p class="eyebrow" data-if="repo-known">
+        <svg class="icon"><use href="#i-repo"></use></svg><a data-href="repo-url" data-text="repo"></a><span>· Bounties</span>
+      </p>
+      <h1>Bounties</h1>
+      <p class="lede">
+        Post USDC on an issue from your own Bounty wallet. When a PR that closes the issue is merged, Bona Fide pays the
+        Bounty within the limits you set. Above them, you pay it here.
+      </p>
+
+      <div class="mt-24">
+        <div class="alert warn mb-16" data-if="payout-link-broken" role="alert">
+          <svg class="icon md"><use href="#i-alert"></use></svg>
+          <div>
+            <strong>This Payout link is incomplete</strong>
+            <p>It needs the issue number and the payee's full address. Open it again from Bona Fide's comment on the issue.</p>
+          </div>
+        </div>
+
+        <section class="card" data-show="loading" aria-live="polite">
+          <div class="waiting">
+            <span class="spinner" aria-hidden="true"></span>
+            <div>
+              <strong>Reading this repo's Bounties</strong>
+              <p class="muted">Its Binding and its Bounty wallet on {{network.name}}.</p>
+            </div>
+          </div>
+        </section>
+
+        <section class="card" data-show="bad-link" aria-labelledby="bad-link-title">
+          <div class="result">
+            <div class="big warn"><svg class="icon"><use href="#i-alert"></use></svg></div>
+            <h2 id="bad-link-title">This link names no repo</h2>
+            <p>Add the repo to the link, such as <code>bounties.html?repo=owner/name</code>.</p>
+          </div>
+        </section>
+
+        <section class="card" data-show="no-factory" aria-labelledby="no-factory-title">
+          <div class="result">
+            <div class="big info"><svg class="icon"><use href="#i-clock"></use></svg></div>
+            <h2 id="no-factory-title">Bounties aren't available on {{network.name}} yet</h2>
+            <p>The Bounty wallet contract isn't deployed on this network yet. Deposits work as before.</p>
+          </div>
+        </section>
+
+        <section class="card" data-show="chain-error" aria-labelledby="chain-error-title">
+          <div class="result">
+            <div class="big warn"><svg class="icon"><use href="#i-alert"></use></svg></div>
+            <h2 id="chain-error-title">Can't reach {{network.name}} right now</h2>
+            <p>This page couldn't read the repo's Binding or its Bounty wallet. Check your connection, then try again.</p>
+          </div>
+          <button class="btn primary block mt-20" type="button" data-action="reload">Try again</button>
+        </section>
+
+        <section class="card" data-show="not-set-up" aria-labelledby="not-set-up-title">
+          <div class="result">
+            <div class="big info"><svg class="icon"><use href="#i-clock"></use></svg></div>
+            <h2 id="not-set-up-title">Set up Bona Fide here first</h2>
+            <p>
+              Bounties are paid from the Bounty wallet of the Maintainer that <span data-text="repo"></span>'s Binding
+              names, and <span data-text="repo"></span> has no active Binding yet.
+            </p>
+          </div>
+          <a class="btn secondary block mt-20" data-href="setup-page"><span>Set up <span data-text="repo"></span></span></a>
+        </section>
+
+        <!-- Who's connected -->
+        <section class="card" data-show="no-wallet view" aria-labelledby="connect-title">
+          <h2 id="connect-title" data-show="no-wallet">No Bounty wallet yet</h2>
+          <h2 data-show="view">Manage Bounties</h2>
+          <p class="muted" data-show="no-wallet">
+            <span data-text="repo"></span>'s Maintainer, <span data-text="maintainer-short"></span>, hasn't created one. Connect
+            that wallet to create it.
+          </p>
+          <p class="muted" data-show="view">Connect <span data-text="maintainer-short"></span>, the Maintainer wallet, to fund, post or pay Bounties.</p>
+          <button class="btn primary block mt-16" type="button" data-action="connect">
+            <svg class="icon md"><use href="#i-wallet"></use></svg>Connect the Maintainer wallet
+          </button>
+          <p class="hint mt-12">
+            <svg class="icon"><use href="#i-lock"></use></svg>
+            <span>Bona Fide never asks for your recovery phrase or private key.</span>
+          </p>
+        </section>
+
+        <section class="card" data-show="wrong-network">
+          {{> wallet-row}}
+          <div class="alert warn mt-14">
+            <svg class="icon md"><use href="#i-alert"></use></svg>
+            <div>
+              <strong>Switch to {{network.name}}</strong>
+              <p>Your wallet is on <span data-text="wallet-network"></span>. The Bounty wallet is on {{network.name}}, where USDC also pays the network fee.</p>
+            </div>
+          </div>
+          <button class="btn primary block mt-14" type="button" data-action="switch-network">Switch to {{network.name}}</button>
+          <p class="inline-note mt-12" data-text="note" data-if="note" role="status"></p>
+        </section>
+
+        <section class="card" data-show="wrong-wallet">
+          <div class="wallet">
+            <span class="avatar"></span>
+            <div class="who"><div class="addr" data-text="account-short"></div><div class="sub">{{network.name}}</div></div>
+            <div class="end"><span class="tag danger">Not the Maintainer</span></div>
+          </div>
+          <div class="alert warn mt-14">
+            <svg class="icon md"><use href="#i-alert"></use></svg>
+            <div>
+              <strong>This isn't the Maintainer wallet</strong>
+              <p>
+                Only <span data-text="maintainer-short"></span>, the Maintainer in <span data-text="repo"></span>'s Binding,
+                can manage its Bounties. Bona Fide pays only from that wallet's Bounty wallet: one that any other address
+                creates for the repo is never used.
+              </p>
+            </div>
+          </div>
+        </section>
+
+        <!-- The Payout the App sent the Maintainer here for -->
+        <section class="card" data-if="payout-shown" aria-labelledby="payout-title">
+          <h2 id="payout-title">Pay the Bounty on <a data-href="payout-issue-url" data-text="payout-issue"></a></h2>
+          <p class="muted" data-if="payout-open">Bona Fide left this Payout to you. Check it, then pay.</p>
+          <dl class="rows mt-12">
+            <div><dt>Amount</dt><dd data-text="payout-amount"></dd></div>
+            <div data-if="payee-known">
+              <dt>Payee</dt>
+              <dd>
+                <a class="mono" data-href="payout-payee-url" data-text="payout-payee" target="_blank" rel="noopener"></a>
+                <small data-if="payee-from-link">The wallet the PR's Contributor made known</small>
+                <small data-if="payee-entered">The address you entered. <button class="link-button" type="button" data-action="change-payee">Change</button></small>
+              </dd>
+            </div>
+            <div data-if="payee-unknown"><dt>Payee</dt><dd>Not known yet<small>The Contributor hasn't named a wallet. The Maintainer can enter one here.</small></dd></div>
+            <div data-if="payout-open"><dt>Why it waited</dt><dd data-text="payout-why"></dd></div>
+          </dl>
+          <form class="fields single mt-16" data-form="payee" data-if="payee-needed" novalidate>
+            <div class="field">
+              <label for="payee">Payee wallet</label>
+              <input id="payee" class="mono" data-field="payee" autocomplete="off" spellcheck="false" placeholder="0x…" aria-describedby="payee-help" />
+              <small id="payee-help">The Contributor hasn't named a wallet. Ask them on the PR, then paste the address they give you. Check it: a Payout can't be undone.</small>
+            </div>
+            <button class="btn secondary block" type="submit" data-action="use-payee">Use this wallet</button>
+          </form>
+          <div class="alert ok mt-14" data-if="payout-paid" role="status">
+            <svg class="icon md"><use href="#i-check-circle"></use></svg>
+            <div>
+              <strong>Paid</strong>
+              <p><span data-text="payout-paid-text"></span> <a data-href="payout-paid-tx" target="_blank" rel="noopener" data-if="payout-paid-tx">View the transaction</a></p>
+            </div>
+          </div>
+          <div class="alert warn mt-14" data-if="payout-closed">
+            <svg class="icon md"><use href="#i-info"></use></svg>
+            <div><p data-text="payout-closed-text"></p></div>
+          </div>
+          <div class="alert warn mt-14" data-if="payout-refused-payee">
+            <svg class="icon md"><use href="#i-alert"></use></svg>
+            <div>
+              <strong>The Bounty wallet can't pay this address</strong>
+              <p>It's the Keeper's, the Bounty wallet's own, or zero. Ask the Contributor for another wallet.</p>
+            </div>
+          </div>
+          <div data-if="payout-actions">
+            <button class="btn primary block mt-16" type="button" data-action="pay-owner" data-busy-label="Waiting for your wallet">
+              <svg class="icon md"><use href="#i-send"></use></svg><span>Pay <span data-text="payout-amount"></span> now</span>
+            </button>
+            <p class="hint mt-8">
+              <svg class="icon"><use href="#i-info"></use></svg>
+              <span>One transaction from your wallet. You pay the network fee, in USDC.</span>
+            </p>
+            <p class="link-row mt-12" data-if="pay-sign-offer">
+              <button class="link-button" type="button" data-action="pay-sign">Sign instead, and Bona Fide sends it</button>
+            </p>
+            <div class="waiting mt-14" data-if="pay-signing" aria-live="polite">
+              <span class="spinner" aria-hidden="true"></span>
+              <div>
+                <strong>Waiting for your signature</strong>
+                <p class="muted">Your wallet shows a request from BonaFide Bounty called Payout, with the fields below.</p>
+              </div>
+            </div>
+            <div class="waiting mt-14" data-if="pay-relaying" aria-live="polite">
+              <span class="spinner" aria-hidden="true"></span>
+              <div>
+                <strong>Sending your signed Payout</strong>
+                <p class="muted">Bona Fide's Keeper checks it and sends it to the Bounty wallet. It pays the network fee.</p>
+              </div>
+            </div>
+            <div class="alert warn mt-14" data-if="pay-relay-failed">
+              <svg class="icon md"><use href="#i-alert"></use></svg>
+              <div>
+                <strong data-text="relay-title"></strong>
+                <p data-text="relay-body"></p>
+                <p class="detail" data-text="relay-detail" data-if="relay-detail"></p>
+              </div>
+            </div>
+            <button class="btn secondary block mt-14" type="button" data-if="pay-relay-failed" data-action="pay-signed" data-busy-label="Waiting for your wallet">
+              Send the signed Payout from your wallet
+            </button>
+            <details class="mt-14" data-if="pay-sign-shown">
+              <summary>What you sign</summary>
+              <dl class="rows compact mt-8">
+                <div><dt><code>issueNumber</code></dt><dd data-text="payout-issue-number"></dd></div>
+                <div><dt><code>serial</code></dt><dd><span data-text="payout-serial"></span><small>This Bounty's. If you cancel it, the signature stops working.</small></dd></div>
+                <div><dt><code>payee</code></dt><dd class="mono" data-text="payout-payee"></dd></div>
+                <div><dt><code>amount</code></dt><dd><span data-text="payout-units"></span><small><span data-text="payout-amount"></span>, counted in millionths</small></dd></div>
+                <div>
+                  <dt><code>deadline</code></dt>
+                  <dd data-if="payout-deadline-known"><span data-text="payout-deadline-unix"></span><small><time data-time="payout-deadline"></time>. After it, the signature doesn't pay.</small></dd>
+                  <dd data-if="payout-deadline-later">1 hour after you sign<small>After it, the signature doesn't pay.</small></dd>
+                </div>
+              </dl>
+              <p class="hint mt-12">
+                <svg class="icon"><use href="#i-info"></use></svg>
+                <span>Signing is free. It's for this Bounty wallet only, and pays this Bounty once, in full, to this payee. Sign from a multisig, or when this wallet has no USDC for the fee.</span>
+              </p>
+            </details>
+          </div>
+          <p class="muted mt-14" data-if="payout-connect">Connect the Maintainer wallet to pay it.</p>
+          <div data-status="pay"></div>
+        </section>
+
+        <!-- The wallet, for everyone -->
+        <section class="card" data-if="wallet-known" aria-labelledby="wallet-title">
+          <div class="card-head">
+            <h2 id="wallet-title">Bounty wallet</h2>
+            <a class="mono" data-href="wallet-url" data-text="wallet-short" target="_blank" rel="noopener"></a>
+          </div>
+          <div class="stats">
+            <div class="stat"><div class="n" data-text="available"></div><div class="l">Available to post or withdraw</div></div>
+            <div class="stat"><div class="n" data-text="reserved"></div><div class="l">Reserved for open Bounties</div></div>
+          </div>
+          <dl class="rows mt-16">
+            <div>
+              <dt>Keeper payouts</dt>
+              <dd><span class="tag accent" data-if="keeper-on">On</span><span class="tag warn" data-if="keeper-off">Off</span><small data-if="keeper-on">Bona Fide pays posted Bounties within the limits below.</small><small data-if="keeper-off">Bona Fide can't pay any Bounty. Every Payout waits for the Maintainer.</small></dd>
+            </div>
+            <div><dt>Per-payout limit</dt><dd><span data-text="per-payout-limit"></span><small>A larger Bounty waits for the Maintainer.</small></dd></div>
+            <div><dt>Per-period limit</dt><dd><span data-text="period-limit"></span><small data-text="period-left"></small></dd></div>
+          </dl>
+        </section>
+
+        <!-- Manage -->
+        <section class="card" data-show="manage" aria-labelledby="post-title">
+          <h2 id="post-title">Post a Bounty</h2>
+          <p class="muted">It's reserved from the available USDC until it's paid or you cancel it. An issue is paid at most once.</p>
+          <form class="fields mt-16" data-form="post" novalidate>
+            <div class="field">
+              <label for="post-issue">Issue number</label>
+              <span class="with-unit"><span>#</span><input id="post-issue" data-field="post-issue" inputmode="numeric" autocomplete="off" /></span>
+            </div>
+            <div class="field">
+              <label for="post-amount">Amount</label>
+              <span class="with-unit"><input id="post-amount" data-field="post-amount" inputmode="decimal" autocomplete="off" aria-describedby="post-amount-help" /><span>USDC</span></span>
+              <small id="post-amount-help">Available: <span data-text="available"></span></small>
+            </div>
+            <button class="btn primary block" type="submit" data-action="post" data-busy-label="Waiting for your wallet">Post Bounty</button>
+          </form>
+          <div data-status="post"></div>
+        </section>
+
+        <section class="card" data-if="wallet-known" aria-labelledby="bounties-title">
+          <h2 id="bounties-title">Bounties</h2>
+          <div class="progress-line mt-8" data-if="bounties-loading" aria-live="polite">
+            <span class="spinner" aria-hidden="true"></span><span>Reading Bounties from {{network.name}}: <span data-text="bounties-progress"></span></span>
+          </div>
+          <div class="alert warn mt-8" data-if="bounties-failed">
+            <svg class="icon md"><use href="#i-alert"></use></svg>
+            <div>
+              <strong>Couldn't read the Bounties</strong>
+              <p>{{network.name}}'s RPC didn't answer. <button class="link-button" type="button" data-action="reload-bounties">Try again</button></p>
+            </div>
+          </div>
+          <p class="muted mt-8" data-if="no-bounties">No Bounties yet.</p>
+          <table class="table" data-if="has-bounties">
+            <thead>
+              <tr>
+                <th>For</th>
+                <th>Amount</th>
+                <th>Status</th>
+                <th>Transaction</th>
+              </tr>
+            </thead>
+            <tbody data-bounty-rows data-self-managed></tbody>
+          </table>
+          <div data-status="bounties"></div>
+        </section>
+
+        <section class="card" data-show="manage" aria-labelledby="fund-title">
+          <h2 id="fund-title">Fund</h2>
+          <p class="muted">Move USDC from your wallet into the Bounty wallet. Anyone can fund it, and only you can take it out.</p>
+          <form class="fields mt-16" data-form="fund" novalidate>
+            <div class="field">
+              <label for="fund-amount">Amount</label>
+              <span class="with-unit"><input id="fund-amount" data-field="fund-amount" inputmode="decimal" autocomplete="off" aria-describedby="fund-amount-help" /><span>USDC</span></span>
+              <small id="fund-amount-help" data-if="balance-known">Your wallet holds <span data-text="balance"></span>.</small>
+            </div>
+            <button class="btn primary block" type="submit" data-action="fund-sign" data-busy-label="Waiting for your wallet">Fund with one signature</button>
+          </form>
+          <p class="link-row mt-12"><button class="link-button" type="button" data-action="fund-two-step">Fund with two transactions instead</button></p>
+          <p class="hint mt-8">
+            <svg class="icon"><use href="#i-info"></use></svg>
+            <span>You sign a permission for exactly this amount, then send it from your wallet. A smart wallet that hasn't made a transaction on {{network.name}} yet can't sign: fund with two transactions instead.</span>
+          </p>
+          <div data-status="fund"></div>
+        </section>
+
+        <!-- Create, or change the limits -->
+        <section class="card" data-show="create manage" aria-labelledby="limits-title">
+          <h2 id="limits-title" data-show="create">Create the Bounty wallet</h2>
+          <h2 data-show="manage">Limits</h2>
+          <p class="muted" data-show="create">
+            A contract on {{network.name}} that only you control. You fund it and post Bounties on issues. Bona Fide's
+            Keeper can only pay a posted Bounty, in full, within these limits. You can change them at any time.
+          </p>
+          <p class="muted" data-show="manage">What Bona Fide may pay without asking you. Changes apply at once.</p>
+          <form class="fields mt-16" data-form="limits" novalidate>
+            <div class="field">
+              <label for="per-payout">Per-payout limit</label>
+              <span class="with-unit"><input id="per-payout" data-field="per-payout" inputmode="decimal" autocomplete="off" aria-describedby="per-payout-help" /><span>USDC</span></span>
+              <small id="per-payout-help">The largest Bounty Bona Fide pays on its own. A larger one waits for you to pay it here.</small>
+            </div>
+            <div class="field">
+              <label for="period-limit">Per-period limit</label>
+              <span class="with-unit"><input id="period-limit" data-field="period-limit" inputmode="decimal" autocomplete="off" aria-describedby="period-limit-help" /><span>USDC</span></span>
+              <small id="period-limit-help">The most Bona Fide pays in total in one period. After that, Payouts wait for you until the next one.</small>
+            </div>
+            <div class="field">
+              <label for="period-length">Period</label>
+              <select id="period-length" data-field="period-length" aria-describedby="period-length-help">
+                <option value="3600">1 hour</option>
+                <option value="86400">1 day</option>
+                <option value="604800">7 days</option>
+                <option value="2592000">30 days</option>
+                <option value="7776000">90 days</option>
+                <option value="31536000">365 days</option>
+              </select>
+              <small id="period-length-help">A period starts with Bona Fide's first Payout after the last period ended.</small>
+            </div>
+            <button class="btn primary block" type="submit" data-show="create" data-action="create" data-busy-label="Waiting for your wallet">Create the Bounty wallet</button>
+            <button class="btn primary block" type="submit" data-show="manage" data-action="set-limits" data-busy-label="Waiting for your wallet">Save limits</button>
+          </form>
+          <p class="hint mt-12" data-show="create">
+            <svg class="icon"><use href="#i-info"></use></svg>
+            <span>One transaction. You pay the network fee, in USDC. Then fund the wallet and post Bounties here.</span>
+          </p>
+          <div data-status="limits"></div>
+        </section>
+
+        <section class="card" data-show="manage" aria-labelledby="keeper-title">
+          <h2 id="keeper-title">Keeper payouts</h2>
+          <p class="muted" data-if="keeper-on">
+            On. When a PR that closes an issue is merged, Bona Fide pays its Bounty within your limits.
+          </p>
+          <p class="muted" data-if="keeper-off">
+            Off. Bona Fide can't pay any Bounty, even within your limits. Every Payout waits for you to pay it here.
+          </p>
+          <button class="btn danger block mt-16" type="button" data-if="keeper-on" data-action="keeper-off" data-busy-label="Waiting for your wallet">Turn off Keeper payouts</button>
+          <button class="btn primary block mt-16" type="button" data-if="keeper-off" data-action="keeper-on" data-busy-label="Waiting for your wallet">Turn on Keeper payouts</button>
+          <p class="hint mt-12">
+            <svg class="icon"><use href="#i-shield"></use></svg>
+            <span>The emergency stop. Turn it off if you think Bona Fide's key is at risk, or it paid something it shouldn't have. Your USDC and your Bounties stay as they are, and you can still pay any Bounty here.</span>
+          </p>
+          <div data-status="keeper"></div>
+        </section>
+
+        <section class="card" data-show="manage" aria-labelledby="withdraw-title">
+          <h2 id="withdraw-title">Withdraw</h2>
+          <p class="muted">Take back USDC that no open Bounty reserves, to your wallet. To free a Bounty's USDC, cancel it first.</p>
+          <form class="fields mt-16" data-form="withdraw" novalidate>
+            <div class="field">
+              <label for="withdraw-amount">Amount</label>
+              <span class="with-unit"><input id="withdraw-amount" data-field="withdraw-amount" inputmode="decimal" autocomplete="off" aria-describedby="withdraw-amount-help" /><span>USDC</span></span>
+              <small id="withdraw-amount-help">Available: <span data-text="available"></span></small>
+            </div>
+            <button class="btn secondary block" type="submit" data-action="withdraw" data-busy-label="Waiting for your wallet">Withdraw to your wallet</button>
+          </form>
+          <div data-status="withdraw"></div>
+        </section>
+      </div>
+    </main>
+
+    {{> wallet-picker}}
+
+    <template data-bounty-row>
+      <tr>
+        <td class="for"><a data-cell="issue"></a></td>
+        <td class="num" data-label="Amount" data-cell="amount"></td>
+        <td>
+          <span class="state">
+            <span class="tag" data-cell="tag"></span><small data-cell="detail"></small>
+            <button class="btn secondary small" type="button" data-action="cancel-row" hidden>Cancel</button>
+          </span>
+        </td>
+        <td data-label="Transaction"><a data-cell="tx" target="_blank" rel="noopener"></a></td>
+      </tr>
+    </template>
+
+    <footer class="bf-foot">
+      <span>Bona Fide: refundable good-faith deposits for open source.</span>
+      {{#if bountyFactory}}<a href="{{network.explorerUrl}}/address/{{network.bountyFactory}}" target="_blank" rel="noopener">Bounty wallet factory</a>{{/if}}
+      <a data-href="repo-page" data-if="repo-known">Deposits and Bounties in <span data-text="repo"></span></a>
+    </footer>
+    {{> scripts}}
+  </body>
+</html>

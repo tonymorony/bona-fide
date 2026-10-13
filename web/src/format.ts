@@ -12,6 +12,16 @@ export function usdcAmount(amount: bigint): string {
   return fraction ? `${grouped}.${fraction.padEnd(2, "0")}` : grouped;
 }
 
+/** An amount someone typed, such as "50", "12.5" or "1,000", in USDC base units; null if it isn't one. */
+export function parseUsdc(text: string): bigint | null {
+  const plain = text.trim().replaceAll(",", "");
+  const match = /^(\d{1,12})(?:\.(\d{0,6}))?$|^\.(\d{1,6})$/.exec(plain);
+  if (!match) return null;
+  const whole = match[1] ?? "0";
+  const fraction = (match[2] ?? match[3] ?? "").padEnd(USDC_DECIMALS, "0");
+  return BigInt(whole) * 10n ** BigInt(USDC_DECIMALS) + BigInt(fraction);
+}
+
 export function usdc(amount: bigint): string {
   return `${usdcAmount(amount)} USDC`;
 }

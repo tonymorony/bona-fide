@@ -1,10 +1,13 @@
 import { expect, test } from "vitest";
 import {
+  bountiesPageUrl,
   explorerAddress,
   explorerTx,
   itemName,
   itemUrl,
   readItemLink,
+  readPayee,
+  readPayoutLink,
   readRepoLink,
   repoPageUrl,
 } from "../src/link.ts";
@@ -59,4 +62,37 @@ test("transactions and addresses link to the network's explorer", () => {
   expect(explorerAddress(network, "0x05283F2c7D94D66669227Cecf75abBbd024771A7")).toBe(
     "https://explorer.testnet.arc.io/address/0x05283F2c7D94D66669227Cecf75abBbd024771A7",
   );
+});
+
+test("the App's Payout link names the issue, and the payee when the Contributor named one", () => {
+  const payee = "0x5aAeb6053F3E94C9b9A09f33669435E7Ef1BeAed";
+
+  expect(readPayoutLink(`?repo=acme/widgets&issue=12&payee=${payee.toLowerCase()}`)).toEqual({ issue: 12, payee });
+  expect(readPayoutLink("?repo=acme/widgets")).toBe("none");
+  expect(readPayoutLink("?repo=acme/widgets&issue=12")).toEqual({ issue: 12, payee: null });
+  expect(bountiesPageUrl("acme/widgets", { issue: 12, payee: null })).toBe(
+    "bounties.html?repo=acme%2Fwidgets&issue=12",
+  );
+  expect(bountiesPageUrl("acme/widgets")).toBe("bounties.html?repo=acme%2Fwidgets");
+  expect(bountiesPageUrl("acme/widgets", { issue: 12, payee })).toBe(
+    `bounties.html?repo=acme%2Fwidgets&issue=12&payee=${payee}`,
+  );
+});
+
+test.each([
+  ["?repo=acme/widgets&payee=0x5aAeb6053F3E94C9b9A09f33669435E7Ef1BeAed"],
+  ["?repo=acme/widgets&issue=0&payee=0x5aAeb6053F3E94C9b9A09f33669435E7Ef1BeAed"],
+  ["?repo=acme/widgets&issue=12&payee=0x5aAeb6053F3E94C9b9A09f33669435E7Ef1BeAe"],
+  ["?repo=acme/widgets&issue=12&payee=0x5AAeb6053F3E94C9b9A09f33669435E7Ef1BeAed"],
+  ["?repo=acme/widgets&issue=9007199254740992&payee=0x5aAeb6053F3E94C9b9A09f33669435E7Ef1BeAed"],
+])("a Payout link that's incomplete or malformed, %j, reads as invalid", (search) => {
+  expect(readPayoutLink(search)).toBe("invalid");
+});
+
+test("a payee typed or pasted is all lowercase or correctly checksummed, and comes back checksummed", () => {
+  expect(readPayee(" 0x5aaeb6053f3e94c9b9a09f33669435e7ef1beaed ")).toBe("0x5aAeb6053F3E94C9b9A09f33669435E7Ef1BeAed");
+  expect(readPayee("0x5aAeb6053F3E94C9b9A09f33669435E7Ef1BeAed")).toBe("0x5aAeb6053F3E94C9b9A09f33669435E7Ef1BeAed");
+  expect(readPayee("0x5AAeb6053F3E94C9b9A09f33669435E7Ef1BeAed")).toBeNull();
+  expect(readPayee("5aaeb6053f3e94c9b9a09f33669435e7ef1beaed")).toBeNull();
+  expect(readPayee("vitalik.eth")).toBeNull();
 });

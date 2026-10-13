@@ -1,12 +1,14 @@
 import { parseEventLogs, type Hex } from "viem";
 import { escrowAbi, routerAbi } from "../abi.ts";
+import { createBountyReader, hasBounties, type BountyRow, type BountyWalletState } from "../bounty.ts";
 import type { RepoTerms, Terms } from "../chain.ts";
 import { decisionWords } from "../decisions.ts";
 import { readDecisions, type Decision, type DecisionsOutcome } from "../endpoints.ts";
-import { delay, localTime, percent, shortAddress, shortDate, timeout, usdc, utcTime } from "../format.ts";
+import { delay, localTime, percent, shortAddress, shortDate, timeLeft, timeout, usdc, utcTime } from "../format.ts";
 import { readRepoHistory, type DepositRow, type RepoHistory } from "../history.ts";
 import { repoIdOf } from "../keys.ts";
-import { explorerAddress, explorerTx, itemName, itemUrl, readRepoLink } from "../link.ts";
+import { bountiesPageUrl, explorerAddress, explorerTx, itemName, itemUrl, readRepoLink } from "../link.ts";
+import { drawBountyRows } from "../ui/bounty-rows.ts";
 import { newView, onAction, render } from "../ui/dom.ts";
 import { sendContractCall } from "../wallet.ts";
 import {
@@ -17,12 +19,14 @@ import {
   reader,
   readyWallet,
   revertReason,
+  sameAddress,
   startSession,
   walletFailure,
 } from "./common.ts";
 
 const repo = readRepoLink(location.search);
 const repoId = repo && repoIdOf(repo);
+const bountyReader = hasBounties(network) ? createBountyReader(client, network) : null;
 /** Rows shown before "Show all". */
 const FIRST_ROWS = 10;
 
@@ -38,6 +42,9 @@ let showAll = false;
 let refundSent: { row: DepositRow; txHash: Hex } | null = null;
 let flushed: { amount: bigint; txHash: Hex } | null = null;
 let actionNote = "";
+/** The repo's Bounty wallet, read from chain: undefined while it is read, null when there is none. */
+let bountyWallet: { state: BountyWalletState; rows: BountyRow[] } | null | undefined;
+let bountyFailed = false;
 /** The App's decision log for the repo; null while it is read. */
 let decisions: DecisionsOutcome | null = null;
 const busy = new Set<string>();
@@ -45,6 +52,8 @@ const rowsBody = document.querySelector<HTMLTableSectionElement>("[data-rows]")!
 const rowTemplate = document.querySelector<HTMLTemplateElement>("template[data-row]")!;
 const decisionList = document.querySelector<HTMLOListElement>("[data-decisions]")!;
 const decisionTemplate = document.querySelector<HTMLTemplateElement>("template[data-decision]")!;
+const bountyBody = document.querySelector<HTMLTableSectionElement>("[data-bounty-rows]")!;
+const bountyTemplate = document.querySelector<HTMLTemplateElement>("template[data-bounty-row]")!;
 
 const session = startSession(() => paint());
 
@@ -154,10 +163,39 @@ function paint(): void {
     view.text["decided-count"] = String(decisions.counts.decided);
     view.text["escalated-count"] = String(decisions.counts.escalated);
   }
+  paintBounties(view, state);
   view.text["action-note"] = actionNote;
   view.flags["action-note"] = actionNote !== "";
   for (const action of busy) view.busy.add(action);
   render(view);
+}
+
+// Read from the Bounty wallet on chain, never from the App. A network without the factory shows nothing.
+function paintBounties(view: ReturnType<typeof newView>, state: string): void {
+  if (!bountyReader || state !== "live" || !repo) return;
+  view.flags["bounties-section"] = true;
+  view.flags["maintainer-connected"] = sameAddress(session.account, terms?.active?.maintainer);
+  view.hrefs["bounties-page"] = bountiesPageUrl(repo);
+  view.flags["bounty-loading"] = bountyWallet === undefined && !bountyFailed;
+  view.flags["bounty-failed"] = bountyFailed;
+  view.flags["no-bounty-wallet"] = bountyWallet === null;
+  if (!bountyWallet) return;
+  const { state: wallet, rows } = bountyWallet;
+  view.flags["bounty-wallet"] = true;
+  view.text["bounty-available"] = usdc(wallet.available);
+  view.text["bounty-reserved"] = usdc(wallet.reserved);
+  view.flags["bounty-keeper-on"] = wallet.keeperEnabled;
+  view.flags["bounty-keeper-off"] = !wallet.keeperEnabled;
+  view.text["bounty-limits"] =
+    `Up to ${usdc(wallet.perPayoutLimit)} a Bounty, and ${usdc(wallet.periodLimit)} every ${timeLeft(wallet.periodLength)}`;
+  view.text["bounty-period-left"] =
+    `${usdc(wallet.keeperAllowance)} left in this period. Above that, the Maintainer pays.`;
+  view.text["bounty-wallet-short"] = shortAddress(wallet.address);
+  view.hrefs["bounty-wallet-url"] = explorerAddress(network, wallet.address);
+  const shown = rows.filter((row) => row.status !== "cancelled");
+  view.flags["has-bounty-rows"] = shown.length > 0;
+  view.flags["no-bounty-rows"] = shown.length === 0;
+  drawBountyRows(bountyBody, bountyTemplate, shown, { repo, explorerUrl: network.explorerUrl });
 }
 
 function drawRows(deposits: DepositRow[]): void {
@@ -217,7 +255,14 @@ function drawDecisions(list: Decision[]): void {
     const item = cell("item") as HTMLAnchorElement;
     item.textContent = itemName(d.item.kind, d.item.number, { capital: true });
     item.href = itemUrl({ repo: repo!, kind: d.item.kind, number: d.item.number });
-    cell("kind").textContent = words.kind;
+    const kind = cell("kind");
+    kind.textContent = words.kind;
+    if (words.pr !== null) {
+      const pr = document.createElement("a");
+      pr.textContent = itemName("pr", words.pr);
+      pr.href = itemUrl({ repo: repo!, kind: "pr", number: words.pr });
+      kind.append(" for ", pr);
+    }
     const outcome = cell("outcome");
     outcome.textContent = words.outcome;
     outcome.classList.add(d.outcome === "decided" ? "accent" : "neutral");
@@ -286,7 +331,27 @@ async function load(): Promise<void> {
     loadFailed = true;
   }
   paint();
+  if (!loadFailed && terms?.active) void loadBounties();
   if (!loadFailed && terms && (terms.active || terms.pending)) await loadHistory();
+}
+
+/** The Binding Maintainer's Bounty wallet, its figures and its Bounties. */
+async function loadBounties(): Promise<void> {
+  if (!bountyReader || !repoId || !terms) return;
+  bountyFailed = false;
+  bountyWallet = undefined;
+  paint();
+  try {
+    const address = await bountyReader.repoWallet(repoId, terms);
+    if (!address) bountyWallet = null;
+    else {
+      const [state, rows] = await Promise.all([bountyReader.state(address), bountyReader.bounties(address)]);
+      bountyWallet = { state, rows };
+    }
+  } catch {
+    bountyFailed = true;
+  }
+  paint();
 }
 
 async function loadHistory(): Promise<void> {
@@ -377,6 +442,7 @@ onAction((action, element) => {
   if (action === "reload") return location.reload();
   if (action === "reload-history") return void loadHistory();
   if (action === "reload-decisions") return void loadDecisions();
+  if (action === "reload-bounties") return void loadBounties();
   if (action === "show-all") {
     showAll = true;
     return paint();

@@ -2,7 +2,7 @@ import type { Decision } from "./endpoints.ts";
 
 /** How the repo page words one decision. Every string is shown as text, never as HTML. */
 export interface DecisionWords {
-  /** "Automated review", "Early Refund" or "Record Exemption". */
+  /** "Automated review", "Early Refund", "Record Exemption", "Bounty Payout" or "Bounty held". */
   kind: string;
   outcome: string;
   /** What the model suggested, or null when no model was asked. */
@@ -13,14 +13,16 @@ export interface DecisionWords {
   read: string | null;
   /** What asking the model cost, or null. */
   cost: string | null;
+  /** The merged PR a Bounty decision is about, or null. */
+  pr: number | null;
 }
 
 const KINDS: Record<string, string> = {
   triage: "Automated review",
   "early-refund": "Early Refund",
   waive: "Record Exemption",
-  pay: "Payment",
-  hold: "Hold",
+  pay: "Bounty Payout",
+  hold: "Bounty held",
 };
 
 const VERDICTS: Record<string, string> = {
@@ -30,6 +32,9 @@ const VERDICTS: Record<string, string> = {
   waive: "no Deposit needed",
   require: "ask for the Deposit",
   flag: "ask for the Deposit, and flag the record for the Maintainer",
+  resolves: "the PR resolves the issue",
+  partial: "the PR resolves the issue only in part",
+  unrelated: "the PR doesn't resolve the issue",
 };
 
 const ACTIONS: Record<string, string> = {
@@ -48,6 +53,41 @@ const WAIVE_ACTIONS: Record<string, string> = {
   silent: "Kept asking for the Deposit.",
 };
 
+const HOLD = "The Maintainer can pay it from the Bounty page.";
+
+// Why the App held a Bounty, as `held: <why>` names it.
+const HELD: Record<string, string> = {
+  "not linked": "GitHub doesn't link the PR as closing the issue",
+  "no model": "no automated reviewer was available",
+  "merged after another": "another PR that closes the issue was merged first",
+  "checks not green": "the PR's checks weren't green",
+  "Keeper payouts off": "Keeper payouts are off",
+  "above the per-payout limit": "it's above the per-payout limit",
+  "above the period limit": "it's above what's left of the per-period limit",
+  "model said partial": "an automated reviewer thinks the PR only partly resolves the issue",
+  "model said unrelated": "an automated reviewer thinks the PR doesn't resolve the issue",
+};
+
+function heldWords(why: string): string {
+  const refused = /^wallet refused \((.+)\)$/.exec(why)?.[1];
+  return HELD[why] ?? (refused ? `the Bounty wallet refused it: ${refused}` : why);
+}
+
+// A Bounty's: Bona Fide pays it within the Maintainer's limits, relays their signed Payout, or leaves
+// it to them, saying why.
+function bountyAction(d: Decision, failed: string | undefined): string {
+  if (d.action === "paid") {
+    return d.inputs?.method === "signature"
+      ? "Sent the Maintainer's signed Payout: the Bounty went in full to its payee."
+      : "Paid the Bounty in full to its payee.";
+  }
+  const held = /^held: (.+)$/.exec(d.action)?.[1];
+  if (held) return `Paid nothing: ${heldWords(held)}. ${HOLD}`;
+  if (d.action === "silent") return `Paid nothing. ${HOLD}`;
+  if (failed) return `Bona Fide couldn't finish (${failed}). Nothing was paid. ${HOLD}`;
+  return d.action;
+}
+
 export function decisionWords(d: Decision): DecisionWords {
   const failed = /^failed: (.+)$/.exec(d.action)?.[1];
   const asked = d.type === "triage" || d.type === "waive";
@@ -55,18 +95,22 @@ export function decisionWords(d: Decision): DecisionWords {
   if (d.suggestion) suggestion = `Suggested: ${VERDICTS[d.suggestion.verdict] ?? d.suggestion.verdict}`;
   else if (asked && !failed) suggestion = "The model gave no suggestion.";
   const waive = d.type === "waive";
+  const bounty = d.type === "pay" || d.type === "hold";
   const unasked = waive ? "The Deposit is still needed." : "Nothing was posted.";
   let read: string | null = null;
-  if (d.inputs) read = d.type === "triage" ? readWords(d.inputs) : waive ? recordWords(d.inputs) : null;
+  if (d.inputs) read = d.type === "triage" || bounty ? readWords(d.inputs) : waive ? recordWords(d.inputs) : null;
+  const pr = bounty && typeof d.inputs?.pr === "number" && Number.isSafeInteger(d.inputs.pr) ? d.inputs.pr : null;
   return {
     kind: KINDS[d.type] ?? d.type,
     outcome: d.outcome === "decided" ? "Decided" : "Left to the Maintainer",
     suggestion,
-    done:
-      (waive ? WAIVE_ACTIONS[d.action] : ACTIONS[d.action]) ??
-      (failed ? `The model couldn't be asked (${failed}). ${unasked}` : d.action),
+    done: bounty
+      ? bountyAction(d, failed)
+      : ((waive ? WAIVE_ACTIONS[d.action] : ACTIONS[d.action]) ??
+        (failed ? `The model couldn't be asked (${failed}). ${unasked}` : d.action)),
     read,
     cost: d.cost ? costWords(d.cost) : null,
+    pr: pr !== null && pr > 0 ? pr : null,
   };
 }
 

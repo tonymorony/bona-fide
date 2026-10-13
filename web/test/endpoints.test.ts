@@ -1,5 +1,13 @@
 import { expect, test } from "vitest";
-import { askKeeperToBind, readDecisions, relayDeposit, sendVerdict, type Fetch } from "../src/endpoints.ts";
+import {
+  askKeeperToBind,
+  payoutBody,
+  readDecisions,
+  relayDeposit,
+  relayPayout,
+  sendVerdict,
+  type Fetch,
+} from "../src/endpoints.ts";
 
 const TX = `0x${"ab".repeat(32)}`;
 const WALLET = "0x5aAeb6053F3E94C9b9A09f33669435E7Ef1BeAed";
@@ -237,4 +245,75 @@ test.each([
   ],
 ])("%s makes the log unavailable, never an empty one", async (_, fetch) => {
   expect(await readDecisions("acme/widgets", fetch ?? failing)).toEqual({ kind: "unavailable" });
+});
+
+test.each([
+  ["a Bounty Payout", { type: "pay", action: "paid", txHash: TX, item: { kind: "issue", number: 12 } }],
+  [
+    "a Bounty held for the Maintainer",
+    {
+      type: "hold",
+      action: "held: above the per-payout limit",
+      outcome: "escalated",
+      serial: "2",
+      item: { kind: "issue", number: 12 },
+      inputs: { source: "merge", pr: 41, method: "keeper" },
+      suggestion: { verdict: "resolves", reasons: ["It fixes the crash."] },
+    },
+  ],
+])("%s is read like any other decision", async (_, more) => {
+  const logged = { ...decision, ...more };
+  const { fetch } = answering(200, { counts: { decided: 1, escalated: 1 }, decisions: [logged] });
+
+  expect(await readDecisions("acme/widgets", fetch)).toEqual({
+    kind: "ok",
+    counts: { decided: 1, escalated: 1 },
+    decisions: [{ ...logged, at: new Date(decision.at) }],
+  });
+});
+
+test("a Bounty decision out of shape still makes the whole log unavailable", async () => {
+  const broken = { ...decision, type: "pay", action: "paid", txHash: "0x1234", serial: "two" };
+  const { fetch } = answering(200, { counts: { decided: 1, escalated: 0 }, decisions: [broken] });
+
+  expect(await readDecisions("acme/widgets", fetch)).toEqual({ kind: "unavailable" });
+});
+
+const payout = {
+  repo: "acme/widgets",
+  issue: 12,
+  payee: WALLET,
+  deadline: 1790000000,
+  signature: `0x${"66".repeat(65)}`,
+} as const;
+
+test("a signed Payout goes to /bounty/payout on the page's own origin, with the deadline as a number", async () => {
+  const { fetch, sent } = answering(200, { txHash: TX });
+
+  await relayPayout(payoutBody({ ...payout, deadline: 1790000000n }, payout.signature), fetch);
+
+  expect(sent[0]!.url).toBe("/bounty/payout");
+  expect(sent[0]!.init.method).toBe("POST");
+  expect(JSON.parse(String(sent[0]!.init.body))).toEqual(payout);
+});
+
+test.each([
+  [200, { txHash: TX }, {}, { kind: "paid", txHash: TX }],
+  [400, { error: "This signature has expired." }, {}, { kind: "refused", status: 400 }],
+  [404, { error: "No such endpoint." }, {}, { kind: "refused", status: 404, message: "No such endpoint." }],
+  [404, { error: "acme/widgets has no Bounty on issue #12." }, {}, { kind: "refused", status: 404 }],
+  [409, { error: "The Bounty on issue #12 was already paid." }, {}, { kind: "refused", status: 409 }],
+  [422, { error: "The Payout would fail on-chain: InvalidSignature." }, {}, { kind: "refused", status: 422 }],
+  [429, { error: "Too many requests." }, { "retry-after": "9" }, { kind: "wait", seconds: 9 }],
+  [502, { error: "reverted", txHash: TX }, {}, { kind: "reverted", txHash: TX }],
+  [504, { error: "not confirmed yet", txHash: TX }, {}, { kind: "unconfirmed", txHash: TX }],
+  [413, { error: "The request body is over the 16 KiB limit." }, {}, { kind: "too-large" }],
+  [502, "<html>Bad Gateway</html>", {}, { kind: "unavailable" }],
+  [200, { status: "ok" }, {}, { kind: "unavailable" }],
+])("the Keeper's %i answer %j to a signed Payout becomes %j", async (status, body, headers, outcome) => {
+  expect(await relayPayout(payout, answering(status, body, headers).fetch)).toMatchObject(outcome);
+});
+
+test("a Payout relay the page can't reach is unavailable", async () => {
+  expect(await relayPayout(payout, failing)).toEqual({ kind: "unavailable" });
 });

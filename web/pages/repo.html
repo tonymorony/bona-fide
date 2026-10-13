@@ -168,6 +168,57 @@
         </p>
       </section>
 
+      <section class="card mt-16" data-if="bounties-section" aria-labelledby="bounties-title">
+        <div class="card-head">
+          <h2 id="bounties-title">Bounties</h2>
+          <a data-href="bounties-page" data-if="maintainer-connected">Manage Bounties</a>
+        </div>
+        <div class="progress-line mt-8" data-if="bounty-loading" aria-live="polite">
+          <span class="spinner" aria-hidden="true"></span><span>Reading Bounties from {{network.name}}</span>
+        </div>
+        <div class="alert warn mt-8" data-if="bounty-failed">
+          <svg class="icon md"><use href="#i-alert"></use></svg>
+          <div>
+            <strong>Couldn't read the Bounties</strong>
+            <p>{{network.name}}'s RPC didn't answer. <button class="link-button" type="button" data-action="reload-bounties">Try again</button></p>
+          </div>
+        </div>
+        <p class="muted" data-if="no-bounty-wallet">No Bounties here: the Maintainer hasn't set up a Bounty wallet.</p>
+        <div data-if="bounty-wallet">
+          <p class="muted">
+            USDC the Maintainer posts on issues. When a PR that closes one is merged, Bona Fide pays its Bounty to the
+            Contributor, within the Maintainer's limits.
+          </p>
+          <div class="stats">
+            <div class="stat"><div class="n" data-text="bounty-available"></div><div class="l">Available for new Bounties</div></div>
+            <div class="stat"><div class="n" data-text="bounty-reserved"></div><div class="l">In open Bounties</div></div>
+          </div>
+          <dl class="rows compact mt-16">
+            <div>
+              <dt>Paid by Bona Fide</dt>
+              <dd data-if="bounty-keeper-on"><span data-text="bounty-limits"></span><small data-text="bounty-period-left"></small></dd>
+              <dd data-if="bounty-keeper-off">Off: every Payout waits for the Maintainer</dd>
+            </div>
+            <div>
+              <dt>Bounty wallet</dt>
+              <dd><a class="mono" data-href="bounty-wallet-url" data-text="bounty-wallet-short" target="_blank" rel="noopener"></a></dd>
+            </div>
+          </dl>
+          <p class="muted mt-16" data-if="no-bounty-rows">No Bounties posted yet.</p>
+          <table class="table mt-8" data-if="has-bounty-rows">
+            <thead>
+              <tr>
+                <th>For</th>
+                <th>Amount</th>
+                <th>Status</th>
+                <th>Transaction</th>
+              </tr>
+            </thead>
+            <tbody data-bounty-rows data-self-managed></tbody>
+          </table>
+        </div>
+      </section>
+
       <section class="card mt-16" aria-labelledby="decisions-title" data-hide="bad-link">
         <h2 id="decisions-title">Decisions</h2>
         <p class="muted">
@@ -270,6 +321,15 @@
           </span>
         </td>
         <td data-label="Made"><time data-cell="made"></time></td>
+      </tr>
+    </template>
+
+    <template data-bounty-row>
+      <tr>
+        <td class="for"><a data-cell="issue"></a></td>
+        <td class="num" data-label="Amount" data-cell="amount"></td>
+        <td><span class="state"><span class="tag" data-cell="tag"></span><small data-cell="detail"></small></span></td>
+        <td data-label="Transaction"><a data-cell="tx" target="_blank" rel="noopener"></a></td>
       </tr>
     </template>
 

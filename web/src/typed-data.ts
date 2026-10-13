@@ -9,6 +9,10 @@ export const WINDOWS = {
   bindingProof: 1800,
   /** The Maintainer's Forfeit. */
   verdict: 3600,
+  /** The Maintainer's one-signature funding of their Bounty wallet. Their own wallet sends it at once. */
+  bountyFund: 600,
+  /** The Maintainer's signed Payout, which the Keeper or anyone relays. */
+  payout: 3600,
 } as const;
 
 /** The escrow's EIP-712 domain, for Forfeits and Binding proofs. */
@@ -123,5 +127,74 @@ export function bindingProof({ chainId, escrow, repo, maintainer, nonce, deadlin
     },
     primaryType: "Binding",
     message: { repo: `github:${repo.toLowerCase()}`, maintainer, nonce, deadline },
+  } as const;
+}
+
+/** A Bounty wallet's EIP-712 domain, for Payout signatures: it names the wallet, so one can't pay from another. */
+export function bountyDomain(chainId: number, wallet: Address) {
+  return { name: "BonaFide Bounty", version: "1", chainId, verifyingContract: wallet } as const;
+}
+
+export interface PayoutTerms {
+  chainId: number;
+  /** The Bounty wallet. */
+  wallet: Address;
+  issueNumber: number;
+  /** The open Bounty's Serial: cancelling it and posting again voids the signature. */
+  serial: bigint;
+  payee: Address;
+  /** The open Bounty's whole amount, in USDC base units. */
+  amount: bigint;
+  /** Unix seconds, inclusive. */
+  deadline: bigint;
+}
+
+/** The Maintainer's signed Payout of one open Bounty, in full, to one payee. */
+export function payoutSignature({ chainId, wallet, issueNumber, serial, payee, amount, deadline }: PayoutTerms) {
+  return {
+    domain: bountyDomain(chainId, wallet),
+    types: {
+      Payout: [
+        { name: "issueNumber", type: "uint256" },
+        { name: "serial", type: "uint256" },
+        { name: "payee", type: "address" },
+        { name: "amount", type: "uint256" },
+        { name: "deadline", type: "uint256" },
+      ],
+    },
+    primaryType: "Payout",
+    message: { issueNumber: BigInt(issueNumber), serial, payee, amount, deadline },
+  } as const;
+}
+
+export interface BountyFundTerms {
+  chainId: number;
+  usdc: Address;
+  /** The Bounty wallet: USDC lets only it redeem the authorization. */
+  wallet: Address;
+  from: Address;
+  value: bigint;
+  /** 32 random bytes, so each authorization is new. */
+  nonce: Hex;
+  /** Unix seconds. */
+  validBefore: bigint;
+}
+
+/** USDC's ReceiveWithAuthorization letting a Bounty wallet take exactly `value` from `from`, once. */
+export function bountyFundAuthorization({ chainId, usdc, wallet, from, value, nonce, validBefore }: BountyFundTerms) {
+  return {
+    domain: usdcDomain(chainId, usdc),
+    types: {
+      ReceiveWithAuthorization: [
+        { name: "from", type: "address" },
+        { name: "to", type: "address" },
+        { name: "value", type: "uint256" },
+        { name: "validAfter", type: "uint256" },
+        { name: "validBefore", type: "uint256" },
+        { name: "nonce", type: "bytes32" },
+      ],
+    },
+    primaryType: "ReceiveWithAuthorization",
+    message: { from, to: wallet, value, validAfter: 0n, validBefore, nonce },
   } as const;
 }

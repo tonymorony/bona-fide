@@ -1,7 +1,8 @@
 import type { Network } from "./src/network.ts";
 
 // One build of the pages per network: `npm run build` builds testnet, `npm run build -- mainnet`
-// builds mainnet. A build stops if the network's escrow or router address is missing.
+// builds mainnet. A build stops if the network's escrow or router address is missing. Without a
+// bountyFactory, the pages say Bounties aren't available on the network yet.
 
 const ARC_USDC = "0x3600000000000000000000000000000000000000";
 
@@ -9,6 +10,7 @@ const ENDPOINTS = {
   relayDeposit: "/relay/deposit",
   forfeit: "/forfeit",
   bindingProof: "/binding-proof",
+  bountyPayout: "/bounty/payout",
 };
 
 export const testnet: Network = {
@@ -21,6 +23,8 @@ export const testnet: Network = {
   escrow: "0x05283F2c7D94D66669227Cecf75abBbd024771A7",
   escrowFromBlock: 64_367_399,
   router: "0xae079DC6536c270d2743c0721cfC41c94E12ca9f",
+  bountyFactory: "",
+  bountyFactoryFromBlock: 0,
   // The testnet router flushes through CCTP to a test address on Base Sepolia: Protocol Guild's
   // vest exists only on Base.
   forfeits: {
@@ -53,6 +57,8 @@ export const mainnet: Network = {
   escrow: "",
   escrowFromBlock: 0,
   router: "",
+  bountyFactory: "",
+  bountyFactoryFromBlock: 0,
   forfeits: {
     recipient: "Protocol Guild",
     purpose: "funds open-source maintainers through Protocol Guild",

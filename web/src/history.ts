@@ -58,29 +58,18 @@ export async function readRepoHistory({
   concurrency = 4,
   onProgress,
 }: HistoryOptions): Promise<RepoHistory> {
-  const latest = await client.getBlockNumber({ cacheTime: 0 });
-  const ranges: [bigint, bigint][] = [];
-  for (let from = BigInt(network.escrowFromBlock); from <= latest; from += BigInt(rangeSize)) {
-    const to = from + BigInt(rangeSize) - 1n;
-    ranges.push([from, to < latest ? to : latest]);
-  }
-
   const read = (fromBlock: bigint, toBlock: bigint) =>
     client.getLogs({ address: [network.escrow, network.router], events: EVENTS, fromBlock, toBlock, strict: true });
   type Log = Awaited<ReturnType<typeof read>>[number];
 
-  const logs: Log[] = [];
-  let done = 0;
-  let next = 0;
-  async function worker() {
-    while (next < ranges.length) {
-      const [from, to] = ranges[next++]!;
-      logs.push(...(await withRetries(() => read(from, to))));
-      onProgress?.(++done, ranges.length);
-    }
-  }
-  await Promise.all(Array.from({ length: Math.min(concurrency, ranges.length) }, worker));
-  logs.sort((a, b) => Number(a.blockNumber - b.blockNumber) || a.logIndex - b.logIndex);
+  const logs: Log[] = await readInRanges({
+    client,
+    fromBlock: network.escrowFromBlock,
+    rangeSize,
+    concurrency,
+    onProgress,
+    read,
+  });
 
   const times = new Map<bigint, Promise<Date>>();
   const timeOf = (log: Log): Promise<Date> => {
@@ -136,6 +125,45 @@ export async function readRepoHistory({
   }
 
   return { deposits: [...deposits.values()].reverse(), liveSince, flushes };
+}
+
+/**
+ * Reads logs from `fromBlock` to the latest block in ranges of `rangeSize`, `concurrency` at once, each
+ * retried a few times. The logs come back in chain order.
+ */
+export async function readInRanges<Log extends { blockNumber: bigint; logIndex: number }>({
+  client,
+  fromBlock,
+  rangeSize = LOG_RANGE,
+  concurrency = 4,
+  onProgress,
+  read,
+}: {
+  client: PublicClient;
+  fromBlock: number;
+  rangeSize?: number;
+  concurrency?: number;
+  onProgress?: (done: number, total: number) => void;
+  read: (fromBlock: bigint, toBlock: bigint) => Promise<Log[]>;
+}): Promise<Log[]> {
+  const latest = await client.getBlockNumber({ cacheTime: 0 });
+  const ranges: [bigint, bigint][] = [];
+  for (let from = BigInt(fromBlock); from <= latest; from += BigInt(rangeSize)) {
+    const to = from + BigInt(rangeSize) - 1n;
+    ranges.push([from, to < latest ? to : latest]);
+  }
+  const logs: Log[] = [];
+  let done = 0;
+  let next = 0;
+  async function worker() {
+    while (next < ranges.length) {
+      const [from, to] = ranges[next++]!;
+      logs.push(...(await withRetries(() => read(from, to))));
+      onProgress?.(++done, ranges.length);
+    }
+  }
+  await Promise.all(Array.from({ length: Math.min(concurrency, ranges.length) }, worker));
+  return logs.sort((a, b) => Number(a.blockNumber - b.blockNumber) || a.logIndex - b.logIndex);
 }
 
 async function withRetries<T>(read: () => Promise<T>): Promise<T> {

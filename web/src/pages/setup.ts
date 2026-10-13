@@ -4,7 +4,7 @@ import type { RepoTerms, Terms } from "../chain.ts";
 import { askKeeperToBind, bindingProofBody } from "../endpoints.ts";
 import { delay, percent, shortAddress, timeout, usdc } from "../format.ts";
 import { repoIdOf } from "../keys.ts";
-import { explorerTx, readRepoLink, repoPageUrl } from "../link.ts";
+import { bountiesPageUrl, explorerTx, readRepoLink, repoPageUrl } from "../link.ts";
 import { bindingProof, WINDOWS } from "../typed-data.ts";
 import { focusState, newView, onAction, render } from "../ui/dom.ts";
 import { isUndeployedSmartWalletSignature, isUserRejection, signTypedData } from "../wallet.ts";
@@ -95,6 +95,7 @@ function paint(): void {
     view.text["binding-repo"] = `github:${repo.toLowerCase()}`;
     view.hrefs["repo-url"] = `https://github.com/${repo}`;
     view.hrefs["repo-page"] = repoPageUrl(repo);
+    view.hrefs["bounties-page"] = bountiesPageUrl(repo);
   }
   const fileKnown = fileTerms !== null && fileTerms.maintainer !== null;
   view.flags["file-known"] = fileKnown;
