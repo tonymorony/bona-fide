@@ -1,34 +1,56 @@
-/* Bona Fide's brand: the petrol accent, light and dark, and the identity in each page's top bar.
-   This file is loaded before styles/app.css, so each token selector here is one step more
-   specific than its counterpart there (html:root beats :root) and the brand values win. */
+/* Bona Fide's brand, shared with the landing page's Certificate design: its typefaces, its palette
+   and the identity in each page's top bar. The pages have one theme, light, whatever the system's
+   setting. The build copies each file named here by its path in the repo into assets/. */
 
-html:root {
-  --accent: #04657e;
-  --accent-hover: #03566c;
-  --accent-soft: #e1f4fb;
-  --link: #04657e;
-  --mark: #04657e;
-  --focus: 0 0 0 3px rgba(4, 101, 126, 0.35);
+@font-face {
+  font-family: "Big Shoulders Display";
+  src: url("../landing/fonts/big-shoulders-display.woff2") format("woff2");
+  font-weight: 100 900;
+  font-style: normal;
+  font-display: swap;
 }
 
-@media (prefers-color-scheme: dark) {
-  html:root:not([data-theme="light"]) {
-    --accent: #047996;
-    --accent-hover: #0d7f9d;
-    --accent-soft: #0c2b34;
-    --link: #79acbe;
-    --mark: #79acbe;
-    --focus: 0 0 0 3px rgba(121, 172, 190, 0.4);
-  }
+@font-face {
+  font-family: "Hanken Grotesk";
+  src: url("../landing/fonts/hanken-grotesk.woff2") format("woff2");
+  font-weight: 100 900;
+  font-style: normal;
+  font-display: swap;
 }
 
-html:root[data-theme="dark"] {
-  --accent: #047996;
-  --accent-hover: #0d7f9d;
-  --accent-soft: #0c2b34;
-  --link: #79acbe;
-  --mark: #79acbe;
-  --focus: 0 0 0 3px rgba(121, 172, 190, 0.4);
+@font-face {
+  font-family: "Azeret Mono";
+  src: url("../landing/fonts/azeret-mono.woff2") format("woff2");
+  font-weight: 100 900;
+  font-style: normal;
+  font-display: swap;
+}
+
+:root {
+  --page: #f6f4f9;
+  --band: #efebf6;
+  --paper: #ece6f6;
+  --paper-2: #e9f1ee;
+  --paper-3: #eee7f3;
+  --seal-bg: #f3eef9;
+  --ink: #2b2459;
+  --ink-deep: #1d1838;
+  --green: #3f7a6b;
+  --green-deep: #346a5c;
+  --red: #c8323c;
+  --red-deep: #b02a34;
+  --mint: #a8e6d2;
+  --rule: #dcd5ea;
+  --rule-2: #cfc6e4;
+  --numeral: #8a80b0;
+  --on-ink: #f6f4f9;
+  --on-ink-2: #dcd5ea;
+
+  --font-display: "Big Shoulders Display", "Arial Narrow", "Roboto Condensed", "Helvetica Neue", sans-serif;
+  --font-body:
+    "Hanken Grotesk", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --font-mono: "Azeret Mono", ui-monospace, "SF Mono", SFMono-Regular, Menlo, Consolas, monospace;
+  color-scheme: light;
 }
 
 .bf-brand {
@@ -36,28 +58,34 @@ html:root[data-theme="dark"] {
   align-items: center;
   gap: 10px;
   min-width: 0;
-  color: var(--text);
-  font-size: 16px;
-  font-weight: 650;
+  min-height: 44px;
+  color: var(--ink-deep);
+  font-family: var(--font-display);
+  font-size: 24px;
+  font-weight: 900;
+  letter-spacing: 0.04em;
+  line-height: 1;
+  text-decoration: none;
+  text-transform: uppercase;
   white-space: nowrap;
 }
 
 .bf-brand:hover {
+  color: var(--ink-deep);
   text-decoration: none;
 }
 
-.bf-brand .mark {
-  color: var(--mark);
-}
-
 .bf-brand .mark svg {
-  width: 30px;
-  height: 30px;
+  width: 40px;
+  height: 40px;
 }
 
 .bf-brand .area {
   overflow: hidden;
   color: var(--text-2);
+  font-family: var(--font-mono);
+  font-size: 12px;
   font-weight: 500;
+  letter-spacing: 0.06em;
   text-overflow: ellipsis;
 }

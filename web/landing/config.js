@@ -1,11 +1,13 @@
 // The landing page's settings. There is no build step: edit this file, then deploy.
 
 export const CONFIG = {
-  // The network the live numbers come from: "testnet" now, "mainnet" once the escrow is deployed there.
-  network: "testnet",
+  // The network the live numbers come from: "mainnet" or "testnet".
+  network: "mainnet",
   installUrl: "https://github.com/apps/bona-fide-deposits/installations/new",
   // While false, the Install buttons read "Opening with the mainnet launch" and don't link anywhere.
-  installOpen: false,
+  installOpen: true,
+  // The demo video's URL. While empty, the "Watch the demo" button stays hidden.
+  demoUrl: "",
 };
 
 // Every URL here must also be in the connect-src of index.html's Content-Security-Policy.
@@ -36,8 +38,8 @@ export const NETWORKS = {
     logsRange: 0,
     explorerUrl: "https://explorer.arc.io",
     usdc: "0x3600000000000000000000000000000000000000",
-    escrow: "",
-    escrowFromBlock: 0,
-    router: "",
+    escrow: "0xe2fe798427CFb43134FC37F6EE054c2da818fAc9",
+    escrowFromBlock: 24_583_718,
+    router: "0xe36fe5152C6A54946b15df3fEBDc068AF48581dc",
   },
 };

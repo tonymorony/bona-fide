@@ -14,8 +14,8 @@ import { serveLanding } from "./support/serve.mjs";
 const TESTNET = NETWORKS.testnet;
 const SCREENSHOTS = process.env.SCREENSHOTS;
 
-function configFor(networks, { network = "testnet", open = false } = {}) {
-  const config = { network, installUrl: CONFIG.installUrl, installOpen: open };
+function configFor(networks, { network = "testnet", open = false, demoUrl = "" } = {}) {
+  const config = { network, installUrl: CONFIG.installUrl, installOpen: open, demoUrl };
   return `export const CONFIG = ${JSON.stringify(config)};\nexport const NETWORKS = ${JSON.stringify(networks)};\n`;
 }
 
@@ -64,7 +64,10 @@ describe("the landing page", () => {
     chain?.stop();
   });
 
-  async function openPage(t, { config = configFor(local), viewport = DESKTOP, scheme = "light", answers = true } = {}) {
+  async function openPage(
+    t,
+    { config = configFor(local), viewport = DESKTOP, scheme = "light", answers = true, reducedMotion = false } = {},
+  ) {
     arcAnswers = answers;
     const site = await serveLanding({ replace: { "/config.js": config } });
     const page = await chrome.newPage({ intercept });
@@ -72,13 +75,13 @@ describe("the landing page", () => {
       await page.close();
       await site.close();
     });
-    await page.open(site.url, viewport, scheme);
+    await page.open(site.url, viewport, scheme, { reducedMotion });
     return { page, site };
   }
 
   for (const viewport of [DESKTOP, PHONE]) {
     for (const scheme of ["light", "dark"]) {
-      test(`renders at ${viewport.width} px in ${scheme}, with the live numbers`, async (t) => {
+      test(`renders in light at ${viewport.width} px on a ${scheme} system, with the live numbers`, async (t) => {
         const { page, site } = await openPage(t, { viewport, scheme });
         await page.waitFor(`${liveState} === "live"`, "the live numbers");
 
@@ -89,12 +92,26 @@ describe("the landing page", () => {
           routerBalance: "0.50",
         });
         assert.match(await page.evaluate(text("[data-live-status]")), /^As of block \d+$/);
-        assert.equal(await page.evaluate(text("[data-network-tag]")), "Arc Testnet · test network");
+        assert.equal(await page.evaluate(text("[data-network-tag]")), "ARC TESTNET · TEST NETWORK");
         assert.ok(await page.evaluate(isShown("[data-test-only]")), "the test-network note is shown");
-        assert.equal(
-          await page.evaluate(`document.querySelector('[data-address="escrow"]').href`),
-          `${TESTNET.explorerUrl}/address/${chain.escrow}`,
+        assert.ok(!(await page.evaluate(isShown(".built-on .live-dot"))), "no mainnet line on a test network");
+        assert.deepEqual(
+          await page.evaluate(
+            `[...document.querySelectorAll("[data-contracts] [data-address]")].map((a) => [a.dataset.address, a.textContent, a.href])`,
+          ),
+          [
+            ["escrow", chain.escrow, `${TESTNET.explorerUrl}/address/${chain.escrow}`],
+            ["router", chain.router, `${TESTNET.explorerUrl}/address/${chain.router}`],
+          ],
         );
+        assert.equal(await page.evaluate(text("[data-contracts] .eyebrow")), "CONTRACTS ON ARC TESTNET");
+        assert.deepEqual(
+          await page.evaluate(
+            `[...document.querySelectorAll(".built-on img")].map((img) => [img.alt, img.complete && img.naturalWidth > 0, img.getBoundingClientRect().height >= 32])`,
+          ),
+          [["Arc", true, true]],
+        );
+        assert.ok(!(await page.evaluate(isShown("[data-demo]"))), "no demo button without a demo");
         assert.deepEqual(
           await page.evaluate(
             `[...document.querySelectorAll("[data-install]")].map((a) => [a.textContent, a.hasAttribute("href"), a.getAttribute("aria-disabled")])`,
@@ -104,10 +121,7 @@ describe("the landing page", () => {
             ["Opening with the mainnet launch", false, "true"],
           ],
         );
-        assert.equal(
-          await page.evaluate(`getComputedStyle(document.body).backgroundColor`),
-          scheme === "dark" ? "rgb(15, 17, 21)" : "rgb(245, 246, 248)",
-        );
+        assert.equal(await page.evaluate(`getComputedStyle(document.body).backgroundColor`), "rgb(246, 244, 249)");
         assert.ok(
           await page.evaluate(`document.documentElement.scrollWidth <= window.innerWidth`),
           "no sideways scroll",
@@ -159,16 +173,175 @@ describe("the landing page", () => {
     );
   });
 
+  test("shows the demo button once config.js names the video", async (t) => {
+    const demoUrl = "https://example.com/bona-fide-demo";
+    const { page } = await openPage(t, { config: configFor(local, { demoUrl }) });
+
+    assert.ok(await page.evaluate(isShown("[data-demo]")));
+    assert.equal(await page.evaluate(`document.querySelector("[data-demo]").href`), demoUrl);
+    assert.equal(await page.evaluate(text("[data-demo]")), "Watch the demo");
+  });
+
+  test("shows the whole Built on row on the first screen, from a small phone to a wide screen", async (t) => {
+    for (const [width, height] of [
+      [360, 740],
+      [390, 844],
+      [1280, 720],
+      [1440, 900],
+    ]) {
+      // As on mainnet, where the row also says "Live on Arc mainnet".
+      const mainnet = { ...local.testnet, name: "Arc", test: false };
+      const { page } = await openPage(t, {
+        config: configFor({ mainnet }, { network: "mainnet" }),
+        viewport: { width, height, mobile: width < 768 },
+      });
+      await page.waitFor(`document.fonts.status === "loaded"`, "the fonts");
+      await page.waitFor(`${liveState} === "live"`, "the live numbers");
+      assert.ok(await page.evaluate(isShown(".built-on .live-dot")), "the mainnet line is shown");
+      const { bottom, logo } = await page.evaluate(
+        `({ bottom: document.querySelector(".built-on").getBoundingClientRect().bottom, logo: document.querySelector(".built-on img").getBoundingClientRect().height })`,
+      );
+      assert.ok(
+        bottom <= height,
+        `the Built on row ends at ${bottom} px, below the ${height} px screen at ${width} px`,
+      );
+      assert.ok(logo >= 32, `Arc's logo is ${logo} px tall at ${width} px`);
+    }
+  });
+
+  test("keeps the certificate's number and seal word inside its inner frame on a small phone", async (t) => {
+    const { page } = await openPage(t, { viewport: { width: 360, height: 740, mobile: true } });
+    await page.waitFor(`document.fonts.status === "loaded"`, "the fonts");
+
+    const outside = await page.evaluate(`(() => {
+      const frame = document.querySelector(".cert-frame").getBoundingClientRect();
+      const inset = parseFloat(getComputedStyle(document.querySelector(".cert-frame"), "::after").top);
+      return [".cert-number", ".cert-seal-word", ".cert-kind"].filter((selector) => {
+        const r = document.querySelector(selector).getBoundingClientRect();
+        return r.left < frame.left + inset || r.right > frame.right - inset || r.bottom > frame.bottom - inset;
+      });
+    })()`);
+    assert.deepEqual(outside, []);
+  });
+
+  test("shows both code blocks whole on a desktop, with no sideways scroll inside them", async (t) => {
+    const { page } = await openPage(t);
+    await page.waitFor(`document.fonts.status === "loaded"`, "the fonts");
+
+    assert.deepEqual(
+      await page.evaluate(
+        `[...document.querySelectorAll("pre.code")].map((pre) => [pre.getAttribute("aria-label"), pre.scrollWidth <= pre.clientWidth])`,
+      ),
+      [
+        ["Adding the MCP server to Claude Code", true],
+        [".github/bona-fide.yml", true],
+      ],
+    );
+  });
+
+  test("keeps the header at the top while scrolling, and lands nav links below it", async (t) => {
+    const { page } = await openPage(t);
+    await page.waitFor(`document.fonts.status === "loaded"`, "the fonts");
+
+    await page.evaluate(`window.scrollTo({ top: 2000, behavior: "instant" })`);
+    assert.equal(await page.evaluate(`document.querySelector("header.top").getBoundingClientRect().top`), 0);
+
+    for (const id of ["how", "live", "agents"]) {
+      const { header, section, heading } = await page.evaluate(`(async () => {
+        window.scrollTo({ top: 0, behavior: "instant" });
+        const done = new Promise((resolve) => { addEventListener("scrollend", resolve, { once: true }); setTimeout(resolve, 3000); });
+        document.querySelector('.top-nav a[href="#${id}"]').click();
+        await done;
+        const target = document.getElementById("${id}");
+        return {
+          header: document.querySelector("header.top").getBoundingClientRect().bottom,
+          section: target.getBoundingClientRect().top,
+          heading: target.querySelector("h2").getBoundingClientRect().top,
+        };
+      })()`);
+      assert.ok(section >= header, `#${id} starts at ${section} px, under the header that ends at ${header} px`);
+      assert.ok(heading >= header, `#${id}'s heading starts at ${heading} px, under the header (${header} px)`);
+    }
+  });
+
+  test("never scrolls sideways, from a small phone to a wide screen", async (t) => {
+    for (const width of [360, 430, 768, 1440]) {
+      const { page } = await openPage(t, { viewport: { width, height: 900, mobile: width < 768 } });
+      await page.waitFor(`document.fonts.status === "loaded"`, "the fonts");
+      assert.ok(
+        await page.evaluate(`document.documentElement.scrollWidth <= window.innerWidth`),
+        `sideways scroll at ${width} px`,
+      );
+    }
+  });
+
+  const tiltOf = `(() => { const s = document.querySelector("[data-tilt]").style; return { rx: s.getPropertyValue("--rx"), ry: s.getPropertyValue("--ry") }; })()`;
+  /** Scrolls the card into view and returns the viewport point `inset` px inside its wrapper's right edge. */
+  const nearRightEdge = (inset, fy) =>
+    `(() => { const f = document.querySelector(".cert-float"); f.scrollIntoView({ block: "center", behavior: "instant" }); const r = f.getBoundingClientRect(); return { x: r.right - ${inset}, y: r.top + r.height * ${fy} }; })()`;
+
+  test("tilts the certificate a few degrees toward a mouse, and eases back when it leaves", async (t) => {
+    const { page } = await openPage(t);
+    assert.ok(await page.evaluate(`matchMedia("(hover: hover) and (pointer: fine)").matches`), "a fine pointer");
+
+    const corner = await page.evaluate(nearRightEdge(30, 0.1));
+    await page.moveMouse(corner.x, corner.y);
+    await page.waitFor(`parseFloat(${tiltOf}.ry) > 6`, "the tilt toward the top right corner");
+    const { rx, ry } = await page.evaluate(tiltOf);
+    assert.ok(parseFloat(rx) > 4.5 && parseFloat(rx) <= 6.5, rx);
+    assert.ok(parseFloat(ry) <= 6.5, ry);
+
+    await page.moveMouse(2, 2);
+    await page.waitFor(`${tiltOf}.ry === "0.000deg" && ${tiltOf}.rx === "0.000deg"`, "the card at rest");
+    assert.deepEqual(page.errors, []);
+  });
+
+  test("keeps the tilt while the mouse rests just inside the card's edge", async (t) => {
+    const { page } = await openPage(t);
+
+    const edge = await page.evaluate(nearRightEdge(12, 0.5));
+    await page.moveMouse(edge.x, edge.y);
+    await page.waitFor(`parseFloat(${tiltOf}.ry) > 6`, "the tilt toward the right edge");
+    await new Promise((resolve) => setTimeout(resolve, 600));
+    assert.ok(parseFloat((await page.evaluate(tiltOf)).ry) > 6, "still tilted after 600 ms");
+  });
+
+  test("keeps the certificate still when the visitor asks for less motion", async (t) => {
+    const { page } = await openPage(t, { reducedMotion: true });
+
+    const edge = await page.evaluate(nearRightEdge(12, 0.5));
+    await page.moveMouse(edge.x, edge.y);
+    await new Promise((resolve) => setTimeout(resolve, 300));
+    assert.deepEqual(await page.evaluate(tiltOf), { rx: "", ry: "" });
+    assert.deepEqual(
+      await page.evaluate(
+        `[".cert-float", ".cert-sheen", ".step-stamp"].map((s) => getComputedStyle(document.querySelector(s)).animationName)`,
+      ),
+      ["none", "none", "none"],
+    );
+  });
+
+  test("says Live on Arc mainnet under the hero once mainnet has an escrow", async (t) => {
+    const mainnet = { ...local.testnet, name: "Arc", test: false };
+    const { page } = await openPage(t, { config: configFor({ mainnet }, { network: "mainnet" }) });
+    await page.waitFor(`${liveState} === "live"`, "the live numbers");
+
+    assert.ok(await page.evaluate(isShown(".built-on .live-dot")));
+    assert.equal(await page.evaluate(text(".built-on .live-dot")), "Live on Arc mainnet");
+  });
+
   test("waits for the mainnet launch while mainnet has no escrow", async (t) => {
     const mainnet = { ...NETWORKS.mainnet, escrow: "", router: "" };
     const { page } = await openPage(t, { config: configFor({ mainnet }, { network: "mainnet" }) });
     await page.waitFor(`${liveState} === "soon"`, "the waiting state");
 
     assert.match(await page.evaluate(text(".soon")), /^The escrow opens with the mainnet launch\./);
-    assert.equal(await page.evaluate(text("[data-network-tag]")), "Arc");
+    assert.equal(await page.evaluate(text("[data-network-tag]")), "ARC");
     assert.ok(!(await page.evaluate(isShown(".stats"))));
     assert.ok(!(await page.evaluate(isShown("[data-escrow-link]"))));
+    assert.ok(!(await page.evaluate(isShown("[data-contracts]"))), "no contracts to name yet");
     assert.ok(!(await page.evaluate(isShown("[data-test-only]"))));
+    assert.ok(!(await page.evaluate(isShown(".built-on .live-dot"))), "no live line before the escrow opens");
     assert.deepEqual(
       page.requests.filter(({ url }) => url.startsWith("https://")),
       [],
@@ -189,7 +362,12 @@ describe("the landing page", () => {
     await page.withoutScripts();
     await page.open(site.url, PHONE, "light");
 
-    assert.equal(await page.evaluate(text("h1")), "Refundable good-faith Deposits for open source");
+    assert.equal(
+      await page.evaluate(`document.querySelector("h1").textContent.replace(/\\s+/g, " ").trim()`),
+      "Don't turn off pull requests. Ask for good faith.",
+    );
+    assert.ok(!(await page.evaluate(isShown("[data-demo]"))), "no demo button without JavaScript");
+    assert.ok(!(await page.evaluate(isShown(".built-on .live-dot"))), "no live line without JavaScript");
     assert.match(await page.evaluate(text("#live")), /Turn on JavaScript to read these numbers live from Arc\./);
     assert.equal(await page.evaluate(text("[data-install]")), "Opening with the mainnet launch");
     if (SCREENSHOTS) await page.screenshot(join(SCREENSHOTS, "live-no-javascript.png"), "#live");

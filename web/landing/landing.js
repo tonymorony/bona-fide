@@ -109,7 +109,9 @@ function jsonRpc(url, { fetch, attempts, retryDelayMs, timeoutMs }) {
           headers: { "content-type": "application/json" },
           body: JSON.stringify({ jsonrpc: "2.0", id: ++id, method, params }),
           credentials: "omit",
-          referrerPolicy: "no-referrer",
+          // Arc's block explorer refuses a request with no Referer. The origin alone tells it nothing the
+          // Origin header doesn't already.
+          referrerPolicy: "origin",
           cache: "no-store",
           signal: AbortSignal.timeout(timeoutMs),
         });
@@ -163,14 +165,11 @@ export function formatUsdc(units) {
   return `${COUNT.format(units / 1_000_000n)}.${fraction}`;
 }
 
-export function shortAddress(address) {
-  return `${address.slice(0, 6)}…${address.slice(-4)}`;
-}
-
 if (typeof document !== "undefined") startPage(document, CONFIG, NETWORKS[CONFIG.network]);
 
 function startPage(doc, config, network) {
   showInstall(doc, config);
+  showDemo(doc, config);
   showNetwork(doc, network);
   const live = doc.querySelector("[data-live]");
   if (!live) return;
@@ -184,6 +183,14 @@ function showInstall(doc, { installUrl, installOpen }) {
     button.href = installUrl;
     button.removeAttribute("aria-disabled");
     button.textContent = "Install on GitHub";
+  }
+}
+
+function showDemo(doc, { demoUrl }) {
+  if (!demoUrl) return;
+  for (const link of doc.querySelectorAll("[data-demo]")) {
+    link.href = demoUrl;
+    link.hidden = false;
   }
 }
 
@@ -203,12 +210,13 @@ function showNetwork(doc, network) {
       link.hidden = false;
     }
   }
+  for (const contracts of doc.querySelectorAll("[data-contracts]")) contracts.hidden = !network.escrow;
   for (const link of doc.querySelectorAll("[data-address]")) {
     const address = network[link.dataset.address];
     if (!address) continue;
     link.href = `${network.explorerUrl}/address/${address}`;
-    link.textContent = shortAddress(address);
-    link.title = address;
+    link.textContent = address;
+    link.title = "View on the block explorer";
   }
 }
 

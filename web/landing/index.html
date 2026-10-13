@@ -3,92 +3,54 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <meta name="color-scheme" content="light dark" />
+    <meta name="color-scheme" content="light" />
     <meta name="referrer" content="no-referrer" />
     <meta
       http-equiv="Content-Security-Policy"
-      content="default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self'; connect-src https://rpc.testnet.arc.io https://explorer.testnet.arc.io https://rpc.mainnet.arc.io https://explorer.arc.io; base-uri 'none'; form-action 'none'"
+      content="default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self'; font-src 'self'; connect-src https://rpc.testnet.arc.io https://explorer.testnet.arc.io https://rpc.mainnet.arc.io https://explorer.arc.io; base-uri 'none'; form-action 'none'"
     />
     <title>Bona Fide: refundable good-faith Deposits for open source</title>
     <meta
       name="description"
-      content="Ask Contributors you don't know yet for a small refundable USDC Deposit on their PRs and issues. Good-faith work gets it back in full."
+      content="Don't turn off pull requests. Ask Contributors and AI agents you don't know yet for a small refundable USDC Deposit. Good-faith work gets it back in full."
     />
     <meta property="og:type" content="website" />
-    <meta property="og:url" content="https://bonafide.lysakov.com/" />
-    <meta property="og:title" content="Bona Fide: refundable good-faith Deposits for open source" />
+    <meta property="og:url" content="https://bofi.live/" />
+    <meta property="og:title" content="Bona Fide: Don't turn off pull requests. Ask for good faith." />
     <meta
       property="og:description"
-      content="Ask Contributors you don't know yet for a small refundable USDC Deposit on their PRs and issues. Good-faith work gets it back in full."
+      content="Ask Contributors and AI agents you don't know yet for a small refundable USDC Deposit. Good-faith work gets it back in full."
     />
-    <meta property="og:image" content="https://bonafide.lysakov.com/brand/og-card.png" />
+    <meta property="og:image" content="https://bofi.live/brand/og-card.png" />
     <meta property="og:image:width" content="1200" />
     <meta property="og:image:height" content="630" />
-    <meta
-      property="og:image:alt"
-      content="Bona Fide: refundable good-faith Deposits for open source. A scale tipped by a gold bar in one of its two boxes."
-    />
+    <meta property="og:image:alt" content="Bona Fide: refundable good-faith Deposits for open source." />
     <meta name="twitter:card" content="summary_large_image" />
-    <meta name="twitter:image" content="https://bonafide.lysakov.com/brand/og-card.png" />
+    <meta name="twitter:image" content="https://bofi.live/brand/og-card.png" />
+    <link rel="icon" href="favicon.ico" sizes="32x32" />
     <link rel="icon" href="brand/favicon.svg" type="image/svg+xml" />
     <link rel="apple-touch-icon" href="brand/apple-touch-icon.png" />
+    <link rel="preload" href="fonts/big-shoulders-display.woff2" as="font" type="font/woff2" crossorigin />
+    <link rel="preload" href="fonts/hanken-grotesk.woff2" as="font" type="font/woff2" crossorigin />
     <link rel="stylesheet" href="landing.css" />
     <link rel="modulepreload" href="config.js" />
     <script type="module" src="landing.js"></script>
+    <script type="module" src="tilt.js"></script>
   </head>
   <body>
     <svg class="sprite" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
-      <symbol id="i-check" viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5" /></symbol>
-      <symbol id="i-clock" viewBox="0 0 24 24">
-        <circle cx="12" cy="12" r="9" />
-        <path d="M12 7v5l3.2 2" />
-      </symbol>
-      <symbol id="i-scale" viewBox="0 0 24 24">
-        <path d="M12 4v16M8 20h8M5 7.5h14" />
-        <path d="M5 7.5l-2.5 5.5a2.6 2.6 0 0 0 5 0z" />
-        <path d="M19 7.5l-2.5 5.5a2.6 2.6 0 0 0 5 0z" />
-      </symbol>
-      <symbol id="i-lock" viewBox="0 0 24 24">
-        <rect x="5" y="11" width="14" height="10" rx="2" />
-        <path d="M8 11V8a4 4 0 0 1 8 0v3" />
-      </symbol>
-      <symbol id="i-key" viewBox="0 0 24 24">
-        <circle cx="8" cy="15" r="4" />
-        <path d="M11 12l8-8M16 7l3 3M14 9l2 2" />
-      </symbol>
-      <symbol id="i-pen" viewBox="0 0 24 24">
-        <path d="M14.5 5.5l4 4L8 20H4v-4z" />
-        <path d="M12.5 7.5l4 4" />
-      </symbol>
-      <symbol id="i-repo" viewBox="0 0 24 24">
-        <path d="M6 4h11a1 1 0 0 1 1 1v15H7.5A2.5 2.5 0 0 1 5 17.5V5a1 1 0 0 1 1-1z" />
-        <path d="M5 17.5A2.5 2.5 0 0 1 7.5 15H18" />
-      </symbol>
-      <symbol id="i-people" viewBox="0 0 24 24">
-        <circle cx="9" cy="8.5" r="3.2" />
-        <path d="M3 19.5a6 6 0 0 1 12 0" />
-        <circle cx="17" cy="9.5" r="2.5" />
-        <path d="M15.5 14.4A5 5 0 0 1 21.5 19" />
-      </symbol>
-      <symbol id="i-agent" viewBox="0 0 24 24">
-        <rect x="4" y="7" width="16" height="12" rx="3" />
-        <path d="M12 3v4M9 12.5v1M15 12.5v1M2 12v3M22 12v3" />
-      </symbol>
-      <symbol id="i-coin" viewBox="0 0 24 24">
-        <circle cx="12" cy="12" r="9" />
-        <path
-          d="M14.8 9.4c-.4-1.1-1.5-1.8-2.8-1.8-1.6 0-2.8.9-2.8 2.1 0 2.9 5.8 1.5 5.8 4.5 0 1.2-1.3 2.2-3 2.2-1.4 0-2.6-.7-3-1.8M12 6.1v1.5M12 16.4v1.5"
-        />
-      </symbol>
+      <symbol id="i-play" viewBox="0 0 24 24"><path d="M7 4v16l13-8z" /></symbol>
       <symbol id="i-alert" viewBox="0 0 24 24">
         <path d="M12 4l9 16H3z" />
         <path d="M12 10v4.5M12 17.2v.3" />
       </symbol>
-      <symbol id="i-external" viewBox="0 0 24 24">
-        <path d="M14 5h5v5M19 5l-8 8" />
-        <path d="M17 14v4a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V8a1 1 0 0 1 1-1h4" />
-      </symbol>
+      <symbol id="i-check" viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5" /></symbol>
       <symbol id="i-arrow" viewBox="0 0 24 24"><path d="M5 12h14M13 6l6 6-6 6" /></symbol>
+      <symbol id="i-external" viewBox="0 0 24 24"><path d="M8 16L16 8M9 8h7v7" /></symbol>
+      <symbol id="i-pen" viewBox="0 0 24 24">
+        <path d="M14.5 5.5l4 4L8 20H4v-4z" />
+        <path d="M12.5 7.5l4 4" />
+      </symbol>
     </svg>
 
     <a class="skip" href="#main">Skip to content</a>
@@ -96,282 +58,271 @@
     <header class="top">
       <div class="wrap top-row">
         <a class="brand" href="./">
-          <picture>
-            <source srcset="brand/lockup-dark.svg" media="(prefers-color-scheme: dark)" />
-            <img src="brand/lockup.svg" alt="Bona Fide" width="157" height="28" />
-          </picture>
+          <img src="brand/mark.svg" alt="" width="52" height="52" />
+          <span>Bona Fide</span>
         </a>
         <nav class="top-nav" aria-label="Sections">
+          <a href="#problem">Why</a>
           <a href="#how">How it works</a>
-          <a href="#trust">Trust</a>
           <a href="#live">Live</a>
+          <a href="#agents">For agents</a>
           <a href="#faq">FAQ</a>
         </nav>
+        <a class="btn primary small" href="#install">Install</a>
       </div>
     </header>
 
     <main id="main">
       <section class="hero" aria-labelledby="hero-title">
-        <div class="wrap hero-grid">
-          <div class="hero-copy">
-            <h1 id="hero-title">Refundable <span class="nowrap">good-faith</span> Deposits for open source</h1>
-            <p class="lede">
-              Stay open to Contributors you don't know yet, without drowning in low-effort PRs and issues.
-            </p>
-            <div class="actions">
-              <a class="btn primary" data-install aria-disabled="true">Opening with the mainnet launch</a>
-              <a class="btn secondary" href="#how">See how it works</a>
+        <div class="wrap">
+          <div class="hero-grid">
+            <div class="hero-head">
+              <p class="mono problem-line">AI made pull requests free to open. Reviewing them still costs you hours.</p>
+              <h1 id="hero-title" class="display hero-title">
+                Don't turn off pull requests. <span class="green">Ask for good faith.</span>
+              </h1>
             </div>
-            <p class="fine">No fees. Good-faith work gets its Deposit back in full.</p>
+            <div class="hero-copy">
+              <p class="lede">
+                Contributors and AI agents you don't know yet back their PR with a small refundable Deposit. Good work
+                gets it all back. Bona Fide takes nothing, and nobody profits from a rejection.
+              </p>
+              <div class="actions">
+                <a class="btn primary" data-install aria-disabled="true">Opening with the mainnet launch</a>
+                <a class="btn ghost" data-demo hidden
+                  ><svg class="icon fill" aria-hidden="true"><use href="#i-play" /></svg>Watch the demo</a
+                >
+              </div>
+              <div class="built-on">
+                <p class="mono label">Built on</p>
+                <a class="arc-logo" href="https://arc.network"
+                  ><img src="brand/built-on-arc.svg" alt="Arc" width="93" height="32"
+                /></a>
+                <p class="mono live-dot" data-main-only hidden>
+                  <span>Live on <span data-network-name>Arc</span> mainnet</span>
+                </p>
+              </div>
+            </div>
           </div>
-          <div class="hero-art">
-            <picture>
-              <source srcset="brand/hero-dark.svg" media="(prefers-color-scheme: dark)" />
-              <img
-                src="brand/hero-light.svg"
-                alt="A scale: an empty box on one side, a box with a gold bar on the other, which weighs it down"
-                width="1344"
-                height="768"
-              />
-            </picture>
-          </div>
+
+          <figure class="cert-figure">
+            <div class="cert-float">
+              <div class="cert" data-tilt>
+                <div class="cert-frame" aria-hidden="true">
+                  <span class="micro micro-top"
+                    >BONA FIDE · GOOD FAITH · OPEN SOURCE · BONA FIDE · GOOD FAITH · OPEN SOURCE · BONA FIDE · GOOD
+                    FAITH · OPEN SOURCE · BONA FIDE · GOOD FAITH · OPEN SOURCE · BONA FIDE · GOOD FAITH · OPEN SOURCE ·
+                    BONA FIDE · GOOD FAITH · OPEN SOURCE ·</span
+                  >
+                  <span class="micro micro-bottom"
+                    >BONA FIDE · GOOD FAITH · OPEN SOURCE · BONA FIDE · GOOD FAITH · OPEN SOURCE · BONA FIDE · GOOD
+                    FAITH · OPEN SOURCE · BONA FIDE · GOOD FAITH · OPEN SOURCE · BONA FIDE · GOOD FAITH · OPEN SOURCE ·
+                    BONA FIDE · GOOD FAITH · OPEN SOURCE ·</span
+                  >
+                </div>
+                <img class="cert-waves" src="brand/guilloche-waves.svg" alt="" width="1100" height="500" />
+                <p class="cert-serial cert-serial-top" aria-hidden="true">BF 000412 A</p>
+                <div class="cert-seal" aria-hidden="true">
+                  <img src="brand/guilloche-rosette.svg" alt="" width="400" height="400" />
+                  <svg viewBox="-200 -200 400 400">
+                    <circle r="58" />
+                    <path d="M-23 2 L-6 19 L25 -17" />
+                  </svg>
+                </div>
+                <div class="cert-holo" aria-hidden="true"></div>
+                <div class="cert-body">
+                  <p class="cert-title">Certificate of good faith</p>
+                  <p class="cert-text">
+                    This pull request came from someone the repo didn't know yet, who backed it with a refundable
+                    Deposit. Witnessed as follows.
+                  </p>
+                  <div class="cert-pr">
+                    <span class="cert-avatar" aria-hidden="true"></span>
+                    <div>
+                      <p class="cert-pr-title">Fix race in cache invalidation</p>
+                      <p class="cert-pr-meta">
+                        acme/parser · <span class="nowrap">@first-time-contributor</span> · first PR here
+                      </p>
+                    </div>
+                  </div>
+                  <ul class="cert-stamps">
+                    <li class="ok">
+                      <svg class="tick" aria-hidden="true"><use href="#i-check" /></svg>Deposit held
+                    </li>
+                    <li class="ok">
+                      <svg class="tick" aria-hidden="true"><use href="#i-check" /></svg>Checks green
+                    </li>
+                    <li class="ok">
+                      <svg class="tick" aria-hidden="true"><use href="#i-check" /></svg>Merged by Maintainer
+                    </li>
+                  </ul>
+                  <p class="cert-note">Deposit returned in full · <span class="nowrap">recorded on Arc</span></p>
+                </div>
+                <div class="cert-side">
+                  <p class="cert-kind">Pull request</p>
+                  <p class="cert-number">#482</p>
+                  <p class="cert-seal-word">
+                    Bona Fide<svg class="tick" aria-hidden="true"><use href="#i-check" /></svg>
+                  </p>
+                </div>
+                <p class="cert-serial cert-serial-bottom" aria-hidden="true">BF 000412 A</p>
+                <div class="cert-sheen" aria-hidden="true"></div>
+                <div class="cert-glare" aria-hidden="true"></div>
+              </div>
+            </div>
+            <figcaption class="mono">
+              An example certificate, for illustration: the PR, the repo and the numbers on it are made up.
+            </figcaption>
+          </figure>
         </div>
       </section>
 
-      <section class="section" id="why" aria-labelledby="why-title">
-        <div class="wrap split">
-          <div class="split-text">
-            <h2 id="why-title">A small Deposit shows good faith</h2>
-            <p>
-              Maintainers are drowning in low-effort PRs and issues, and now AI agents open them too. Closing the repo
-              to newcomers keeps out good work along with the noise.
-            </p>
-            <p>
-              Bona Fide asks Contributors you don't know yet for a small refundable Deposit instead: 1 USDC by default.
-              Good-faith work gets it back in full.
-            </p>
-          </div>
-          <div class="split-side">
-            <h3 class="card-title">What happens to a 1 USDC Deposit</h3>
-            <ul class="outcomes">
-              <li>
-                <span class="ico ok"
-                  ><svg class="icon" aria-hidden="true"><use href="#i-check" /></svg
-                ></span>
-                <div>
-                  <p class="when">Merged or accepted</p>
-                  <p class="detail">Bona Fide sends the Refund.</p>
-                </div>
-                <p class="back">1 USDC <small>refunded</small></p>
-              </li>
-              <li>
-                <span class="ico"
-                  ><svg class="icon" aria-hidden="true"><use href="#i-clock" /></svg
-                ></span>
-                <div>
-                  <p class="when">No decision before the Timeout</p>
-                  <p class="detail">7 days by default. After it, Bona Fide sends the Refund.</p>
-                </div>
-                <p class="back">1 USDC <small>refunded</small></p>
-              </li>
-              <li>
-                <span class="ico accent"
-                  ><svg class="icon" aria-hidden="true"><use href="#i-scale" /></svg
-                ></span>
-                <div>
-                  <p class="when">Bad faith, signed by a Maintainer</p>
-                  <p class="detail">
-                    0.50 USDC funds open-source maintainers (Protocol Guild). It's never more than half.
-                  </p>
-                </div>
-                <p class="back">0.50 USDC <small>refunded</small></p>
-              </li>
-            </ul>
-            <p class="promise">
-              <svg class="icon" aria-hidden="true"><use href="#i-lock" /></svg>
-              <span>Nobody else gets any of it: not the Maintainers, and not Bona Fide.</span>
+      <div class="event">
+        <div class="wrap event-row mono">
+          <a href="https://github.com/tonymorony/bona-fide"
+            >GitHub<svg class="arrow" aria-hidden="true"><use href="#i-external" /></svg
+          ></a>
+        </div>
+      </div>
+
+      <section class="section" id="problem" aria-labelledby="problem-title">
+        <div class="wrap stack">
+          <div class="head-split">
+            <div class="head">
+              <p class="eyebrow red">The problem</p>
+              <h2 id="problem-title" class="display">Open source is closing its doors.</h2>
+            </div>
+            <p class="lede">
+              AI made a plausible-looking pull request nearly free to produce. Reviewing one still takes a person.
+              Maintainers are answering the only way they can: by shutting strangers out.
             </p>
           </div>
+          <div class="exhibits">
+            <a class="exhibit" href="https://daniel.haxx.se/blog/2026/01/26/the-end-of-the-curl-bug-bounty/">
+              <p class="mono exhibit-tag">Exhibit A · curl · Jan 2026</p>
+              <h3 class="exhibit-title">Ended its bug bounty</h3>
+              <p>AI slop drove confirmed security reports below 5%. The bug bounty ended on January 31, 2026.</p>
+              <p class="mono exhibit-source">
+                daniel.haxx.se<svg class="arrow" aria-hidden="true"><use href="#i-external" /></svg>
+              </p>
+            </a>
+            <a class="exhibit" href="https://github.com/mitchellh/vouch">
+              <p class="mono exhibit-tag">Exhibit B · Ghostty · Feb 2026</p>
+              <h3 class="exhibit-title">Closes PRs from strangers</h3>
+              <p>Pull requests from anyone nobody has vouched for are now closed automatically, with Vouch.</p>
+              <p class="mono exhibit-source">
+                github.com/mitchellh/vouch<svg class="arrow" aria-hidden="true"><use href="#i-external" /></svg>
+              </p>
+            </a>
+            <a
+              class="exhibit"
+              href="https://github.blog/changelog/2026-02-13-new-repository-settings-for-configuring-pull-request-access"
+            >
+              <p class="mono exhibit-tag">Exhibit C · GitHub · Feb 2026</p>
+              <h3 class="exhibit-title">Added an off switch</h3>
+              <p>
+                Repos can now turn pull requests off, or limit them to collaborators. In June came caps on PRs from
+                outsiders.
+              </p>
+              <p class="mono exhibit-source">
+                github.blog<svg class="arrow" aria-hidden="true"><use href="#i-external" /></svg>
+              </p>
+            </a>
+          </div>
+          <p class="display-line">Bona Fide keeps the door open. <span class="green">Good faith walks in.</span></p>
         </div>
       </section>
 
       <section class="section" id="how" aria-labelledby="how-title">
-        <div class="wrap">
-          <div class="section-head">
-            <h2 id="how-title">How it works</h2>
-            <p class="lede">Maintainers set it up once. Contributors and their agents deposit when a repo asks.</p>
+        <div class="wrap stack">
+          <div class="head narrow-head">
+            <p class="eyebrow green">How it works</p>
+            <h2 id="how-title" class="display">How a PR earns its certificate.</h2>
           </div>
-          <div class="paths">
-            <article class="card path">
-              <h3>
-                <span class="ico accent"
-                  ><svg class="icon" aria-hidden="true"><use href="#i-repo" /></svg></span
-                >Maintainers
-              </h3>
-              <ol class="steps">
-                <li>Install the Bona Fide App on your repo.</li>
-                <li>
-                  Commit <code>.github/bona-fide.yml</code> with your wallet address. The defaults: 1 USDC, a 50%
-                  forfeit share and a 7-day Timeout.
-                </li>
-                <li>Sign once with that wallet to prove it's yours. Deposits start 24 hours later.</li>
-              </ol>
-              <a
-                class="more"
-                href="https://github.com/tonymorony/bona-fide/blob/main/app/README.md#turn-it-on-for-a-repo"
-                >Read the Maintainer guide<svg class="icon" aria-hidden="true"><use href="#i-arrow" /></svg
-              ></a>
-            </article>
-            <article class="card path">
-              <h3>
-                <span class="ico accent"
-                  ><svg class="icon" aria-hidden="true"><use href="#i-people" /></svg></span
-                >Contributors
-              </h3>
-              <ol class="steps">
-                <li>
-                  Open your PR or issue as usual. If the repo asks for a Deposit, Bona Fide links you to the deposit
-                  page.
-                </li>
-                <li>
-                  Deposit with one signature, and Bona Fide sends it for you. Or approve and deposit from your own
-                  wallet, in two transactions.
-                </li>
-                <li>Get it back in full when your work is merged or accepted, or when the Timeout ends.</li>
-              </ol>
-              <a class="more" href="https://github.com/tonymorony/bona-fide/blob/main/docs/spec.md#how-it-works"
-                >Read how Deposits work<svg class="icon" aria-hidden="true"><use href="#i-arrow" /></svg
-              ></a>
-            </article>
-            <article class="card path">
-              <h3>
-                <span class="ico accent"
-                  ><svg class="icon" aria-hidden="true"><use href="#i-agent" /></svg></span
-                >AI agents
-              </h3>
-              <ol class="steps">
-                <li>Add the Bona Fide MCP server to your agent. It reads a repo's terms and prepares the Deposit.</li>
-                <li>
-                  Your agent signs with its own wallet, such as a Circle agent wallet, and Bona Fide's relay sends it.
-                </li>
-                <li>The server never holds keys, and it refuses any Deposit above your limit: 5 USDC by default.</li>
-              </ol>
-              <a class="more" href="https://github.com/tonymorony/bona-fide/blob/main/agent/README.md"
-                >Read the agent guide<svg class="icon" aria-hidden="true"><use href="#i-arrow" /></svg
-              ></a>
-            </article>
-          </div>
-        </div>
-      </section>
+          <ol class="steps">
+            <li>
+              <span class="step-number" aria-hidden="true">01</span>
+              <h3>Someone new opens a PR</h3>
+              <p>
+                The Bona Fide check asks for a Deposit, 1 USDC by default. People you already trust are never asked.
+              </p>
+            </li>
+            <li>
+              <span class="step-number" aria-hidden="true">02</span>
+              <h3>They sign once</h3>
+              <p>No gas, no second step. The check turns green in seconds.</p>
+            </li>
+            <li class="step-last">
+              <span class="step-number" aria-hidden="true">03</span>
+              <h3>The Maintainer decides</h3>
+              <p>Merge it, and the Deposit goes straight back. The certificate is stamped.</p>
+              <span class="mono step-stamp" aria-hidden="true"
+                >Bona Fide<svg class="tick" aria-hidden="true"><use href="#i-check" /></svg
+              ></span>
+            </li>
+          </ol>
 
-      <section class="section" id="exempt" aria-labelledby="exempt-title">
-        <div class="wrap">
-          <div class="section-head">
-            <h2 id="exempt-title">Who never needs a Deposit</h2>
-            <p class="lede">The check passes at once, with no Deposit, for:</p>
-          </div>
-          <ul class="card checklist">
-            <li>
-              <svg class="icon" aria-hidden="true"><use href="#i-check" /></svg>Collaborators with write access to the
-              repo
-            </li>
-            <li>
-              <svg class="icon" aria-hidden="true"><use href="#i-check" /></svg>
-              <span
-                >Contributors vouched for in
-                <a href="https://github.com/mitchellh/vouch"><code>VOUCHED.td</code></a></span
-              >
-            </li>
-            <li>
-              <svg class="icon" aria-hidden="true"><use href="#i-check" /></svg>Anyone with a merged PR in the repo
-            </li>
-            <li>
-              <svg class="icon" aria-hidden="true"><use href="#i-check" /></svg>Allowed bots, such as Dependabot and
-              Renovate
-            </li>
-            <li>
-              <svg class="icon" aria-hidden="true"><use href="#i-check" /></svg>
-              <span>PRs and issues a Maintainer labels <code>bona-fide:waive</code></span>
-            </li>
-            <li>
-              <svg class="icon" aria-hidden="true"><use href="#i-check" /></svg>PRs and issues opened before Bona Fide
-              started in the repo
-            </li>
-          </ul>
-        </div>
-      </section>
-
-      <section class="section" id="trust" aria-labelledby="trust-title">
-        <div class="wrap">
-          <div class="section-head">
-            <h2 id="trust-title">Nobody can take the money</h2>
-            <p class="lede">An escrow contract on Arc holds every Deposit, and nobody can change its rules.</p>
-          </div>
-          <div class="trust">
-            <div class="trust-item">
-              <span class="ico accent"
-                ><svg class="icon" aria-hidden="true"><use href="#i-lock" /></svg
-              ></span>
-              <h3>No owner, no upgrades</h3>
-              <p>The escrow is immutable: it has no owner, no admin and no upgrade path. Nobody can pause it.</p>
-            </div>
-            <div class="trust-item">
-              <span class="ico accent"
-                ><svg class="icon" aria-hidden="true"><use href="#i-key" /></svg
-              ></span>
-              <h3>The Keeper can only give back</h3>
-              <p>
-                The App's signer, the Keeper, can only refund a Deposit to the wallet that paid it. When it relays a
-                Forfeit, at most half goes to the forfeit router.
+          <div class="rule" id="rule">
+            <div class="head">
+              <p class="eyebrow green">The one rule</p>
+              <h2 class="display" id="rule-title">Nobody can profit from a rejection.</h2>
+              <p class="lede">
+                Not the Maintainer, not the bot, not us. An immutable escrow on Arc holds every Deposit and can pay only
+                two places: back to the Contributor, or to open-source maintainers through Protocol Guild. No owner, no
+                upgrade, no pause.
+              </p>
+              <p class="never-pays">
+                Collaborators, vouched Contributors, past contributors and allowed bots never pay. Maintainers can waive
+                any item with a label.
               </p>
             </div>
-            <div class="trust-item">
-              <span class="ico accent"
-                ><svg class="icon" aria-hidden="true"><use href="#i-pen" /></svg
-              ></span>
-              <h3>Forfeits need the Maintainer's signature</h3>
-              <p>
-                Only the Maintainer's own wallet can sign one, for that one Deposit, and only before its Timeout ends.
-              </p>
-            </div>
-            <div class="trust-item">
-              <span class="ico accent"
-                ><svg class="icon" aria-hidden="true"><use href="#i-clock" /></svg
-              ></span>
-              <h3>The Timeout refunds automatically</h3>
-              <p>
-                If nobody decides in time, the Deposit is refunded in full. The Keeper sends it, and anyone else can
-                too.
-              </p>
-            </div>
+            <ol class="clauses" aria-labelledby="rule-title">
+              <li>
+                <span class="mono clause-number">§1</span>
+                <span class="clause-text">Merged, approved or accepted</span>
+                <span class="clause-result">100% back</span>
+              </li>
+              <li>
+                <span class="mono clause-number">§2</span>
+                <span class="clause-text">Nobody decides within 7 days by default. Anyone can send it back.</span>
+                <span class="clause-result">100% back</span>
+              </li>
+              <li>
+                <span class="mono clause-number">§3</span>
+                <span class="clause-text"
+                  >Bad faith, signed by the Maintainer's own wallet. The rest funds open-source maintainers (Protocol
+                  Guild).</span
+                >
+                <span class="clause-result red">50%+ back</span>
+              </li>
+              <li>
+                <span class="mono clause-number">§4</span>
+                <span class="clause-text"
+                  >What Bona Fide keeps, whatever happens. The Maintainer gets nothing either.</span
+                >
+                <span class="clause-result green">0%</span>
+              </li>
+            </ol>
           </div>
-          <p class="links">
-            <a data-escrow-link hidden
-              >View the escrow on the explorer<svg class="icon" aria-hidden="true"><use href="#i-external" /></svg
-            ></a>
-            <a href="https://github.com/tonymorony/bona-fide/blob/main/contracts/src/BonaFideEscrow.sol"
-              >Read the contract's source<svg class="icon" aria-hidden="true"><use href="#i-external" /></svg
-            ></a>
-            <a href="https://github.com/tonymorony/bona-fide/blob/main/contracts/README.md#guarantees"
-              >Read its guarantees<svg class="icon" aria-hidden="true"><use href="#i-external" /></svg
-            ></a>
-          </p>
         </div>
       </section>
 
       <section class="section" id="live" aria-labelledby="live-title">
         <div class="wrap">
-          <div class="section-head">
-            <h2 id="live-title">Live from the escrow</h2>
-            <p class="lede">
-              Your browser reads these numbers from <span data-network-name>Arc</span> itself, through Arc's public RPC
-              and block explorer. No Bona Fide server is involved.
-            </p>
-          </div>
-          <div class="card live" data-live data-state="loading">
-            <div class="live-top">
-              <span class="tag" data-network-tag>Arc</span>
-              <p class="live-status" data-live-status role="status"></p>
+          <div class="ledger" data-live data-state="loading">
+            <img class="ledger-waves" src="brand/guilloche-waves.svg" alt="" width="1100" height="500" />
+            <div class="ledger-head">
+              <div class="head">
+                <p class="mono ledger-eyebrow">
+                  <span class="tag" data-network-tag>Arc</span>
+                  <span class="live-status" data-live-status role="status"></span>
+                </p>
+                <h2 id="live-title" class="display">On the record, on Arc.</h2>
+              </div>
+              <p class="ledger-lede">
+                Your browser reads these numbers from <span data-network-name>Arc</span> itself, through Arc's public
+                RPC and block explorer. No Bona Fide server in between.
+              </p>
             </div>
 
             <div class="soon" data-when="soon" hidden>
@@ -380,7 +331,7 @@
 
             <dl class="stats" data-when="loading live unreachable">
               <div>
-                <dt>Deposits</dt>
+                <dt>Deposits: PRs and issues backed</dt>
                 <dd data-value="deposits">—</dd>
               </div>
               <div>
@@ -392,12 +343,12 @@
                 <dd data-value="forfeits">—</dd>
               </div>
               <div>
-                <dt>In the forfeit router</dt>
-                <dd><span data-value="routerBalance">—</span> <small>USDC</small></dd>
+                <dt>USDC waiting in the forfeit router for Protocol Guild</dt>
+                <dd class="mint" data-value="routerBalance">—</dd>
               </div>
             </dl>
 
-            <div class="alert warn" data-when="unreachable" hidden>
+            <div class="alert" data-when="unreachable" hidden>
               <svg class="icon" aria-hidden="true"><use href="#i-alert" /></svg>
               <div>
                 <p>
@@ -407,131 +358,160 @@
                   The live numbers show once it answers. You can also
                   <a data-escrow-link hidden>check the escrow on the explorer</a>.
                 </p>
-                <button class="btn small secondary" type="button" data-retry>Try again</button>
+                <button class="btn small ghost" type="button" data-retry>Try again</button>
               </div>
             </div>
 
-            <dl class="rows" data-when="loading live unreachable">
-              <div>
-                <dt>Escrow</dt>
-                <dd><a class="mono" data-address="escrow">—</a></dd>
-              </div>
-              <div>
-                <dt>Forfeit router</dt>
-                <dd><a class="mono" data-address="router">—</a></dd>
-              </div>
-            </dl>
+            <div class="contracts" data-contracts hidden>
+              <p class="mono eyebrow">Contracts on <span data-network-name>Arc</span></p>
+              <dl class="mono">
+                <div>
+                  <dt>Escrow</dt>
+                  <dd><a data-address="escrow">—</a></dd>
+                </div>
+                <div>
+                  <dt>Forfeit router</dt>
+                  <dd><a data-address="router">—</a></dd>
+                </div>
+              </dl>
+            </div>
 
             <p class="fine" data-test-only hidden>
               This is a test network: its USDC has no value, and its Forfeits go to a test address on Base Sepolia, not
               to Protocol Guild.
             </p>
             <p class="fine" data-main-only hidden>
-              Forfeited USDC waits in the forfeit router until anyone sends it on to Protocol Guild.
+              Forfeited USDC waits in the forfeit router until anyone sends it on to Protocol Guild, through Circle's
+              CCTP.
             </p>
             <noscript><p class="fine">Turn on JavaScript to read these numbers live from Arc.</p></noscript>
           </div>
         </div>
       </section>
 
-      <section class="section" id="arc" aria-labelledby="arc-title">
-        <div class="wrap">
-          <div class="section-head">
-            <h2 id="arc-title">Built on Arc</h2>
-            <p class="lede">Every Deposit, Refund and Forfeit happens on-chain, in USDC.</p>
+      <section class="section" id="agents" aria-labelledby="agents-title">
+        <div class="wrap agents">
+          <div class="head">
+            <p class="eyebrow green">For AI agents</p>
+            <h2 id="agents-title" class="display medium">Repos that turn agents away can let yours in.</h2>
+            <p class="lede">
+              Add the MCP server. Your agent reads a repo's terms and signs its own Deposit, under a limit you set: 5
+              USDC by default. The server never holds keys.
+            </p>
+            <a class="more" href="https://github.com/tonymorony/bona-fide/blob/main/agent/README.md"
+              >Read the agent guide<svg class="arrow" aria-hidden="true"><use href="#i-arrow" /></svg
+            ></a>
           </div>
-          <div class="pair">
-            <div class="card">
-              <span class="ico accent"
-                ><svg class="icon" aria-hidden="true"><use href="#i-coin" /></svg
-              ></span>
-              <h3>Deposits and fees in USDC</h3>
-              <p>
-                Deposits and network fees are both paid in <a href="https://www.circle.com/usdc">USDC</a> on
-                <a href="https://www.arc.io">Arc</a>, so Contributors need no other token. Arc settles each Deposit in
-                under a second, so the check turns green within seconds.
-              </p>
-            </div>
-            <div class="card">
-              <span class="ico accent"
-                ><svg class="icon" aria-hidden="true"><use href="#i-scale" /></svg
-              ></span>
-              <h3>Forfeits fund open-source maintainers</h3>
-              <p>
-                Forfeited USDC waits in the forfeit router until anyone sends it on. It crosses to Base through Circle's
-                <a href="https://developers.circle.com/cctp">CCTP</a>, into the vesting contract of
-                <a href="https://www.protocolguild.org">Protocol Guild</a>.
-              </p>
-            </div>
-          </div>
+          <pre
+            class="code"
+            tabindex="0"
+            aria-label="Adding the MCP server to Claude Code"
+          ><code>claude mcp add bona-fide \
+  -e ESCROW_ADDRESS=0xe2fe798427CFb43134FC37F6EE054c2da818fAc9 \
+  -e RPC_URL=https://rpc.mainnet.arc.io \
+  -e APP_URL=https://bofi.live \
+  -e MAX_DEPOSIT_USDC=5 \
+  -- node /path/to/bona-fide/agent/src/main.ts</code></pre>
         </div>
       </section>
 
       <section class="section" id="faq" aria-labelledby="faq-title">
-        <div class="wrap">
-          <h2 id="faq-title">Questions</h2>
+        <div class="wrap faq-wrap">
+          <h2 id="faq-title" class="display">Questions</h2>
           <div class="faq">
             <details>
-              <summary>Why USDC?</summary>
+              <summary>Is this crypto?<span class="plus mono" aria-hidden="true">+</span></summary>
+              <p>It uses USDC, a digital dollar, on Arc. There's no token and nothing to trade or farm.</p>
+            </details>
+            <details>
+              <summary>What does it cost?<span class="plus mono" aria-hidden="true">+</span></summary>
               <p>
-                A Deposit should keep its value while the escrow holds it. USDC is a digital dollar, and on Arc it also
-                pays the network fee, so Contributors need no other token.
+                Nothing. Good-faith work gets the whole Deposit back, and Bona Fide takes no fee, not even from a
+                Forfeit.
               </p>
             </details>
             <details>
-              <summary>What if a Maintainer is malicious?</summary>
+              <summary>Who gets the money from a Forfeit?<span class="plus mono" aria-hidden="true">+</span></summary>
               <p>
-                They can't profit from it. A Forfeit takes at most half a Deposit, needs the Maintainer's signature
-                before the Timeout ends, and sends that half only to the forfeit router, which funds open-source
-                maintainers (Protocol Guild). The rest goes back to the Contributor. Nobody else can receive any of it.
+                Never Bona Fide, and never the Maintainer. At least half goes back to the Contributor, and the rest
+                funds open-source maintainers through Protocol Guild. The escrow can't pay anyone else.
               </p>
             </details>
             <details>
-              <summary>What happens at the Timeout?</summary>
+              <summary>What if a Maintainer is malicious?<span class="plus mono" aria-hidden="true">+</span></summary>
               <p>
-                If nobody has decided by then, 7 days after the Deposit by default, it's refunded in full. The Keeper
-                sends the Refund on its own, and anyone else can send it too. After the Timeout, nobody can forfeit it.
+                They can forfeit at most half, only with their own wallet's signature, only before the Timeout, and
+                never to themselves.
               </p>
             </details>
             <details>
-              <summary>Does it cost anything?</summary>
+              <summary>How do I get USDC?<span class="plus mono" aria-hidden="true">+</span></summary>
               <p>
-                Bona Fide charges no fees. Arc's network fee is paid in USDC. A one-signature Deposit costs the
-                Contributor nothing: Bona Fide relays it and pays the fee. Two steps from your own wallet cost two small
-                network fees.
+                You need USDC on Arc and nothing else: on Arc, gas is paid in USDC too. Agents use a Circle agent wallet
+                through the MCP server.
               </p>
+            </details>
+            <details>
+              <summary>What happens at the Timeout?<span class="plus mono" aria-hidden="true">+</span></summary>
+              <p>The Deposit goes back in full. Bona Fide sends it, and anyone else can too.</p>
             </details>
           </div>
         </div>
       </section>
 
-      <section class="section cta" aria-labelledby="cta-title">
-        <div class="wrap narrow">
-          <h2 id="cta-title">Keep your repo open, without the noise</h2>
-          <p class="lede">Install the App, commit one file and sign once.</p>
-          <div class="actions">
-            <a class="btn primary" data-install aria-disabled="true">Opening with the mainnet launch</a>
-            <a
-              class="btn secondary"
-              href="https://github.com/tonymorony/bona-fide/blob/main/app/README.md#turn-it-on-for-a-repo"
-              >Read the Maintainer guide</a
-            >
+      <section class="section install-section" id="install" aria-labelledby="install-title">
+        <div class="wrap">
+          <div class="install">
+            <div class="head">
+              <h2 id="install-title" class="display large">Keep the door open.</h2>
+              <ol class="install-steps">
+                <li>Install the App on a repo.</li>
+                <li>Commit <code>.github/bona-fide.yml</code> with your wallet.</li>
+                <li>Sign once. Deposits start 1 hour later.</li>
+              </ol>
+              <div class="actions">
+                <a class="btn primary large" data-install aria-disabled="true">Opening with the mainnet launch</a>
+                <a
+                  class="more"
+                  href="https://github.com/tonymorony/bona-fide/blob/main/app/README.md#turn-it-on-for-a-repo"
+                  >Read the Maintainer guide<svg class="arrow" aria-hidden="true"><use href="#i-arrow" /></svg
+                ></a>
+              </div>
+            </div>
+            <pre
+              class="code yaml"
+              tabindex="0"
+              aria-label=".github/bona-fide.yml"
+            ><code><span class="comment"># .github/bona-fide.yml</span>
+maintainer: 0xYourWallet   <span class="comment"># signs verdicts; never paid</span>
+amount: 1                  <span class="comment"># USDC</span>
+forfeit: 50%               <span class="comment"># never more</span>
+timeout: 7 days</code></pre>
           </div>
         </div>
       </section>
     </main>
 
     <footer class="foot">
-      <div class="wrap foot-row">
-        <p class="foot-brand">
-          <span class="foot-mark"></span>Bona Fide: refundable good-faith Deposits for open source.
+      <div class="wrap foot-inner">
+        <div class="foot-row">
+          <a class="brand small" href="./">
+            <img src="brand/mark.svg" alt="" width="36" height="36" />
+            <span>Bona Fide</span>
+          </a>
+          <nav class="foot-links mono" aria-label="Project">
+            <a href="https://github.com/tonymorony/bona-fide">Source</a>
+            <a href="https://github.com/tonymorony/bona-fide/blob/main/contracts/README.md">Contracts</a>
+            <a data-escrow-link hidden>Escrow on the explorer</a>
+            <a href="https://github.com/tonymorony/bona-fide/blob/main/agent/README.md">Agent guide</a>
+            <a href="mailto:tlysakov@gmail.com">Contact: tlysakov@gmail.com</a>
+          </nav>
+        </div>
+        <p class="mono trademark">
+          Built on Arc. Arc is a trademark of Circle Internet Group, Inc. and/or its affiliates. All other trademarks
+          are the property of their respective owners. Bona Fide is not affiliated with or endorsed by Circle or
+          Anthropic.
         </p>
-        <nav class="foot-links" aria-label="Project">
-          <a href="https://github.com/tonymorony/bona-fide">Source code</a>
-          <a href="https://github.com/tonymorony/bona-fide/blob/main/docs/spec.md">Docs</a>
-          <a data-escrow-link hidden>Escrow contract</a>
-          <a href="https://www.arc.io">Built on Arc</a>
-        </nav>
       </div>
     </footer>
   </body>

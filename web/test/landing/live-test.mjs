@@ -4,14 +4,7 @@
 import assert from "node:assert/strict";
 import { before, describe, test } from "node:test";
 import { NETWORKS } from "../../landing/config.js";
-import {
-  LiveNumbersError,
-  TOPICS,
-  formatCount,
-  formatUsdc,
-  readLiveNumbers,
-  shortAddress,
-} from "../../landing/landing.js";
+import { LiveNumbersError, TOPICS, formatCount, formatUsdc, readLiveNumbers } from "../../landing/landing.js";
 import { ISSUE, PR, buildContracts, freePort, startChain } from "./support/anvil.mjs";
 
 const summary = ({ deposits, refunds, forfeits, routerBalance }) => ({ deposits, refunds, forfeits, routerBalance });
@@ -98,6 +91,23 @@ describe("readLiveNumbers on a chain with the real escrow", () => {
 });
 
 describe("readLiveNumbers when the chain misbehaves", () => {
+  test("sends the page's origin as the referrer, without cookies: Arc's explorer refuses a request with none", async () => {
+    const sent = [];
+    const fetch = fakeRpc((method) => (method === "eth_getLogs" ? [] : method === "eth_chainId" ? "0x4cef52" : "0x64"));
+    await readLiveNumbers(fakeNetwork, {
+      fetch: (url, init) => {
+        sent.push(init);
+        return fetch(url, init);
+      },
+    });
+
+    assert.ok(sent.length >= 4);
+    for (const init of sent) {
+      assert.equal(init.referrerPolicy, "origin");
+      assert.equal(init.credentials, "omit");
+    }
+  });
+
   test("says the chain can't be reached when nothing answers", async () => {
     const port = await freePort();
     const network = { ...fakeNetwork, rpcUrl: `http://127.0.0.1:${port}`, logsUrl: `http://127.0.0.1:${port}` };
@@ -200,9 +210,5 @@ describe("formatting", () => {
   test("groups counts by thousands", () => {
     assert.equal(formatCount(0), "0");
     assert.equal(formatCount(12_345), "12,345");
-  });
-
-  test("shortens addresses to their first and last four digits", () => {
-    assert.equal(shortAddress("0x05283F2c7D94D66669227Cecf75abBbd024771A7"), "0x0528…71A7");
   });
 });

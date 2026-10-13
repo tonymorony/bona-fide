@@ -170,14 +170,24 @@ export async function startChrome() {
         requests,
         evaluate,
 
+        /** Moves a real mouse to (x, y) in the viewport, so hit-testing and pointerleave work as for a person. */
+        async moveMouse(x, y) {
+          await send("Input.dispatchMouseEvent", { type: "mouseMoved", x, y, pointerType: "mouse" }, sessionId);
+        },
+
         async withoutScripts() {
           await send("Emulation.setScriptExecutionDisabled", { value: true }, sessionId);
         },
 
-        async open(url, viewport = DESKTOP, scheme = "light") {
+        async open(url, viewport = DESKTOP, scheme = "light", { reducedMotion = false } = {}) {
           await send(
             "Emulation.setEmulatedMedia",
-            { features: [{ name: "prefers-color-scheme", value: scheme }] },
+            {
+              features: [
+                { name: "prefers-color-scheme", value: scheme },
+                { name: "prefers-reduced-motion", value: reducedMotion ? "reduce" : "no-preference" },
+              ],
+            },
             sessionId,
           );
           await send(

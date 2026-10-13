@@ -57,13 +57,13 @@ export async function freePort() {
   return port;
 }
 
-async function until(ready, timeoutMs = 10_000) {
+async function until(ready, what = "anvil to start", timeoutMs = 10_000) {
   const deadline = Date.now() + timeoutMs;
   for (;;) {
     try {
       if (await ready()) return;
     } catch {}
-    if (Date.now() > deadline) throw new Error("anvil didn't start");
+    if (Date.now() > deadline) throw new Error(`Timed out waiting for ${what}`);
     await new Promise((resolve) => setTimeout(resolve, 100));
   }
 }
@@ -92,8 +92,13 @@ export async function startChain({ chainId = 5042002 } = {}) {
 
   async function transact(from, to, input) {
     const hash = await rpc("eth_sendTransaction", [{ from, ...(to ? { to } : {}), data: input }]);
-    const receipt = await rpc("eth_getTransactionReceipt", [hash]);
-    if (receipt?.status !== "0x1") throw new Error(`transaction ${hash} failed`);
+    // Since anvil 1.8, eth_sendTransaction may answer before the block that holds the transaction.
+    let receipt = null;
+    await until(
+      async () => (receipt = await rpc("eth_getTransactionReceipt", [hash])) !== null,
+      `the receipt of ${hash}`,
+    );
+    if (receipt.status !== "0x1") throw new Error(`transaction ${hash} failed`);
     return receipt;
   }
   const deploy = async (contract, ...args) =>
