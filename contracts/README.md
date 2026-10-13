@@ -317,6 +317,15 @@ FOUNDRY_INVARIANT_RUNS=10000 forge test --match-path 'test/invariant/*'   # deep
 - **Deploy script tests** (`test/Deploy.t.sol`, `test/DeployBountyWalletFactory.t.sol`) cover the deploy order, the
   forfeit sink, the mainnet guard, the environment and `FORFEIT_RECIPIENT` parsing.
 
+## Deployments
+
+| Network | Escrow | Forfeit router | Binding delay | Forfeits go to |
+|---|---|---|---|---|
+| Arc (chain 5042) | [`0xe2fe798427CFb43134FC37F6EE054c2da818fAc9`](https://explorer.arc.io/address/0xe2fe798427CFb43134FC37F6EE054c2da818fAc9) | [`0xe36fe5152C6A54946b15df3fEBDc068AF48581dc`](https://explorer.arc.io/address/0xe36fe5152C6A54946b15df3fEBDc068AF48581dc) | 1 hour | Protocol Guild's vest on Base |
+| Arc Testnet (chain 5042002) | [`0x05283F2c7D94D66669227Cecf75abBbd024771A7`](https://explorer.testnet.arc.io/address/0x05283F2c7D94D66669227Cecf75abBbd024771A7) | [`0xae079DC6536c270d2743c0721cfC41c94E12ca9f`](https://explorer.testnet.arc.io/address/0xae079DC6536c270d2743c0721cfC41c94E12ca9f) | 1 hour | A test address on Base Sepolia |
+
+Both escrows take Deposits of at most 50 USDC. The mainnet pair was deployed in blocks 24,583,717 and 24,583,718.
+
 ## Deploy (dry run only)
 
 `script/Deploy.s.sol` deploys the Charity router, then the escrow with `forfeitSink` = the router. It reads these

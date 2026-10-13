@@ -56,7 +56,7 @@ if [ -n "$(git -C "$repo" status --porcelain -- app/package.json app/package-loc
 	say "warning: app/ or deploy/ has uncommitted changes. They're deployed too, and the revision is marked -dirty."
 fi
 short=$(printf '%.12s' "$revision")
-domain=$(awk '/^[^#[:space:]][^[:space:]]* \{$/ { print $1; exit }' "$repo/deploy/Caddyfile.bonafide")
+domain=$(awk '/^[^#[:space:]][^{]* \{$/ { sub(/,$/, "", $1); print $1; exit }' "$repo/deploy/Caddyfile.bonafide")
 [ -n "$domain" ] || die "Can't find the site's host name in deploy/Caddyfile.bonafide. Its site block must start with a line such as: example.com {"
 
 tmp=${TMPDIR:-/tmp}

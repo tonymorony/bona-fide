@@ -18,7 +18,7 @@ Caddy gets the site's TLS certificate and caps request bodies at 1 MB. The App l
 |---|---|
 | `Dockerfile` | The App's image: production dependencies only, runs as `node`, checks `/health` |
 | `docker-compose.yml` | The `bona-fide-app` service: port 8930 on 127.0.0.1, settings from `.env`, restarts unless stopped, read-only filesystem except the `bona-fide-data` volume for the decision log and Contributor records, no capabilities, 512 MB of memory |
-| `Caddyfile.bonafide` | The site block. Its first line is the site's host name: change it to run your own instance |
+| `Caddyfile.bonafide` | The site block. Its first line names the site's hosts, the main one first: change it to run your own instance |
 | `.env.example` | Every setting the App reads, with a line on each |
 | `deploy.sh` | The command you run from your machine |
 | `install.sh` | What `deploy.sh` runs on the server |

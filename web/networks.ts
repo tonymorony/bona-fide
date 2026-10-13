@@ -41,6 +41,7 @@ export const testnet: Network = {
   endpoints: ENDPOINTS,
   links: {
     getUsdc: "https://faucet.circle.com",
+    portal: "",
     source: "",
     installApp: "",
   },
@@ -54,9 +55,9 @@ export const mainnet: Network = {
   rpcUrl: "https://rpc.mainnet.arc.io",
   explorerUrl: "https://explorer.arc.io",
   usdc: ARC_USDC,
-  escrow: "",
-  escrowFromBlock: 0,
-  router: "",
+  escrow: "0xe2fe798427CFb43134FC37F6EE054c2da818fAc9",
+  escrowFromBlock: 24_583_718,
+  router: "0xe36fe5152C6A54946b15df3fEBDc068AF48581dc",
   bountyFactory: "",
   bountyFactoryFromBlock: 0,
   forfeits: {
@@ -73,8 +74,9 @@ export const mainnet: Network = {
   endpoints: ENDPOINTS,
   links: {
     getUsdc: "",
-    source: "",
-    installApp: "",
+    portal: "https://portal.arc.io",
+    source: "https://github.com/tonymorony/bona-fide",
+    installApp: "https://github.com/apps/bona-fide-deposits/installations/new",
   },
   walletConnectProjectId: "",
 };

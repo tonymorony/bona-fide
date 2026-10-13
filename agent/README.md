@@ -55,8 +55,9 @@ wallets.
 
 ```sh
 claude mcp add bona-fide \
-  -e ESCROW_ADDRESS=<escrow address> \
-  -e APP_URL=<Bona Fide App URL> \
+  -e ESCROW_ADDRESS=0xe2fe798427CFb43134FC37F6EE054c2da818fAc9 \
+  -e RPC_URL=https://rpc.mainnet.arc.io \
+  -e APP_URL=https://bofi.live \
   -e MAX_DEPOSIT_USDC=5 \
   -- node /path/to/bona-fide/agent/src/main.ts
 ```
@@ -70,8 +71,9 @@ Or add it to a project's `.mcp.json`:
       "command": "node",
       "args": ["/path/to/bona-fide/agent/src/main.ts"],
       "env": {
-        "ESCROW_ADDRESS": "<escrow address>",
-        "APP_URL": "<Bona Fide App URL>",
+        "ESCROW_ADDRESS": "0xe2fe798427CFb43134FC37F6EE054c2da818fAc9",
+        "RPC_URL": "https://rpc.mainnet.arc.io",
+        "APP_URL": "https://bofi.live",
         "MAX_DEPOSIT_USDC": "5"
       }
     }
@@ -79,7 +81,8 @@ Or add it to a project's `.mcp.json`:
 }
 ```
 
-Run `/mcp` in Claude Code to check that `bona-fide` is connected.
+Run `/mcp` in Claude Code to check that `bona-fide` is connected. The values above are Bona Fide's escrow and App on
+Arc mainnet.
 
 | Variable | Default | What it is |
 |---|---|---|

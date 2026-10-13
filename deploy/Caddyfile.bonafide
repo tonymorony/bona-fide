@@ -4,7 +4,9 @@
 #
 # Caddy reaches the App at BONA_FIDE_UPSTREAM: 127.0.0.1:8930 unless Caddy's environment sets it.
 # A Caddy container on the App's Docker network sets it to bona-fide-app:3000.
-bonafide.lysakov.com {
+#
+# The first host is the site's main address. The second is its earlier one, which keeps working.
+bofi.live, bonafide.lysakov.com {
 	request_body {
 		max_size 1MB
 	}

@@ -51,6 +51,8 @@ export interface Network {
   links: {
     /** Where to get USDC on this network. */
     getUsdc: string;
+    /** Arc's own app, where a wallet is funded from another chain. With it, the deposit page says how to get USDC. */
+    portal: string;
     /** The source code, which also documents the agent path and the Maintainer's setup. */
     source: string;
     /** Where Maintainers install the GitHub App. */
