@@ -169,6 +169,13 @@ Both are immutable: no owner, no upgrade and no pause. The escrow's Binding dela
 Deposit is 50 USDC. The router sends Forfeits through CCTP to Protocol Guild's vesting contract on Base,
 [`0xffaaCCFe120f3fC47f42102cF4F28e837cd49A20`](https://basescan.org/address/0xffaaCCFe120f3fC47f42102cF4F28e837cd49A20).
 
+The first Deposit on mainnet went through [tonymorony/lottie-squeeze#1](https://github.com/tonymorony/lottie-squeeze/pull/1):
+
+| Step | Transaction on Arc |
+|---|---|
+| The Deposit, 1 USDC, signed once and relayed by the App | [`0x84e8cdae…814a789f`](https://explorer.arc.io/tx/0x84e8cdaeaf4fe73f002d3a3ec3964e6bbcf2060c9eb05a7a248a6808814a789f) |
+| The Refund, in full, when the PR was merged | [`0xe4001116…41ed6764`](https://explorer.arc.io/tx/0xe4001116b653452422e9085aa3ccf4ffa16d8b45831f4de41efb94f541ed6764) |
+
 ## Stack
 
 - **Contracts:** Solidity 0.8.30 with [Foundry](https://getfoundry.sh) and OpenZeppelin; USDC's EIP-3009 for
