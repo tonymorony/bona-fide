@@ -28,7 +28,7 @@ test("re-running the check on a PR from a fork evaluates the PR again", async ()
 
   await deliver("check_run", rerun({ externalId: asked?.externalId, pullRequests: [] }));
 
-  expect(asked?.conclusion).toBe("action_required");
+  expect(asked?.conclusion).toBe("pending");
   expect(github.checkOn(REPO, HEAD_SHA)).toMatchObject({
     conclusion: "success",
     title: "No Deposit needed: @newcomer is vouched for",
@@ -60,5 +60,5 @@ test("a re-run of another check changes nothing", async () => {
 
   await deliver("check_run", rerun({ checkName: "lint", externalId: asked?.externalId, pullRequests: [PR] }));
 
-  expect(github.checkOn(REPO, HEAD_SHA)?.conclusion).toBe("action_required");
+  expect(github.checkOn(REPO, HEAD_SHA)?.conclusion).toBe("pending");
 });

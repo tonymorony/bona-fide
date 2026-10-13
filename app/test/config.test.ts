@@ -52,7 +52,7 @@ test.each([
 test("a forfeit share of 0% leaves out the bad-faith line", async () => {
   const check = await checkWith("forfeit: 0\n", { forfeitBps: 0 });
 
-  expect(check?.conclusion).toBe("action_required");
+  expect(check?.conclusion).toBe("pending");
   expect(check?.summary).not.toContain("Bad faith");
 });
 

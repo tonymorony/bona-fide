@@ -64,7 +64,7 @@ test("once new terms take effect, open PRs opened since Bona Fide started are as
 
   expect(before?.title).toBe("Deposit needed: 1 USDC, refundable");
   expect(github.checkOn(REPO, HEAD_SHA)).toMatchObject({
-    conclusion: "action_required",
+    conclusion: "pending",
     title: "Deposit needed: 2 USDC, refundable",
   });
 });

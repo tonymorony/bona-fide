@@ -66,7 +66,7 @@ test("once the Binding is active, the check asks for the Deposit", async () => {
 
   const check = await deliver();
 
-  expect(check).toMatchObject({ conclusion: "action_required", title: "Deposit needed: 1 USDC, refundable" });
+  expect(check).toMatchObject({ conclusion: "pending", title: "Deposit needed: 1 USDC, refundable" });
 });
 
 test("the check asks for the active Binding's terms, and the Deposit is exactly that amount", async () => {
@@ -161,5 +161,5 @@ test("a PR opened before the Binding took effect passes, as does one within the 
 
   expect(await openAt(1, -3600)).toBe("success");
   expect(await openAt(2, 60)).toBe("success");
-  expect(await openAt(3, 600)).toBe("action_required");
+  expect(await openAt(3, 600)).toBe("pending");
 }, 30_000);

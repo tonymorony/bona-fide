@@ -83,7 +83,7 @@ test("a Deposit made before the PR was opened doesn't turn it green", async () =
   await watcher.tick();
   await deliver("pull_request", payload("pull_request", "opened", { author: NEWCOMER }));
 
-  expect(github.checkOn(REPO, HEAD_SHA)?.conclusion).toBe("action_required");
+  expect(github.checkOn(REPO, HEAD_SHA)?.conclusion).toBe("pending");
 });
 
 test("Deposits for other repos and for items that don't exist are skipped", async () => {
@@ -198,7 +198,7 @@ test("a replayed Deposit that was forfeited since doesn't turn the check green",
 
   await createDepositWatcher({ chain, github, app, fromBlock: saved }).tick();
 
-  expect(github.checkOn(REPO, HEAD_SHA)?.conclusion).toBe("action_required");
+  expect(github.checkOn(REPO, HEAD_SHA)?.conclusion).toBe("pending");
 });
 
 /** A Deposit for the PR, made five minutes before the PR is opened: the PR doesn't exist yet. */
@@ -222,7 +222,7 @@ test("a Deposit made before its PR existed is checked once the PR opens, with no
   github.addItem(pr);
   for (let i = 0; i < 3; i++) await watcher.tick();
 
-  expect(github.checkOn(REPO, HEAD_SHA)?.conclusion).toBe("action_required");
+  expect(github.checkOn(REPO, HEAD_SHA)?.conclusion).toBe("pending");
 });
 
 test("a Deposit waiting for its PR is looked at less and less often", async () => {
@@ -234,7 +234,7 @@ test("a Deposit waiting for its PR is looked at less and less often", async () =
   for (let i = 0; i < 128; i++) await watcher.tick();
 
   expect(reads.mock.calls.length).toBeLessThanOrEqual(8);
-  expect(github.checkOn(REPO, HEAD_SHA)?.conclusion).toBe("action_required");
+  expect(github.checkOn(REPO, HEAD_SHA)?.conclusion).toBe("pending");
 });
 
 test("a Deposit refunded or forfeited before its PR opens is no longer waited for", async () => {

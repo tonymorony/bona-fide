@@ -53,7 +53,7 @@ test("the check turns green within 10 s of the Deposited event", async () => {
   await handle(
     signed("pull_request", payload("pull_request", "opened", { author: NEWCOMER, createdAt: openedAt.toISOString() })),
   );
-  expect(github.checkOn(REPO, HEAD_SHA)?.conclusion).toBe("action_required");
+  expect(github.checkOn(REPO, HEAD_SHA)?.conclusion).toBe("pending");
 
   await anvil.deposit(REPO, "pr", PR);
   const confirmed = Date.now();
@@ -97,5 +97,5 @@ test("a Deposit made before the PR was opened never turns it green", async () =>
   stop();
 
   expect(errors).toEqual([]);
-  expect(github.checkOn(REPO, sha)?.conclusion).toBe("action_required");
+  expect(github.checkOn(REPO, sha)?.conclusion).toBe("pending");
 }, 30_000);

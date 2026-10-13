@@ -51,8 +51,8 @@ test.each([
   [-3600, "success"],
   [60, "success"],
   [120, "success"],
-  [121, "action_required"],
-  [3600, "action_required"],
+  [121, "pending"],
+  [3600, "pending"],
 ])("a PR opened %i s after Bona Fide started here gives %s", async (seconds, conclusion) => {
   const { github, deliver } = harness({ config: "", startedAt: STARTED });
 
@@ -68,7 +68,7 @@ test("a later Binding doesn't move the start: a PR opened after the first one st
   await deliver("pull_request", openedPr(secondsAfterStart(3600)));
 
   expect(github.checkOn(REPO, HEAD_SHA)).toMatchObject({
-    conclusion: "action_required",
+    conclusion: "pending",
     title: "Deposit needed: 2 USDC, refundable",
   });
 });

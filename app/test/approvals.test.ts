@@ -30,7 +30,7 @@ test.each(["read", "none"] as const)("an approval from someone with %s access ac
 
   await deliver("pull_request_review", review("approved", "passerby", { author: NEWCOMER }));
 
-  expect(github.checkOn(REPO, HEAD_SHA)?.conclusion).toBe("action_required");
+  expect(github.checkOn(REPO, HEAD_SHA)?.conclusion).toBe("pending");
 });
 
 test("any approval from someone who can push is enough, whoever else approved", async () => {
@@ -51,7 +51,7 @@ test("an approval is ignored while the PR is marked bad faith", async () => {
 
   await deliver("pull_request_review", review("approved", "mo", { author: NEWCOMER, labels: ["bona-fide:bad-faith"] }));
 
-  expect(github.checkOn(REPO, HEAD_SHA)?.conclusion).toBe("action_required");
+  expect(github.checkOn(REPO, HEAD_SHA)?.conclusion).toBe("pending");
 });
 
 test("a denounced Contributor's check fails even when the PR is approved", async () => {

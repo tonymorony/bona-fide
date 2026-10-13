@@ -12,7 +12,7 @@ test("a PR from someone new gets a check asking for the Deposit", async () => {
 
   const check = github.checkOn(REPO, HEAD_SHA);
   expect(check).toMatchObject({
-    conclusion: "action_required",
+    conclusion: "pending",
     title: "Deposit needed: 1 USDC, refundable",
     detailsUrl: DEPOSIT_LINK,
   });
@@ -33,6 +33,35 @@ test("a PR from someone new gets a check asking for the Deposit", async () => {
   );
 });
 
+test("a PR that needs a Deposit also gets one comment with the link, since a check sends no email", async () => {
+  const { github, deliver } = harness({ config: "" });
+
+  await deliver("pull_request", payload("pull_request", "opened", { author: NEWCOMER }));
+
+  const comments = github.commentsOn(REPO, 2);
+  expect(comments).toHaveLength(1);
+  expect(comments[0]).toContain("**Deposit needed: 1 USDC, refundable**");
+  expect(comments[0]).toContain(`**[Make the Deposit](${DEPOSIT_LINK})**`);
+});
+
+test("the comment on a PR is edited in place when the PR gets new commits, never repeated", async () => {
+  const { github, deliver } = harness({ config: "" });
+
+  await deliver("pull_request", payload("pull_request", "opened", { author: NEWCOMER }));
+  await deliver("pull_request", payload("pull_request", "synchronize", { author: NEWCOMER }));
+
+  expect(github.commentsOn(REPO, 2)).toHaveLength(1);
+});
+
+test("a PR that needs no Deposit gets no comment", async () => {
+  const { github, deliver } = harness({ config: "" });
+  github.setPermission(REPO, "mo", "write");
+
+  await deliver("pull_request", payload("pull_request", "opened", { author: "mo" }));
+
+  expect(github.commentsOn(REPO, 2)).toEqual([]);
+});
+
 test.each(["admin", "write"] as const)("a collaborator with %s access passes at once", async (permission) => {
   const { github, deliver } = harness({ config: "" });
   github.setPermission(REPO, "mo", permission);
@@ -51,7 +80,7 @@ test("read access alone is not an Exemption", async () => {
 
   await deliver("pull_request", payload("pull_request", "opened", { author: NEWCOMER }));
 
-  expect(github.checkOn(REPO, HEAD_SHA)?.conclusion).toBe("action_required");
+  expect(github.checkOn(REPO, HEAD_SHA)?.conclusion).toBe("pending");
 });
 
 test.each(["VOUCHED.td", ".github/VOUCHED.td"])("a Contributor vouched for in %s passes at once", async (path) => {
@@ -69,9 +98,9 @@ test.each(["VOUCHED.td", ".github/VOUCHED.td"])("a Contributor vouched for in %s
 test.each([
   ["github:newcomer", "success"],
   ["newcomer fixed the docs twice", "success"],
-  ["gitlab:newcomer", "action_required"],
-  ["# newcomer", "action_required"],
-  ["newcomer2", "action_required"],
+  ["gitlab:newcomer", "pending"],
+  ["# newcomer", "pending"],
+  ["newcomer2", "pending"],
 ])("the VOUCHED.td line %j gives %s", async (line, conclusion) => {
   const { github, deliver } = harness({ config: "" });
   github.setFile(REPO, "VOUCHED.td", `alice\n${line}\n`);
@@ -123,7 +152,7 @@ test("adding the Waiver label turns the check green, and removing it asks again"
     "pull_request",
     payload("pull_request", "unlabeled", { author: NEWCOMER, label: "bona-fide:waive", labels: ["bug"] }),
   );
-  expect(github.checkOn(REPO, HEAD_SHA)?.conclusion).toBe("action_required");
+  expect(github.checkOn(REPO, HEAD_SHA)?.conclusion).toBe("pending");
 });
 
 test("the bona-fide:ok label passes the check as accepted, a push keeps it, and removing the label asks again", async () => {
@@ -148,7 +177,7 @@ test("the bona-fide:ok label passes the check as accepted, a push keeps it, and 
   );
   expect(accepted?.detailsUrl).toBeUndefined();
   expect(pushed?.conclusion).toBe("success");
-  expect(github.checkOn(REPO, HEAD_SHA)?.conclusion).toBe("action_required");
+  expect(github.checkOn(REPO, HEAD_SHA)?.conclusion).toBe("pending");
 });
 
 test("other labels don't re-run the check", async () => {
@@ -161,7 +190,7 @@ test("other labels don't re-run the check", async () => {
     payload("pull_request", "labeled", { author: NEWCOMER, label: "bug", labels: ["bug"] }),
   );
 
-  expect(github.checkOn(REPO, HEAD_SHA)?.conclusion).toBe("action_required");
+  expect(github.checkOn(REPO, HEAD_SHA)?.conclusion).toBe("pending");
 });
 
 test("a denounced Contributor's PR fails with a neutral message and no Deposit offer", async () => {
@@ -198,7 +227,7 @@ test("a reopened PR is checked again", async () => {
 
   await deliver("pull_request", payload("pull_request", "reopened", { author: NEWCOMER }));
 
-  expect(github.checkOn(REPO, HEAD_SHA)?.conclusion).toBe("action_required");
+  expect(github.checkOn(REPO, HEAD_SHA)?.conclusion).toBe("pending");
 });
 
 test("a push to the PR puts the check on the new head commit", async () => {
@@ -207,7 +236,7 @@ test("a push to the PR puts the check on the new head commit", async () => {
 
   await deliver("pull_request", payload("pull_request", "synchronize", { author: NEWCOMER, headSha: newHead }));
 
-  expect(github.checkOn(REPO, newHead)?.conclusion).toBe("action_required");
+  expect(github.checkOn(REPO, newHead)?.conclusion).toBe("pending");
 });
 
 test("without .github/bona-fide.yml the App does nothing", async () => {

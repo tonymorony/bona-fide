@@ -28,7 +28,7 @@ nobody has vouched for yet: a small deposit that honest contributors always get 
 
    The Maintainer signs a one-time message with that wallet to prove control, so a typo can't
    bind an address nobody holds. The Keeper proposes the Binding only after that proof, and it
-   takes effect **24 hours** later.
+   takes effect **1 hour** later.
 2. **A Contributor opens a PR or issue.**
    - **Exempt** (the check passes at once): repo collaborators with write, maintain or admin
      access; anyone listed in Vouch's `VOUCHED.td`; anyone with a prior merged PR in the repo;
@@ -45,7 +45,8 @@ nobody has vouched for yet: a small deposit that honest contributors always get 
    - **Denounced** in `VOUCHED.td`: the check fails and no Deposit is offered. A denouncement
      outranks the waiver label.
    - Otherwise the check asks for a Deposit, or a vouch from a Maintainer. It links to a deposit
-     page, and agents have their own path.
+     page, and agents have their own path. The check stays in progress while it waits, and the
+     App leaves one comment with the same link, so the author gets an email.
 3. **The Contributor or their agent deposits USDC into the escrow on Arc.** The check turns
    green within seconds. The App counts only Deposits made after the item was opened.
 4. **Outcomes, enforced by the contract:**

@@ -126,7 +126,7 @@ test("the first check on a commit is created, completed, with its link", async (
   });
 
   await github.setCheck(REPO, "abc123", {
-    conclusion: "action_required",
+    conclusion: "neutral",
     title: "T",
     summary: "S",
     detailsUrl: "https://x.example/d",
@@ -138,10 +138,33 @@ test("the first check on a commit is created, completed, with its link", async (
     name: "Bona Fide",
     head_sha: "abc123",
     status: "completed",
-    conclusion: "action_required",
+    conclusion: "neutral",
     details_url: "https://x.example/d",
     output: { title: "T", summary: "S" },
   });
+});
+
+test("a check that waits for a Deposit stays in progress, so GitHub doesn't show it as failed", async () => {
+  const { github, sent } = fakeApi({
+    [`GET ${API}/commits/abc123/check-runs`]: { status: 200, body: { total_count: 0, check_runs: [] } },
+    [`POST ${API}/check-runs`]: { status: 201, body: { id: 9 } },
+  });
+
+  await github.setCheck(REPO, "abc123", {
+    conclusion: "pending",
+    title: "T",
+    summary: "S",
+    detailsUrl: "https://x.example/d",
+  });
+
+  expect(sent[1]?.body).toMatchObject({
+    name: "Bona Fide",
+    status: "in_progress",
+    details_url: "https://x.example/d",
+    output: { title: "T", summary: "S" },
+  });
+  expect(sent[1]?.body).not.toHaveProperty("conclusion");
+  expect(sent[1]?.body).not.toHaveProperty("completed_at");
 });
 
 test("a later check on the same commit updates the App's run", async () => {
@@ -213,7 +236,7 @@ test("a check's external id is stored on the run, when it is created and when it
     [`PATCH ${API}/check-runs/9`]: { status: 200, body: { id: 9 } },
   });
 
-  await github.setCheck(REPO, "abc123", { conclusion: "action_required", title: "T", summary: "S", externalId: "2" });
+  await github.setCheck(REPO, "abc123", { conclusion: "pending", title: "T", summary: "S", externalId: "2" });
   await github.setCheck(REPO, "abc123", { conclusion: "success", title: "T2", summary: "S2", externalId: "2" });
 
   expect(sent.filter((s) => s.method !== "GET").map((s) => [s.method, s.body.external_id])).toEqual([

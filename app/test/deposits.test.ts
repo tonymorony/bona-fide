@@ -27,6 +27,20 @@ test("a PR whose Deposit is on-chain passes, shows who paid and links the Deposi
   );
 });
 
+test("when the Deposit lands, the PR's comment is edited to say so", async () => {
+  const { github, chain, deliver } = harness({ config: "" });
+  await deliver("pull_request", payload("pull_request", "opened", { author: NEWCOMER }));
+  expect(github.commentsOn(REPO, PR)[0]).toContain("**Deposit needed: 1 USDC, refundable**");
+
+  chain.deposit({ repo: REPO, kind: "pr", number: PR, depositor: DEPOSITOR, at: new Date(PR_OPENED_AT + 60_000) });
+  await deliver("pull_request", payload("pull_request", "reopened", { author: NEWCOMER }));
+
+  const comments = github.commentsOn(REPO, PR);
+  expect(comments).toHaveLength(1);
+  expect(comments[0]).toContain("**Deposit received from 0x5aAe…eAed**");
+  expect(comments[0]).not.toContain("Make the Deposit");
+});
+
 test("the Deposit's link goes to the explorer the App is given, such as testnet's", async () => {
   const { github, chain, deliver } = harness({ config: "", explorerUrl: "https://explorer.testnet.arc.io" });
   const { txHash } = chain.deposit({
@@ -50,7 +64,7 @@ test("a Deposit made before the PR was opened is ignored", async () => {
 
   await deliver("pull_request", payload("pull_request", "opened", { author: NEWCOMER }));
 
-  expect(github.checkOn(REPO, HEAD_SHA)?.conclusion).toBe("action_required");
+  expect(github.checkOn(REPO, HEAD_SHA)?.conclusion).toBe("pending");
 });
 
 test("a Deposit in the same second the PR was opened counts", async () => {
@@ -65,7 +79,7 @@ test("a Deposit in the same second the PR was opened counts", async () => {
 // GitHub's clock stamps created_at and Arc's stamps the block, so they may disagree a little.
 test.each([
   [120, "success"],
-  [121, "action_required"],
+  [121, "pending"],
 ])("a Deposit whose block is %i s older than the PR gives %s", async (seconds, conclusion) => {
   const { github, chain, deliver } = harness({ config: "" });
   const at = new Date(PR_OPENED_AT - seconds * 1000);
@@ -82,7 +96,7 @@ test("a Deposit for an issue with the same number doesn't count for the PR", asy
 
   await deliver("pull_request", payload("pull_request", "reopened", { author: NEWCOMER }));
 
-  expect(github.checkOn(REPO, HEAD_SHA)?.conclusion).toBe("action_required");
+  expect(github.checkOn(REPO, HEAD_SHA)?.conclusion).toBe("pending");
 });
 
 test("a Deposit reported by a separate watcher while the App asks for one still ends green", async () => {

@@ -178,7 +178,7 @@ test.each([
   await open();
 
   expect(advisor.requests).toEqual([]);
-  expect(github.checkOn(REPO, HEAD_SHA)?.conclusion).toBe("action_required");
+  expect(github.checkOn(REPO, HEAD_SHA)?.conclusion).toBe("pending");
   expect(logged).toEqual([]);
 });
 
@@ -256,7 +256,7 @@ test("a model that says require keeps the Deposit ask and posts nothing", async 
 
   await open();
 
-  expect(github.checkOn(REPO, HEAD_SHA)?.conclusion).toBe("action_required");
+  expect(github.checkOn(REPO, HEAD_SHA)?.conclusion).toBe("pending");
   expect(github.markedNotesOn(REPO, PR)).toEqual([]);
   expect(logged).toMatchObject([
     { type: "waive", action: "required", outcome: "escalated", suggestion: { verdict: "require" } },
@@ -276,7 +276,7 @@ test("a model that flags the record keeps the Deposit ask and posts a note for t
 
   await open();
 
-  expect(github.checkOn(REPO, HEAD_SHA)?.conclusion).toBe("action_required");
+  expect(github.checkOn(REPO, HEAD_SHA)?.conclusion).toBe("pending");
   expect(github.markedNotesOn(REPO, PR)).toEqual([
     [
       FLAG_MARKER,
@@ -319,7 +319,7 @@ test.each([
   const response = await open();
 
   expect(response.status).toBe(200);
-  expect(github.checkOn(REPO, HEAD_SHA)?.conclusion).toBe("action_required");
+  expect(github.checkOn(REPO, HEAD_SHA)?.conclusion).toBe("pending");
   expect(github.markedNotesOn(REPO, PR)).toEqual([]);
   expect(logged).toMatchObject([{ action, outcome: "escalated", suggestion: null, cost }]);
   expect(JSON.stringify(logged)).not.toContain("sk-ant");
@@ -474,7 +474,7 @@ test("a later Forfeit of the Contributor's, in any repo, ends the Record Exempti
   await open("pr", "synchronize");
   await open("pr", "reopened");
 
-  expect(github.checkOn(REPO, HEAD_SHA)?.conclusion).toBe("action_required");
+  expect(github.checkOn(REPO, HEAD_SHA)?.conclusion).toBe("pending");
   expect(advisor.requests).toHaveLength(1);
 });
 
@@ -506,7 +506,7 @@ test.each(["off", "false"])("`record_exemption: %s` asks no model", async (value
 
   expect(advisor.requests).toEqual([]);
   expect(github.profileReads).toEqual([]);
-  expect(github.checkOn(REPO, HEAD_SHA)?.conclusion).toBe("action_required");
+  expect(github.checkOn(REPO, HEAD_SHA)?.conclusion).toBe("pending");
 });
 
 test("turning it off ends a Record Exemption granted before", async () => {
@@ -517,7 +517,7 @@ test("turning it off ends a Record Exemption granted before", async () => {
   github.setFile(REPO, ".github/bona-fide.yml", "record_exemption: off\n");
   await open("pr", "synchronize");
 
-  expect(github.checkOn(REPO, HEAD_SHA)?.conclusion).toBe("action_required");
+  expect(github.checkOn(REPO, HEAD_SHA)?.conclusion).toBe("pending");
 });
 
 test("without a model on the host, nobody's record is weighed", async () => {
@@ -526,7 +526,7 @@ test("without a model on the host, nobody's record is weighed", async () => {
   await open();
 
   expect(github.profileReads).toEqual([]);
-  expect(github.checkOn(REPO, HEAD_SHA)?.conclusion).toBe("action_required");
+  expect(github.checkOn(REPO, HEAD_SHA)?.conclusion).toBe("pending");
 });
 
 test("an exempt Contributor's record isn't weighed", async () => {

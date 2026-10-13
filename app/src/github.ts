@@ -156,10 +156,14 @@ export function createGitHub({ appId, app, installation }: GitHubOptions): GitHu
       // An update can replace a run's link but not clear it. A run created without one links to the
       // App's homepage, so a check without a link goes back to that, or to the run's own page.
       const detailsUrl = check.detailsUrl ?? existing?.app?.external_url ?? existing?.html_url;
+      // A run that waits for a Deposit stays in progress. GitHub shows a finished run that asks for
+      // something as failed, with a red cross on the commit, before the Contributor has done anything.
+      const state =
+        check.conclusion === "pending"
+          ? { status: "in_progress" as const }
+          : { status: "completed" as const, conclusion: check.conclusion, completed_at: new Date().toISOString() };
       const fields = {
-        status: "completed" as const,
-        conclusion: check.conclusion,
-        completed_at: new Date().toISOString(),
+        ...state,
         output: { title: check.title, summary: check.summary },
         ...(detailsUrl ? { details_url: detailsUrl } : {}),
         ...(check.externalId ? { external_id: check.externalId } : {}),

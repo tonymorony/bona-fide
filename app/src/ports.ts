@@ -36,7 +36,8 @@ export type Item = PullRequest | Issue;
 export type Permission = "admin" | "write" | "read" | "none";
 
 export interface CheckRun {
-  conclusion: "success" | "failure" | "neutral" | "action_required";
+  /** "pending" leaves the run in progress: it waits for a Deposit, and GitHub shows it as running, not failed. */
+  conclusion: "success" | "failure" | "neutral" | "pending";
   title: string;
   summary: string;
   detailsUrl?: string;
@@ -51,7 +52,7 @@ export interface GitHub {
   hasMergedPullRequest(repo: Repo, login: string): Promise<boolean>;
   /** Creates or updates the "Bona Fide" check on a commit. */
   setCheck(repo: Repo, headSha: string, check: CheckRun): Promise<void>;
-  /** The id of the App's own comment on an issue, or null. */
+  /** The id of the App's own comment on a PR or issue, or null. */
   findOwnComment(repo: Repo, number: number): Promise<number | null>;
   createComment(repo: Repo, number: number, body: string): Promise<void>;
   updateComment(repo: Repo, commentId: number, body: string): Promise<void>;

@@ -39,7 +39,7 @@ Write each `exempt_bots` login on its own `- ` line, exactly as GitHub shows it.
 
 The escrow charges each Deposit the terms of the repo's active on-chain Binding, not the file. The
 Keeper proposes a Binding once the Maintainer has proved control of the wallet, and it takes effect
-24 hours later. So:
+1 hour later. So:
 
 - **Before the repo's first Binding is active,** nobody is asked for a Deposit, since the escrow
   would refuse it. PRs get a neutral check: "No Deposit needed: not set up here yet", which links
@@ -88,11 +88,18 @@ In order:
 4. **Deposited:** a Deposit for this PR or issue, made after it was opened, turns the check green
    and shows who paid, with a link to its transaction on Arc's block explorer.
 5. **Not live yet:** the repo's Binding isn't active, so the check is neutral (see above).
-6. **Deposit needed:** otherwise the check asks for the Deposit and links to the deposit page.
+6. **Deposit needed:** otherwise the check asks for the Deposit and links to the deposit page. It
+   stays in progress until the Deposit lands: GitHub shows a finished check that asks for something
+   as failed, with a red cross on the commit, before the Contributor has done anything.
 
 `VOUCHED.td` is read from the repo root, then from `.github/`. PRs get one check named "Bona Fide"
-on their head commit. Issues get one comment, edited in place, and the `bona-fide:deposit-required`
-label while a Deposit is needed.
+on their head commit. A PR or issue that is asked for a Deposit also gets one comment from the App,
+edited in place as things change: a comment reaches the author's inbox, and a check doesn't. Issues
+have no checks, so they carry the `bona-fide:deposit-required` label too while a Deposit is needed.
+
+Only the App's own comment and check carry the real link. Anyone can comment on a public PR, so a
+Contributor should follow a link only from the comment marked with the App's **bot** badge, or from
+the check.
 
 While the check asks for a Deposit, its Details link opens the deposit page. Once it stops asking,
 the link goes to the App's homepage, where GitHub points a check that never had a link: GitHub's API
@@ -172,7 +179,7 @@ A Maintainer binds a repo by committing `.github/bona-fide.yml` with a `maintain
 default branch (see [Turn it on for a repo](#turn-it-on-for-a-repo)), then signing a proof of
 control of that wallet and sending it to `POST /binding-proof`. The Keeper proposes the file's
 amount, forfeit share and Timeout for that wallet. The Binding takes effect after the escrow's
-Binding delay, 24 hours at launch; the Keeper activates it then.
+Binding delay, 1 hour on Arc; the Keeper activates it then.
 
 ### Signer hygiene
 

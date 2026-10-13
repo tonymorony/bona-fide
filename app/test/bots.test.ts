@@ -20,7 +20,7 @@ test.each(["Copilot", "devin-ai-integration[bot]"])(
   "any other bot, such as the AI coding agent %s, is asked for a Deposit like anyone else",
   async (bot) => {
     expect(await checkFor(bot)).toMatchObject({
-      conclusion: "action_required",
+      conclusion: "pending",
       title: "Deposit needed: 1 USDC, refundable",
     });
   },

@@ -168,7 +168,7 @@ export function createApp({
       case "needed": {
         const link = depositLink(depositPageUrl, item);
         return {
-          conclusion: "action_required",
+          conclusion: "pending",
           ...depositNeededText(item.kind, verdict.binding, verdict.newTerms, link),
           detailsUrl: link,
         };
@@ -186,6 +186,7 @@ export function createApp({
     const check = checkFor(item, verdict);
     if (item.kind === "issue") return noteOnIssue(item, verdict, check);
     await postCheck(item, check);
+    await comment(item, verdict, check);
     return item;
   }
 
@@ -195,16 +196,22 @@ export function createApp({
     return github.setCheck(pr.repo, pr.headSha, { ...check, externalId: String(pr.number) });
   }
 
-  // Issues have no checks: one comment, edited in place, and a label while a Deposit is needed.
-  // Nothing to ask for, as for an exempt author, an accepted issue or a repo that isn't live yet,
-  // starts no comment.
-  async function noteOnIssue(issue: Issue, verdict: Verdict, check: CheckRun): Promise<Issue> {
+  // One comment, edited in place, says what the check says: a comment reaches the author's inbox,
+  // and a check doesn't. Nothing to ask for, as for an exempt author, an accepted item or a repo
+  // that isn't live yet, starts no comment. Returns whether the item already had one.
+  async function comment(item: Item, verdict: Verdict, check: CheckRun): Promise<boolean> {
     const body = `**${check.title}**\n\n${check.summary}`;
-    const existing = await github.findOwnComment(issue.repo, issue.number);
-    if (existing !== null) await github.updateComment(issue.repo, existing, body);
+    const existing = await github.findOwnComment(item.repo, item.number);
+    if (existing !== null) await github.updateComment(item.repo, existing, body);
     else if (verdict.kind !== "exempt" && verdict.kind !== "accepted" && verdict.kind !== "inactive") {
-      await github.createComment(issue.repo, issue.number, body);
+      await github.createComment(item.repo, item.number, body);
     }
+    return existing !== null;
+  }
+
+  // Issues have no checks: the comment, and a label while a Deposit is needed.
+  async function noteOnIssue(issue: Issue, verdict: Verdict, check: CheckRun): Promise<Issue> {
+    const commented = await comment(issue, verdict, check);
 
     // The label goes on with the comment, and the issue may predate both, so a comment means "maybe labelled".
     const labelled = issue.labels.includes(DEPOSIT_REQUIRED);
@@ -212,7 +219,7 @@ export function createApp({
       await github.addLabel(issue.repo, issue.number, DEPOSIT_REQUIRED);
       return { ...issue, labels: [...issue.labels, DEPOSIT_REQUIRED] };
     }
-    if (verdict.kind !== "needed" && (labelled || existing !== null)) {
+    if (verdict.kind !== "needed" && (labelled || commented)) {
       await github.removeLabel(issue.repo, issue.number, DEPOSIT_REQUIRED);
       return { ...issue, labels: issue.labels.filter((label) => label !== DEPOSIT_REQUIRED) };
     }
