@@ -136,7 +136,8 @@ only if something changed. It never touches `.env`.
 ssh <ssh host> 'cd /opt/bona-fide && docker compose logs -f --tail=100'
 ```
 
-The App logs its errors in full, and an RPC error can include the RPC's URL. If `RPC_URL` holds an
+With triage on, each triage decision is one JSON line with `"event":"triage"`; `grep '"event":"triage"'`
+picks them out. The App logs its errors in full, and an RPC error can include the RPC's URL. If `RPC_URL` holds an
 API key, don't share the logs as they are. `docker compose config` prints every value in `.env`, so
 don't run it where others can see.
 

@@ -215,11 +215,11 @@ export function createEscrowChain({ client, escrow, fromBlock = 0n }: EscrowChai
       const { status, depositor, amount, serial } = await depositOf(key);
       if (status !== STATUS_ACTIVE) return null;
       if (seen?.key === key && seen.serial === serial) {
-        return seen.blockTime >= since ? { depositor, amount, txHash: seen.txHash } : null;
+        return seen.blockTime >= since ? { depositor, amount, serial, txHash: seen.txHash } : null;
       }
       const before = await lastBlockBefore(BigInt(Math.ceil(since.getTime() / 1000)));
       if (before !== null && (await depositOf(key, before)).serial === serial) return null;
-      return { depositor, amount, txHash: await transactionOf(key, serial, before ?? fromBlock - 1n) };
+      return { depositor, amount, serial, txHash: await transactionOf(key, serial, before ?? fromBlock - 1n) };
     },
 
     async bindingOf(repoId) {

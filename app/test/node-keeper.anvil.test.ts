@@ -32,6 +32,7 @@ function startHost(env: Record<string, string>) {
       DEPOSIT_PAGE_URL: DEPOSIT_PAGE,
       SETUP_PAGE_URL: SETUP_PAGE,
       SIGN_PAGE_URL: SIGN_PAGE,
+      ANTHROPIC_API_KEY: "",
       ...env,
     },
     stdio: ["ignore", "pipe", "pipe"],
@@ -71,6 +72,48 @@ test("the Node host serves the Keeper's endpoints, names the Keeper, and never p
     host.stop();
   }
 }, 30_000);
+
+test("with an Anthropic key, the Node host turns triage on, names its model, and never prints the key", async () => {
+  const port = await freePort();
+  const apiKey = "sk-ant-api03-not-a-real-key";
+  const host = startHost({
+    PORT: String(port),
+    KEEPER_PRIVATE_KEY: keeperKey,
+    ANTHROPIC_API_KEY: apiKey,
+    TRIAGE_MODEL: "claude-sonnet-5",
+  });
+  try {
+    await host.until(() => host.output().includes("listening"));
+
+    expect(host.output()).toContain("Triage asks claude-sonnet-5 about each PR and issue that holds a Deposit.");
+    expect(host.output()).not.toContain(apiKey);
+  } finally {
+    host.stop();
+  }
+}, 30_000);
+
+test.each([
+  ["without an Anthropic key", {}, "Triage off: set ANTHROPIC_API_KEY"],
+  [
+    "without the Keeper",
+    { KEEPER_PRIVATE_KEY: "", ANTHROPIC_API_KEY: "sk-ant-api03-x" },
+    "Triage off: it needs the Keeper.",
+  ],
+])(
+  "%s, the Node host says triage is off",
+  async (_, env, line) => {
+    const port = await freePort();
+    const host = startHost({ PORT: String(port), KEEPER_PRIVATE_KEY: keeperKey, ...env });
+    try {
+      await host.until(() => host.output().includes("listening"));
+
+      expect(host.output()).toContain(line);
+    } finally {
+      host.stop();
+    }
+  },
+  30_000,
+);
 
 test("the Node host activates a due Binding on its own", async () => {
   const repo = "octo/host-activates";

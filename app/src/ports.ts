@@ -61,10 +61,34 @@ export interface GitHub {
   getItem(repo: Repo, kind: Kind, number: number): Promise<Item | null>;
   /** Posts the Keeper's note on a PR or issue, or edits the one it posted before. */
   postNote(repo: Repo, number: number, body: string): Promise<void>;
+  /** Whether the App has a comment on the PR or issue that starts with `marker`. */
+  hasNote(repo: Repo, number: number, marker: string): Promise<boolean>;
+  /** Posts a new comment that starts with `marker`. It never edits the Keeper's note or the App's comment. */
+  addNote(repo: Repo, number: number, marker: string, body: string): Promise<void>;
+  /** The logins whose latest review of the PR approves it. */
+  approvers(repo: Repo, number: number): Promise<string[]>;
+  /** What the PR or issue says, and for a PR what it changes: what triage reads. */
+  contentOf(item: Item): Promise<ItemContent>;
   /** The PRs the App's "Bona Fide" runs in one of its check suites were posted for. */
   suitePullRequests(repo: Repo, suiteId: number): Promise<number[]>;
   /** Up to `max` of the repo's open PRs and issues, the most recently updated first, and whether more are open. */
   openItems(repo: Repo, max: number): Promise<{ items: { kind: Kind; number: number }[]; more: boolean }>;
+}
+
+export interface ChangedFile {
+  path: string;
+  additions: number;
+  deletions: number;
+}
+
+export interface ItemContent {
+  title: string;
+  body: string;
+  repoDescription: string | null;
+  /** A PR's changed files: the first page GitHub lists, and how many the PR changes in all. */
+  files?: { listed: ChangedFile[]; total: number };
+  /** A PR's unified diff, or null when GitHub won't make one, as for a very large PR. */
+  diff?: string | null;
 }
 
 export interface Deposit {
@@ -72,6 +96,8 @@ export interface Deposit {
   amount: bigint;
   /** The transaction that made it. */
   txHash: Hex;
+  /** Its Serial: triage marks its note with it, so each Deposit is triaged once. */
+  serial: bigint;
 }
 
 export interface DepositedEvent extends Deposit {
@@ -125,4 +151,40 @@ export interface Chain {
    * no Binding of the repo has taken effect yet. A later Binding doesn't change it.
    */
   startedAt(repoId: Hex): Promise<Date | null>;
+}
+
+export type Suggestion = "accept" | "bad-faith" | "unsure";
+
+/** What triage shows the model: an item's text, cut to fixed budgets, with how much was left out. */
+export interface ReviewRequest {
+  repo: string;
+  repoDescription: string | null;
+  kind: Kind;
+  number: number;
+  author: string;
+  title: string;
+  body: { text: string; leftOut: number };
+  files?: { listed: ChangedFile[]; leftOut: number };
+  /** Null when GitHub made no diff. */
+  diff?: { text: string; leftOut: number } | null;
+}
+
+export interface Review {
+  /** The model's suggestion, or null when it gave none, such as when it declined. */
+  suggestion: { verdict: Suggestion; reasons: string[] } | null;
+  /** Why there is no suggestion, such as "refusal". */
+  silence?: string;
+  /** The model that answered, which may be a fallback. */
+  model: string;
+  inputTokens: number;
+  outputTokens: number;
+}
+
+/**
+ * A model that reads a PR or issue and suggests whether it is good-faith work. Its answer is
+ * untrusted text: it only changes what triage's note says.
+ */
+export interface Reviewer {
+  /** Rejects with ReviewFailed when the model can't be reached or errs. */
+  review(request: ReviewRequest): Promise<Review>;
 }

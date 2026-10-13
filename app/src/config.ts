@@ -11,6 +11,8 @@ export interface Config {
   timeoutSeconds: number;
   /** Bot logins the repo exempts on top of DEFAULT_EXEMPT_BOTS. */
   exemptBots: readonly string[];
+  /** Whether triage reads the repo's items that hold a Deposit, when the host has a model to ask. */
+  triage: boolean;
 }
 
 export const DEFAULTS: Config = {
@@ -18,6 +20,7 @@ export const DEFAULTS: Config = {
   forfeitBps: 5000,
   timeoutSeconds: 7 * DAY_SECONDS,
   exemptBots: [],
+  triage: true,
 };
 
 /**
@@ -60,13 +63,14 @@ export function parseConfig(text: string): ParsedConfig {
   if (typeof settings !== "object" || Array.isArray(settings)) {
     return { ok: false, problems: ["The file must hold settings such as `amount: 1`."] };
   }
-  const { amount, forfeit, timeout, exempt_bots } = settings as Record<string, unknown>;
+  const { amount, forfeit, timeout, exempt_bots, triage } = settings as Record<string, unknown>;
   const problems: string[] = [];
   const config: Config = {
     amount: isSet(amount) ? parseAmount(String(amount), problems) : DEFAULTS.amount,
     forfeitBps: isSet(forfeit) ? parseForfeit(String(forfeit), problems) : DEFAULTS.forfeitBps,
     timeoutSeconds: isSet(timeout) ? parseTimeout(String(timeout), problems) : DEFAULTS.timeoutSeconds,
     exemptBots: isSet(exempt_bots) ? parseLogins(exempt_bots, problems) : DEFAULTS.exemptBots,
+    triage: isSet(triage) ? parseSwitch(triage, "triage", problems) : DEFAULTS.triage,
   };
   return problems.length === 0 ? { ok: true, config } : { ok: false, problems };
 }
@@ -82,6 +86,15 @@ function parseLogins(value: unknown, problems: string[]): string[] {
   if (Array.isArray(value) && value.every((login) => typeof login === "string" && LOGIN.test(login))) return value;
   problems.push("`exempt_bots` must be a list of GitHub logins.");
   return [];
+}
+
+// The failsafe schema reads `off` and `false` alike, as strings.
+function parseSwitch(value: unknown, key: string, problems: string[]): boolean {
+  const text = typeof value === "string" ? value.trim().toLowerCase() : "";
+  if (["on", "true", "yes"].includes(text)) return true;
+  if (["off", "false", "no"].includes(text)) return false;
+  problems.push(`\`${key}\` must be on or off.`);
+  return true;
 }
 
 function parseAmount(text: string, problems: string[]): bigint {

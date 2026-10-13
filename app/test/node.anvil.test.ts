@@ -27,6 +27,7 @@ async function startNode() {
       ESCROW_FROM_BLOCK: String(anvil.deployBlock),
       DEPOSIT_PAGE_URL: DEPOSIT_PAGE,
       SETUP_PAGE_URL: SETUP_PAGE,
+      ANTHROPIC_API_KEY: "",
     },
     stdio: ["ignore", "pipe", "pipe"],
   });

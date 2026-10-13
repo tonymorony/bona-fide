@@ -7,7 +7,7 @@ import type { Anvil } from "./support/anvil.ts";
 import type { FakeGitHub } from "./support/fake-github.ts";
 import { keeperHarness, startKeeperAnvil } from "./support/keeper.ts";
 import { createDepositWatcher } from "../src/watcher.ts";
-import { HELLO_WORLD, NEWCOMER, payload, REPO } from "./support/webhooks.ts";
+import { HELLO_WORLD, NEWCOMER, payload, REPO, review } from "./support/webhooks.ts";
 
 // The escrow's Status enum: None, Active, Refunded, Forfeited.
 const ACTIVE = 1;
@@ -146,6 +146,92 @@ test.each([
   },
   30_000,
 );
+
+/** `by` approves the PR `opened` made. */
+function approved(
+  openedPr: { pull_request: { created_at: string } },
+  number: number,
+  by: string,
+  labels: string[] = [],
+) {
+  const body = review("approved", by, {
+    author: NEWCOMER,
+    labels,
+    createdAt: openedPr.pull_request.created_at,
+    headSha: String(number).padStart(40, "0"),
+  });
+  body.pull_request.number = number;
+  return body;
+}
+
+test("a Maintainer's approval refunds the PR's Deposit in full, and a later push keeps the check green", async () => {
+  const { deliver, github } = keeperHarness(anvil, keeperKey);
+  const openedPr = opened("pr", 133, await anvil.now());
+  await deliver("pull_request", openedPr);
+  await anvil.mine(1, 5);
+  await anvil.deposit(REPO, "pr", 133);
+  github.setPermission(REPO, "mo", "write");
+  github.approve(REPO, 133, "mo");
+  const before = await anvil.usdcBalance(anvil.contributor);
+
+  await deliver("pull_request_review", approved(openedPr, 133, "mo"));
+  await deliver("pull_request", { ...openedPr, action: "synchronize" });
+
+  expect(await anvil.usdcBalance(anvil.contributor)).toBe(before + ONE_USDC);
+  expect(await statusOf("pr", 133)).toBe(REFUNDED);
+  expect(github.checkOn(REPO, openedPr.pull_request.head.sha)).toMatchObject({
+    conclusion: "success",
+    title: "No Deposit needed: @mo approved it",
+  });
+}, 30_000);
+
+test("an approval from someone with read access refunds nothing", async () => {
+  const { deliver, github } = keeperHarness(anvil, keeperKey);
+  const openedPr = opened("pr", 134, await anvil.now());
+  await deliver("pull_request", openedPr);
+  await anvil.mine(1, 5);
+  await anvil.deposit(REPO, "pr", 134);
+  github.setPermission(REPO, "passerby", "read");
+  github.approve(REPO, 134, "passerby");
+
+  await deliver("pull_request_review", approved(openedPr, 134, "passerby"));
+
+  expect(await statusOf("pr", 134)).toBe(ACTIVE);
+}, 30_000);
+
+test("an approval refunds nothing while the PR is marked bad faith", async () => {
+  const { deliver, github } = keeperHarness(anvil, keeperKey);
+  const openedPr = opened("pr", 135, await anvil.now());
+  await deliver("pull_request", openedPr);
+  await anvil.mine(1, 5);
+  await anvil.deposit(REPO, "pr", 135);
+  await deliver("pull_request", labeled("pr", 135, "bona-fide:bad-faith"));
+  github.setPermission(REPO, "mo", "write");
+  github.approve(REPO, 135, "mo");
+
+  await deliver("pull_request_review", approved(openedPr, 135, "mo", ["bona-fide:bad-faith"]));
+
+  expect(await statusOf("pr", 135)).toBe(ACTIVE);
+}, 30_000);
+
+test("an approval delivered twice refunds once, and both deliveries succeed", async () => {
+  const { deliver, github } = keeperHarness(anvil, keeperKey);
+  const openedPr = opened("pr", 136, await anvil.now());
+  await deliver("pull_request", openedPr);
+  await anvil.mine(1, 5);
+  await anvil.deposit(REPO, "pr", 136);
+  github.setPermission(REPO, "mo", "admin");
+  github.approve(REPO, 136, "mo");
+  const before = await anvil.usdcBalance(anvil.contributor);
+
+  const responses = await Promise.all([
+    deliver("pull_request_review", approved(openedPr, 136, "mo")),
+    deliver("pull_request_review", approved(openedPr, 136, "mo")),
+  ]);
+
+  expect(responses.map((r) => r.status)).toEqual([200, 200]);
+  expect(await anvil.usdcBalance(anvil.contributor)).toBe(before + ONE_USDC);
+}, 30_000);
 
 test("a merge delivered twice at once refunds once, and both deliveries succeed", async () => {
   const { deliver } = keeperHarness(anvil, keeperKey);

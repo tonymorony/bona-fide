@@ -2,7 +2,8 @@
 
 The App decides who must put down a Deposit to open a PR or an issue, asks for it, and notices it
 on-chain. Its Keeper refunds Deposits, relays the Forfeits Maintainers sign, and binds repos to
-their Maintainer's wallet. Terms such as Binding and Exemption are defined in
+their Maintainer's wallet. With [triage](#triage) on, an automated reviewer reads each PR or issue
+that holds a Deposit and suggests a verdict to the Maintainer. Terms such as Binding and Exemption are defined in
 [../CONTEXT.md](../CONTEXT.md).
 
 ## Turn it on for a repo
@@ -16,9 +17,11 @@ forfeit: 50%       # the share of a Deposit a Forfeit can use to fund open sourc
 timeout: 7 days    # how long the Maintainer has to decide: 1 to 60 whole days
 exempt_bots:       # optional: bots that need no Deposit
   - pre-commit-ci[bot]
+triage: on         # on or off: whether triage reads PRs and issues that hold a Deposit
 ```
 
-Every key is optional, and the amount, forfeit share and timeout above are the defaults. The Keeper
+Every key is optional, and the amount, forfeit share, timeout and triage setting above are the
+defaults. The Keeper
 also reads `maintainer`, the Maintainer's wallet address, when it proposes the repo's Binding. If a
 value can't be read, the App pauses: PRs get a neutral check that names the problem, and issues get
 nothing.
@@ -59,7 +62,12 @@ In order:
    outranks every Exemption, and acceptance too.
 2. **Accepted:** the `bona-fide:ok` label means a Maintainer accepted the PR or issue. The check
    passes with a reason that names the label, and the Keeper refunds the Deposit (see
-   [Refunds](#refunds)), so a later push doesn't ask for a new one.
+   [Refunds](#refunds)), so a later push doesn't ask for a new one. An approving review of a PR
+   from someone with write, maintain or admin access accepts it too, and the check names who
+   approved. A reviewer's latest review counts: a later request for changes, or a dismissal,
+   withdraws their approval, and a comment doesn't. Approvals are read only for a PR that no
+   Exemption covers, so an exempt author's check names the Exemption instead, and they're ignored
+   while the PR carries `bona-fide:bad-faith`.
 3. **Exempt:** the check passes at once for
    - the `bona-fide:waive` label on the PR or issue;
    - anyone vouched for in `VOUCHED.td`;
@@ -83,8 +91,8 @@ the link goes to the App's homepage, where GitHub points a check that never had 
 can replace a check's link but not remove it.
 
 The check is evaluated again when the PR or issue is reopened, when a PR gets new commits, when the
-`bona-fide:waive` or `bona-fide:ok` label is added or removed, when a Deposit lands, and when
-someone presses **Re-run** on the check or **Re-run all checks** on its suite.
+`bona-fide:waive` or `bona-fide:ok` label is added or removed, when a PR is approved, when a Deposit
+lands, and when someone presses **Re-run** on the check or **Re-run all checks** on its suite.
 
 ### Clock skew
 
@@ -108,6 +116,8 @@ The Keeper refunds a Deposit in full to its Depositor when:
 - the PR is merged;
 - the issue is closed as completed by someone other than its author;
 - the `bona-fide:ok` label is added, or the check runs again while the label is on;
+- someone with write, maintain or admin access approves the PR, or the check runs again while their
+  approval stands. Not while the PR carries `bona-fide:bad-faith`;
 - the check doesn't count the Deposit: its block is more than `CLOCK_SKEW_SECONDS` older than the
   PR or issue (see [Clock skew](#clock-skew)), or the item is exempt, or its Contributor is
   denounced. Anyone can deposit for a PR number that doesn't exist yet, which would keep the real
@@ -166,13 +176,75 @@ Binding delay, 24 hours at launch; the Keeper activates it then.
   marks the delivery as failed. Redeliver it from the App's advanced settings. The Deposit watcher
   retries on its own.
 
+## Triage
+
+With `ANTHROPIC_API_KEY` set as well as the Keeper's key, an automated reviewer reads each PR or
+issue whose check counts a Deposit, and suggests a verdict to the Maintainer in a note. It asks
+Claude through Anthropic's API: `claude-opus-5` unless `TRIAGE_MODEL` names another model. It needs
+the Keeper because its notes promise Refunds and link the sign page. A repo turns it off with
+`triage: off` in `.github/bona-fide.yml`.
+
+**Privacy:** with triage on, the title and body of each PR or issue that holds a Deposit, the
+repo's description, and for a PR its list of changed files and its diff, are sent to Anthropic's
+API.
+
+**What the model reads.** The repo's name and description, and the item's kind, number, author,
+title and body. For a PR, also the first 100 changed files with their added and deleted lines, and
+the unified diff. The body is cut at 20,000 characters and the diff at 60,000 (`BODY_BUDGET` and
+`DIFF_BUDGET` in `src/triage/triage.ts`), and the model is told where each was cut and how much was
+left out. GitHub makes no diff for a very large PR; the model is told so and reads the rest.
+
+**What it posts.** A new comment, separate from the App's comment on issues and the Keeper's note:
+
+- **Good-faith work:** a suggestion to accept it, with the model's reasons, and that approving the
+  PR or adding `bona-fide:ok` refunds the Deposit in full now. For an issue: adding `bona-fide:ok`
+  or closing it as completed.
+- **Likely bad faith** (spam, off-topic, or generated noise): a draft verdict with the model's
+  reasons. It says that nothing has been forfeited and only the Maintainer's signature can forfeit
+  the Deposit. If the Maintainer agrees, they add `bona-fide:bad-faith` and sign the Forfeit on the
+  sign page, which the draft links; if not, they do nothing, and the Deposit is refunded on merge or
+  acceptance, or at the Timeout.
+- **Unsure:** nothing.
+
+Each note says it is a suggestion from an automated reviewer and that the Maintainer decides.
+Triage never adds a label, refunds or forfeits: whatever the model answers, it changes only what the
+note says.
+
+**When it runs.** Once per Deposit: when the check first counts the Deposit, as it lands or the
+next time the item is checked. Never for an item that is exempt, denounced, waived, accepted, or
+labelled `bona-fide:bad-faith`, and not if a Maintainer adds one of those labels while the model
+reads. The note starts with a hidden marker naming the Deposit's Serial, `<!-- bona-fide:triage
+serial=N -->`, so a redelivered webhook, a re-check or a restart doesn't triage the same Deposit
+twice. A new Deposit on the same item is triaged anew. When the model was unsure, declined or
+failed, nothing is posted, so after a restart the next check of the item asks again.
+
+The webhook doesn't wait for the model: triage runs after the check is posted, and a model that
+declines, fails or can't be reached is logged and stays silent. It never fails the webhook, delays
+a Refund or changes the check.
+
+**Untrusted text on both sides.** The item's text goes to the model between tags carrying a random
+token, and the model is told that instructions inside it are data. The model's reasons are made
+plain before they're posted: at most four, each on one line and at most 300 characters, with links
+removed, HTML escaped and `@mentions` broken so they ping nobody.
+
+**The request.** One non-streaming request per Deposit, with adaptive thinking at medium effort, a
+JSON schema for the answer (`verdict` and `reasons`), and at most 16,000 output tokens. With
+Anthropic's server-side fallbacks on (`fallbacks: "default"`), a request the model declines is
+retried on Anthropic's default fallback model; a decline that stands gives no suggestion.
+
+**The decision log.** Each decision is one JSON line in the App's log, with `"event": "triage"`: the
+repo, kind, number, Serial and author; the sizes of what the model read and how much was cut; the
+model that answered, its verdict and reasons; the action (`noted-accept`, `drafted-verdict`,
+`silent`, `skipped: …` or `failed: …`); and the input and output tokens. A failure names its kind,
+such as `failed: rate limited`, never the error's text.
+
 ## GitHub App permissions and events
 
 | Permission | Access | Used for |
 |---|---|---|
 | Checks | Read and write | The "Bona Fide" check on each PR |
 | Issues | Read and write | The comment and label on issues |
-| Pull requests | Read and write | Reading a PR when a Deposit lands or its check is re-run, finding merged PRs, and the Keeper's notes on PRs |
+| Pull requests | Read and write | Reading a PR when a Deposit lands or its check is re-run, finding merged PRs, reading approvals, reading a PR's files and diff for triage, and the Keeper's and triage's notes on PRs |
 | Contents | Read | `.github/bona-fide.yml` and `VOUCHED.td` on the default branch |
 | Metadata | Read | Required by GitHub |
 
@@ -180,6 +252,8 @@ Events:
 
 - **Pull request.** The App acts on opened, reopened, synchronize, labeled, unlabeled and closed.
 - **Issues.** The App acts on opened, reopened, labeled, unlabeled and closed.
+- **Pull request review.** The App acts on submitted with the state approved: it checks the PR
+  again, and an approval from someone with write, maintain or admin access accepts it.
 - **Check run.** The App acts on rerequested, which GitHub sends when someone presses **Re-run** on
   the Bona Fide check. GitHub subscribes Apps with write access to Checks to this event
   automatically.
@@ -198,8 +272,11 @@ npm start
 `npm start` runs `src/node.ts`: an HTTP server for GitHub's webhooks, a watcher that polls the
 escrow for Deposits, and, with `KEEPER_PRIVATE_KEY` set, [the Keeper](#the-keeper) and its
 [endpoints](#endpoints). With `RELAYER_PRIVATE_KEY` set, it also runs the
-[deposit relay](#post-relaydeposit). It is the only file that uses Node: everything `src/index.ts`
-exports also bundles for a Workers-style runtime.
+[deposit relay](#post-relaydeposit), and with `ANTHROPIC_API_KEY` set as well as the Keeper's key,
+[triage](#triage). It is the only file that uses Node: everything `src/index.ts` exports also
+bundles for a Workers-style runtime. Triage's Claude reviewer, `src/triage/claude.ts`, isn't among
+those exports: Anthropic's SDK looks for Node's globals when they exist, and the bundle check allows
+none, so a host imports it directly.
 
 The host reads these environment variables:
 
@@ -222,6 +299,8 @@ The host reads these environment variables:
 | `ACTIVATE_MS` | `30000` | How often the Keeper looks for Bindings to activate |
 | `REFUND_MS` | `30000` | How often the Keeper looks for Deposits past their Timeout to refund |
 | `RELAYER_PRIVATE_KEY` | unset | Signs and pays the gas for relayed Deposits. It may be the Keeper's key |
+| `ANTHROPIC_API_KEY` | unset | Turns [triage](#triage) on, with the Keeper. Sends each PR's or issue's text and diff to Anthropic's API |
+| `TRIAGE_MODEL` | `claude-opus-5` | The Claude model triage asks |
 | `TRUST_PROXY` | unset | `1` makes the per-IP limits count the rightmost `X-Forwarded-For` address instead of the connection's. Set it only behind a reverse proxy that overwrites `X-Forwarded-For`; see [Limits](#limits) |
 
 The Keeper's address needs a little USDC on Arc for gas, and nothing more: no Deposit or Forfeit can

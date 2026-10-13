@@ -8,10 +8,10 @@ import { createKeeperRoutes } from "../../src/keeper/routes.ts";
 import { createWebhookHandler } from "../../src/webhook.ts";
 import { startAnvil, type Anvil } from "./anvil.ts";
 import { FakeGitHub } from "./fake-github.ts";
-import { DEPOSIT_PAGE, SETUP_PAGE } from "./harness.ts";
+import { DEPOSIT_PAGE, SETUP_PAGE, SIGN_PAGE } from "./harness.ts";
 import { REPO, SECRET, signed } from "./webhooks.ts";
 
-export const SIGN_PAGE = "https://bonafide.example/sign";
+export { SIGN_PAGE };
 /** The address the harness's requests to the Keeper's endpoints come from. */
 export const CLIENT_IP = "203.0.113.9";
 

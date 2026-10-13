@@ -8,6 +8,8 @@ const MARKER = "<!-- bona-fide -->";
 const NOTE_MARKER = "<!-- bona-fide:keeper -->";
 const PERMISSIONS: readonly Permission[] = ["admin", "write", "read", "none"];
 const RELIST_AFTER_MS = 60_000;
+/** The review states that stand until the reviewer's next one. A comment leaves the last one standing. */
+const STANDING_REVIEWS = ["APPROVED", "CHANGES_REQUESTED", "DISMISSED"];
 
 /**
  * The `log` to give the App's Octokits. Octokit reports every failed request as an error, but
@@ -31,6 +33,33 @@ export function createGitHub({ appId, app, installation }: GitHubOptions): GitHu
   const repoParams = (repo: Repo) => ({ owner: repo.owner, repo: repo.name });
   let installed = new Map<Hex, Repo>();
   let listedAt = -Infinity;
+
+  // Only the App's own comments: anyone can copy a marker into theirs.
+  async function appComments(repo: Repo, number: number) {
+    const octokit = api(repo);
+    const comments = await octokit.paginate(octokit.rest.issues.listComments, {
+      ...repoParams(repo),
+      issue_number: number,
+      per_page: 100,
+    });
+    return comments.filter((c) => c.performed_via_github_app?.id === appId);
+  }
+
+  // GitHub won't make the diff of a very large PR, and answers 406.
+  async function diffOf(repo: Repo, number: number): Promise<string | null> {
+    try {
+      const { data } = await api(repo).rest.pulls.get({
+        ...repoParams(repo),
+        pull_number: number,
+        mediaType: { format: "diff" },
+      });
+      return typeof data === "string" ? data : null;
+    } catch (error) {
+      const status = (error as { status?: number } | null)?.status;
+      if (status === 406 || status === 422) return null;
+      throw error;
+    }
+  }
 
   async function listInstalledRepos(): Promise<Map<Hex, Repo>> {
     const found = new Map<Hex, Repo>();
@@ -143,13 +172,7 @@ export function createGitHub({ appId, app, installation }: GitHubOptions): GitHu
     },
 
     async findOwnComment(repo, number) {
-      const octokit = api(repo);
-      const comments = await octokit.paginate(octokit.rest.issues.listComments, {
-        ...repoParams(repo),
-        issue_number: number,
-        per_page: 100,
-      });
-      const own = comments.find((c) => c.performed_via_github_app?.id === appId && c.body?.startsWith(MARKER));
+      const own = (await appComments(repo, number)).find((c) => c.body?.startsWith(MARKER));
       return own?.id ?? null;
     },
 
@@ -191,15 +214,66 @@ export function createGitHub({ appId, app, installation }: GitHubOptions): GitHu
 
     async postNote(repo, number, body) {
       const octokit = api(repo);
-      const comments = await octokit.paginate(octokit.rest.issues.listComments, {
-        ...repoParams(repo),
-        issue_number: number,
-        per_page: 100,
-      });
-      const note = comments.find((c) => c.performed_via_github_app?.id === appId && c.body?.startsWith(NOTE_MARKER));
+      const note = (await appComments(repo, number)).find((c) => c.body?.startsWith(NOTE_MARKER));
       const text = `${NOTE_MARKER}\n${body}`;
       if (note) await octokit.rest.issues.updateComment({ ...repoParams(repo), comment_id: note.id, body: text });
       else await octokit.rest.issues.createComment({ ...repoParams(repo), issue_number: number, body: text });
+    },
+
+    async hasNote(repo, number, marker) {
+      return (await appComments(repo, number)).some((c) => c.body?.startsWith(marker));
+    },
+
+    async addNote(repo, number, marker, body) {
+      await api(repo).rest.issues.createComment({
+        ...repoParams(repo),
+        issue_number: number,
+        body: `${marker}\n${body}`,
+      });
+    },
+
+    // GitHub lists a PR's reviews oldest first.
+    async approvers(repo, number) {
+      const octokit = api(repo);
+      const reviews = await octokit.paginate(octokit.rest.pulls.listReviews, {
+        ...repoParams(repo),
+        pull_number: number,
+        per_page: 100,
+      });
+      const standing = new Map<string, string>();
+      for (const review of reviews) {
+        if (review.user && STANDING_REVIEWS.includes(review.state)) standing.set(review.user.login, review.state);
+      }
+      return [...standing].filter(([, state]) => state === "APPROVED").map(([login]) => login);
+    },
+
+    // Triage reads the first page of a PR's files: their names and sizes, not their contents.
+    async contentOf(item) {
+      const octokit = api(item.repo);
+      const { data: repo } = await octokit.rest.repos.get(repoParams(item.repo));
+      const repoDescription = repo.description ?? null;
+      if (item.kind === "issue") {
+        const { data } = await octokit.rest.issues.get({ ...repoParams(item.repo), issue_number: item.number });
+        return { title: data.title, body: data.body ?? "", repoDescription };
+      }
+      const pull = { ...repoParams(item.repo), pull_number: item.number };
+      const [{ data }, { data: files }, diff] = await Promise.all([
+        octokit.rest.pulls.get(pull),
+        octokit.rest.pulls.listFiles({ ...pull, per_page: 100 }),
+        diffOf(item.repo, item.number),
+      ]);
+      const listed = files.map((file) => ({
+        path: file.filename,
+        additions: file.additions,
+        deletions: file.deletions,
+      }));
+      return {
+        title: data.title,
+        body: data.body ?? "",
+        repoDescription,
+        files: { listed, total: Math.max(data.changed_files, listed.length) },
+        diff,
+      };
     },
 
     async getItem(repo, kind, number) {

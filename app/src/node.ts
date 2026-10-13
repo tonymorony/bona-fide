@@ -2,9 +2,12 @@
 // With KEEPER_PRIVATE_KEY set, the Keeper's endpoints, Binding activator and Timeout refunds run
 // beside them.
 // With RELAYER_PRIVATE_KEY set, it also relays signed Deposits at POST /relay/deposit.
+// With ANTHROPIC_API_KEY set as well as the Keeper's key, triage asks Claude about each item that
+// holds a Deposit.
 // Start it with `node src/node.ts`; Node 24 runs the TypeScript directly.
 
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
+import Anthropic from "@anthropic-ai/sdk";
 import { createAppAuth } from "@octokit/auth-app";
 import { Octokit } from "@octokit/rest";
 import { createPublicClient, createWalletClient, http, type Address } from "viem";
@@ -19,6 +22,8 @@ import { createKeeper } from "./keeper/keeper.ts";
 import { BINDING_PROOF_PATH, createKeeperRoutes, FORFEIT_PATH } from "./keeper/routes.ts";
 import { createTimeoutRefunder } from "./keeper/timeouts.ts";
 import { createDepositRelay, RELAY_DEPOSIT_PATH, relayerAccount } from "./relay/deposit.ts";
+import { createClaudeReviewer, DEFAULT_TRIAGE_MODEL } from "./triage/claude.ts";
+import { createTriage, decisionLine } from "./triage/triage.ts";
 import { createDepositWatcher, pollDeposits } from "./watcher.ts";
 import { createWebhookHandler } from "./webhook.ts";
 
@@ -67,6 +72,22 @@ console.log(
     : "Keeper off: set KEEPER_PRIVATE_KEY to refund Deposits, relay Forfeits and bind repos.",
 );
 
+// Triage's notes promise Refunds on acceptance and link the sign page, which only the Keeper serves.
+const anthropicKey = process.env.ANTHROPIC_API_KEY;
+const triageModel = process.env.TRIAGE_MODEL || DEFAULT_TRIAGE_MODEL;
+const triage =
+  keeper && anthropicKey
+    ? createTriage({
+        github,
+        reviewer: createClaudeReviewer({ client: new Anthropic({ apiKey: anthropicKey }), model: triageModel }),
+        signPageUrl: env("SIGN_PAGE_URL"),
+        record: (decision) => console.log(decisionLine(decision)),
+      })
+    : undefined;
+if (triage) console.log(`Triage asks ${triageModel} about each PR and issue that holds a Deposit.`);
+else if (anthropicKey) console.log("Triage off: it needs the Keeper. Set KEEPER_PRIVATE_KEY too.");
+else console.log("Triage off: set ANTHROPIC_API_KEY to have Claude suggest verdicts to Maintainers.");
+
 const app = createApp({
   github,
   chain,
@@ -74,6 +95,7 @@ const app = createApp({
   setupPageUrl: env("SETUP_PAGE_URL"),
   explorerUrl: process.env.EXPLORER_URL || undefined,
   afterVerdict: keeper?.afterVerdict,
+  triage,
 });
 const webhook = createWebhookHandler({ secret: env("WEBHOOK_SECRET"), app, keeper: keeper ?? undefined });
 const keeperRoutes = keeper && createKeeperRoutes(keeper);

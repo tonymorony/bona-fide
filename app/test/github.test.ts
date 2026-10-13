@@ -2,6 +2,7 @@ import { Octokit } from "@octokit/rest";
 import { expect, test, vi } from "vitest";
 import { createGitHub, quietLog } from "../src/github.ts";
 import { repoIdOf } from "../src/keys.ts";
+import type { Item } from "../src/ports.ts";
 import { fixture } from "./support/webhooks.ts";
 
 // The Octokit adapter against a fake api.github.com: what GitHub receives, and how its answers map back.
@@ -15,9 +16,20 @@ interface Sent {
   path: string;
   query: URLSearchParams;
   body: any;
+  accept: string;
 }
 
 type Reply = { status: number; body?: unknown };
+
+/** Whether the request asked for a diff, as Octokit does with its Accept header. */
+function isDiff(sent: Sent): boolean {
+  return sent.accept.includes("diff");
+}
+
+function itemOf(kind: "pr" | "issue", number: number): Item {
+  const fields = { repo: REPO, number, author: "newcomer", createdAt: new Date(0), labels: [] };
+  return kind === "pr" ? { ...fields, kind, headSha: "abc" } : { ...fields, kind };
+}
 
 function fakeApi(routes: Record<string, Reply | ((sent: Sent) => Reply)>) {
   const sent: Sent[] = [];
@@ -28,6 +40,7 @@ function fakeApi(routes: Record<string, Reply | ((sent: Sent) => Reply)>) {
       path: decodeURIComponent(url.pathname),
       query: url.searchParams,
       body: init?.body ? JSON.parse(String(init.body)) : undefined,
+      accept: new Headers(init?.headers).get("accept") ?? "",
     };
     sent.push(request);
     const route = routes[`${request.method} ${request.path}`];
@@ -304,6 +317,113 @@ test("the Keeper's note is its own comment: posted once, then edited, and never 
     [`PATCH ${API}/issues/comments/6`, { body: "<!-- bona-fide:keeper -->\nA newer note" }],
   ]);
   expect(await github.findOwnComment(REPO, 2)).toBeNull();
+});
+
+test("a triage note is a new comment of the App's, found by its marker, and never taken for another note", async () => {
+  const bot = { performed_via_github_app: { id: APP_ID } };
+  const marker = "<!-- bona-fide:triage serial=3 -->";
+  const { github, sent } = fakeApi({
+    [`GET ${API}/issues/1/comments`]: {
+      status: 200,
+      body: [
+        { id: 3, body: "<!-- bona-fide -->\n**Deposit needed**", ...bot },
+        { id: 5, body: "<!-- bona-fide:keeper -->\nThe Keeper's note", ...bot },
+        { id: 6, body: "<!-- bona-fide:triage serial=31 -->\nAnother Deposit's", ...bot },
+      ],
+    },
+    [`GET ${API}/issues/2/comments`]: {
+      status: 200,
+      body: [
+        { id: 7, body: `${marker}\nI copied the marker`, performed_via_github_app: null },
+        { id: 8, body: `${marker}\nThe suggestion`, ...bot },
+      ],
+    },
+    [`POST ${API}/issues/1/comments`]: { status: 201, body: { id: 9 } },
+  });
+
+  expect(await github.hasNote(REPO, 1, marker)).toBe(false);
+  expect(await github.hasNote(REPO, 2, marker)).toBe(true);
+  await github.addNote(REPO, 1, marker, "A suggestion");
+
+  expect(sent.filter((s) => s.method !== "GET").map((s) => [`${s.method} ${s.path}`, s.body])).toEqual([
+    [`POST ${API}/issues/1/comments`, { body: `${marker}\nA suggestion` }],
+  ]);
+});
+
+test("a PR's approvers are those whose latest standing review approves it", async () => {
+  const review = (login: string, state: string) => ({ id: 1, user: { login }, state });
+  const { github, sent } = fakeApi({
+    [`GET ${API}/pulls/2/reviews`]: {
+      status: 200,
+      body: [
+        review("mo", "APPROVED"),
+        review("mo", "COMMENTED"),
+        review("ann", "APPROVED"),
+        review("ann", "CHANGES_REQUESTED"),
+        review("bo", "APPROVED"),
+        review("bo", "DISMISSED"),
+        review("cy", "CHANGES_REQUESTED"),
+        review("cy", "APPROVED"),
+        review("dee", "PENDING"),
+      ],
+    },
+  });
+
+  expect(await github.approvers(REPO, 2)).toEqual(["mo", "cy"]);
+  expect(sent[0]?.query.get("per_page")).toBe("100");
+});
+
+test("an issue's content is its title, body and the repo's description", async () => {
+  const issue = fixture("issues.opened").issue;
+  const { github } = fakeApi({
+    [`GET ${API}`]: { status: 200, body: { description: "My first repo" } },
+    [`GET ${API}/issues/1`]: { status: 200, body: { ...issue, title: "Spelling", body: null } },
+  });
+
+  expect(await github.contentOf(itemOf("issue", 1))).toEqual({
+    title: "Spelling",
+    body: "",
+    repoDescription: "My first repo",
+  });
+});
+
+test("a PR's content adds its first page of files, how many it changes, and its diff", async () => {
+  const pr = fixture("pull_request.opened").pull_request;
+  const diff = "diff --git a/README.md b/README.md\n-teh\n+the\n";
+  const { github, sent } = fakeApi({
+    [`GET ${API}`]: { status: 200, body: { description: null } },
+    [`GET ${API}/pulls/2`]: (s) =>
+      isDiff(s)
+        ? { status: 200, body: diff }
+        : { status: 200, body: { ...pr, title: "Fix", body: "Please", changed_files: 150 } },
+    [`GET ${API}/pulls/2/files`]: {
+      status: 200,
+      body: [{ filename: "README.md", additions: 1, deletions: 1, status: "modified", patch: "-teh\n+the" }],
+    },
+  });
+
+  expect(await github.contentOf(itemOf("pr", 2))).toEqual({
+    title: "Fix",
+    body: "Please",
+    repoDescription: null,
+    files: { listed: [{ path: "README.md", additions: 1, deletions: 1 }], total: 150 },
+    diff,
+  });
+  expect(sent.find((s) => s.path.endsWith("/files"))?.query.get("per_page")).toBe("100");
+});
+
+test("a PR too large for GitHub to diff has no diff", async () => {
+  const pr = fixture("pull_request.opened").pull_request;
+  const { github } = fakeApi({
+    [`GET ${API}`]: { status: 200, body: { description: null } },
+    [`GET ${API}/pulls/2`]: (s) =>
+      isDiff(s)
+        ? { status: 406, body: { message: "Sorry, the diff exceeded the maximum number of files (300)." } }
+        : { status: 200, body: { ...pr, changed_files: 3000 } },
+    [`GET ${API}/pulls/2/files`]: { status: 200, body: [] },
+  });
+
+  expect((await github.contentOf(itemOf("pr", 2))).diff).toBeNull();
 });
 
 test("labels are added, and removing one that is gone is fine", async () => {

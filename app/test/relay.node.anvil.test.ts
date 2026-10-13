@@ -32,6 +32,7 @@ async function startApp(env: Record<string, string>) {
       ESCROW_FROM_BLOCK: String(anvil.deployBlock),
       DEPOSIT_PAGE_URL: DEPOSIT_PAGE,
       SETUP_PAGE_URL: SETUP_PAGE,
+      ANTHROPIC_API_KEY: "",
       ...env,
     },
     stdio: ["ignore", "pipe", "pipe"],

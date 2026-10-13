@@ -1,6 +1,6 @@
 import type { Hex } from "viem";
 import { repoIdOf, type Kind } from "../../src/keys.ts";
-import type { CheckRun, GitHub, Item, Permission, Repo } from "../../src/ports.ts";
+import type { CheckRun, GitHub, Item, ItemContent, Permission, Repo } from "../../src/ports.ts";
 
 interface RepoState {
   repo: Repo;
@@ -12,6 +12,10 @@ interface RepoState {
   labels: Map<number, Set<string>>;
   items: Map<string, Item>;
   notes: Map<number, string>;
+  /** Comments posted with addNote, marker first. */
+  markedNotes: Map<number, string[]>;
+  approvals: Map<number, string[]>;
+  contents: Map<string, ItemContent>;
   /** The commit of each of the App's check suites. */
   suites: Map<number, string>;
 }
@@ -37,6 +41,9 @@ export class FakeGitHub implements GitHub {
       labels: new Map(),
       items: new Map(),
       notes: new Map(),
+      markedNotes: new Map(),
+      approvals: new Map(),
+      contents: new Map(),
       suites: new Map(),
     };
     this.repos.set(fullName.toLowerCase(), state);
@@ -82,6 +89,22 @@ export class FakeGitHub implements GitHub {
   /** The Keeper's note on an item, if it posted one. */
   noteOn(fullName: string, number: number): string | undefined {
     return this.state(fullName).notes.get(number);
+  }
+
+  /** The comments posted with addNote on an item, each with its marker. */
+  markedNotesOn(fullName: string, number: number): string[] {
+    return this.state(fullName).markedNotes.get(number) ?? [];
+  }
+
+  /** Records `login`'s approving review of a PR. */
+  approve(fullName: string, number: number, login: string): void {
+    const approvals = this.state(fullName).approvals;
+    approvals.set(number, [...(approvals.get(number) ?? []), login]);
+  }
+
+  /** What contentOf returns for an item: by default a title and a body, and for a PR one file and its diff. */
+  setContent(fullName: string, kind: Kind, number: number, content: ItemContent): void {
+    this.state(fullName).contents.set(`${kind}#${number}`, content);
   }
 
   labelsOn(fullName: string, number: number): string[] {
@@ -165,6 +188,32 @@ export class FakeGitHub implements GitHub {
   async postNote(repo: Repo, number: number, body: string): Promise<void> {
     await this.roundTrip();
     this.state(fullNameOf(repo)).notes.set(number, body);
+  }
+
+  async hasNote(repo: Repo, number: number, marker: string): Promise<boolean> {
+    await this.roundTrip();
+    return (this.state(fullNameOf(repo)).markedNotes.get(number) ?? []).some((body) => body.startsWith(marker));
+  }
+
+  async addNote(repo: Repo, number: number, marker: string, body: string): Promise<void> {
+    await this.roundTrip();
+    const notes = this.state(fullNameOf(repo)).markedNotes;
+    notes.set(number, [...(notes.get(number) ?? []), `${marker}\n${body}`]);
+  }
+
+  async approvers(repo: Repo, number: number): Promise<string[]> {
+    await this.roundTrip();
+    return this.state(fullNameOf(repo)).approvals.get(number) ?? [];
+  }
+
+  async contentOf(item: Item): Promise<ItemContent> {
+    await this.roundTrip();
+    const content = this.state(fullNameOf(item.repo)).contents.get(`${item.kind}#${item.number}`);
+    if (content) return content;
+    const text = { title: "Fix a typo in the README", body: "It said teh.", repoDescription: "My first repo" };
+    if (item.kind === "issue") return text;
+    const diff = "--- a/README.md\n+++ b/README.md\n@@ -1 +1 @@\n-teh\n+the\n";
+    return { ...text, files: { listed: [{ path: "README.md", additions: 1, deletions: 1 }], total: 1 }, diff };
   }
 
   /** Every item added is open, and the last one added counts as the most recently updated. */

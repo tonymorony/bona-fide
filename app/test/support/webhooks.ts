@@ -42,6 +42,24 @@ export function payload(event: ItemEvent, action: string, o: Overrides = {}) {
   return p;
 }
 
+// GitHub's examples have no pull_request_review delivery for PR #2: this is the recorded opened one
+// with the review a submission adds.
+/** `reviewer` submitted a review of PR #2 in `state`: "approved", "changes_requested" or "commented". */
+export function review(state: string, reviewer: string, o: Overrides = {}) {
+  const p = payload("pull_request", "opened", o);
+  p.action = "submitted";
+  p.review = {
+    id: 237895671,
+    user: { login: reviewer, type: "User" },
+    body: null,
+    state,
+    commit_id: p.pull_request.head.sha,
+    submitted_at: "2019-05-15T15:30:00Z",
+  };
+  p.sender = { ...p.sender, login: reviewer };
+  return p;
+}
+
 export interface RerunOverrides {
   checkName?: string;
   externalId?: string;

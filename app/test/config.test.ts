@@ -1,4 +1,5 @@
 import { expect, test } from "vitest";
+import { parseConfig } from "../src/config.ts";
 import type { Binding } from "../src/ports.ts";
 import { harness } from "./support/harness.ts";
 import { HEAD_SHA, ISSUE, NEWCOMER, payload, REPO } from "./support/webhooks.ts";
@@ -68,11 +69,24 @@ test.each([
   ["exempt_bots:\n  - a[bot] b[bot]\n", "`exempt_bots` must be a list of GitHub logins."],
   ["exempt_bots:\n  - '@renovate[bot]'\n", "`exempt_bots` must be a list of GitHub logins."],
   ["exempt_bots:\n  - name: a[bot]\n", "`exempt_bots` must be a list of GitHub logins."],
+  ["triage: sometimes\n", "`triage` must be on or off."],
+  ["triage:\n  - off\n", "`triage` must be on or off."],
 ])("config %j pauses the App with a neutral check: %s", async (config, problem) => {
   const check = await checkWith(config);
 
   expect(check).toMatchObject({ conclusion: "neutral", title: "Paused: .github/bona-fide.yml needs a fix" });
   expect(check?.summary).toContain(problem);
+});
+
+test.each([
+  ["", true],
+  ["triage: on\n", true],
+  ["triage: true\n", true],
+  ["triage: off\n", false],
+  ["triage: false\n", false],
+  ["triage: Off\n", false],
+])("config %j has triage on: %s", (config, on) => {
+  expect(parseConfig(config)).toMatchObject({ ok: true, config: { triage: on } });
 });
 
 test("a config error posts nothing on issues", async () => {

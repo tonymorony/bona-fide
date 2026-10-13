@@ -44,4 +44,16 @@ export {
   type SignedForfeit,
 } from "./keeper/keeper.ts";
 export { createKeeperRoutes, type KeeperRoutesOptions } from "./keeper/routes.ts";
+export {
+  BODY_BUDGET,
+  createTriage,
+  decisionLine,
+  DIFF_BUDGET,
+  markerFor,
+  ReviewFailed,
+  type Triage,
+  type TriageAction,
+  type TriageDecision,
+  type TriageDeps,
+} from "./triage/triage.ts";
 export { BINDING_TYPES, escrowDomain, FORFEIT_TYPES } from "./keeper/signatures.ts";

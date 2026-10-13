@@ -43,6 +43,7 @@ async function startHost(env: Record<string, string>) {
       DEPOSIT_PAGE_URL: DEPOSIT_PAGE,
       SETUP_PAGE_URL: SETUP_PAGE,
       SIGN_PAGE_URL: SIGN_PAGE,
+      ANTHROPIC_API_KEY: "",
       ...env,
     },
     stdio: ["ignore", "pipe", "pipe"],

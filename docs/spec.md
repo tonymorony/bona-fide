@@ -45,9 +45,14 @@ nobody has vouched for yet: a small deposit that honest contributors always get 
 
    | Outcome | Who triggers | Money |
    |---|---|---|
-   | Merged, closed as completed, or labelled `bona-fide:ok` | Keeper | **100% refunded** |
+   | Merged, approved by a Maintainer, closed as completed, or labelled `bona-fide:ok` | Keeper | **100% refunded** |
    | No decision before the Timeout | The Keeper, or **anyone** | **100% refunded** |
    | Maintainer labels `bona-fide:bad-faith` and **signs with their wallet** | Anyone relays the signature | ≤ 50% to the forfeit router, the rest refunded |
+
+5. **Triage (optional).** An automated reviewer reads each item that holds a Deposit. For clearly
+   good work it suggests acceptance; for likely bad faith it drafts a verdict with reasons and asks
+   the Maintainer to review and sign. It never forfeits and never refunds on its own: only the
+   Maintainer's signature can forfeit, as the escrow requires.
 
 ## Why on-chain, why Arc
 

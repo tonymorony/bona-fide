@@ -19,7 +19,7 @@ import {
   setupLink,
 } from "./copy.ts";
 import { keyOf, repoIdOf, type Kind } from "./keys.ts";
-import { ACCEPTED, DEPOSIT_REQUIRED, WAIVER } from "./labels.ts";
+import { ACCEPTED, BAD_FAITH, DEPOSIT_REQUIRED, WAIVER } from "./labels.ts";
 import {
   fullName,
   type Binding,
@@ -34,6 +34,7 @@ import {
   type PullRequest,
   type Repo,
 } from "./ports.ts";
+import type { Triage } from "./triage/triage.ts";
 import { VOUCHED_PATHS, vouchStatus } from "./vouched.ts";
 
 export interface AppDeps {
@@ -48,6 +49,8 @@ export interface AppDeps {
   now?: () => Date;
   /** Hears each verdict once it is posted, so the Keeper can refund a Deposit the check doesn't count. */
   afterVerdict?(item: Item, verdict: Verdict): Promise<void>;
+  /** Reads each item whose check counts a Deposit and suggests a verdict to the Maintainer. */
+  triage?: Pick<Triage, "afterVerdict">;
 }
 
 export interface App {
@@ -68,7 +71,8 @@ export interface NewTerms {
 }
 
 export type Verdict =
-  | { kind: "accepted" }
+  /** Accepted with the bona-fide:ok label, or by `approver`'s approval of the PR. */
+  | { kind: "accepted"; approver?: string }
   | { kind: "exempt"; exemption: Exemption }
   | { kind: "denounced" }
   | { kind: "deposited"; deposit: Deposit }
@@ -83,6 +87,7 @@ export function createApp({
   explorerUrl = ARC_EXPLORER_URL,
   now = () => new Date(),
   afterVerdict,
+  triage,
 }: AppDeps): App {
   async function readVouched(item: Item): Promise<string> {
     for (const path of VOUCHED_PATHS) {
@@ -103,6 +108,10 @@ export function createApp({
     const permission = await github.permissionOf(item.repo, item.author);
     if (permission === "admin" || permission === "write") return { kind: "exempt", exemption: "collaborator" };
     if (await github.hasMergedPullRequest(item.repo, item.author)) return { kind: "exempt", exemption: "merged" };
+    // An approval accepts the PR like the label does, but only as late as this: it takes GitHub
+    // reads, and an exempt author needs no acceptance. A PR marked bad faith waits for the Maintainer.
+    const approver = item.kind === "pr" && !item.labels.includes(BAD_FAITH) ? await approverOf(item) : null;
+    if (approver) return { kind: "accepted", approver };
     const [deposit, binding] = await Promise.all([
       chain.depositSince(key, countsFrom(item), seen),
       chain.bindingOf(repoId),
@@ -118,10 +127,19 @@ export function createApp({
     return { kind: "needed", binding: binding.active, newTerms: newTermsOf(config, binding.active, binding.pending) };
   }
 
+  /** Someone with write, maintain or admin access whose latest review approves the PR, or null. */
+  async function approverOf(pr: PullRequest): Promise<string | null> {
+    for (const login of await github.approvers(pr.repo, pr.number)) {
+      const permission = await github.permissionOf(pr.repo, login);
+      if (permission === "admin" || permission === "write") return login;
+    }
+    return null;
+  }
+
   function checkFor(item: Item, verdict: Verdict): CheckRun {
     switch (verdict.kind) {
       case "accepted":
-        return { conclusion: "success", ...acceptedText(item.kind) };
+        return { conclusion: "success", ...acceptedText(item.kind, verdict.approver) };
       case "exempt":
         return { conclusion: "success", ...exemptText(item.kind, verdict.exemption, item.author) };
       case "denounced":
@@ -208,10 +226,14 @@ export function createApp({
     const verdict = await judge(item, parsed.config, repoId, key, seen);
     const posted = await publish(item, verdict);
     await afterVerdict?.(item, verdict);
+    await triage?.afterVerdict(item, verdict, parsed.config);
     if (verdict.kind !== "needed") return;
     // A watcher elsewhere may have reported a Deposit between the read above and this post.
     const late = await chain.depositSince(key, countsFrom(item));
-    if (late) await publish(posted, { kind: "deposited", deposit: late });
+    if (!late) return;
+    const counted: Verdict = { kind: "deposited", deposit: late };
+    await publish(posted, counted);
+    await triage?.afterVerdict(posted, counted, parsed.config);
   }
 
   const settle = (item: Item, seen?: DepositedEvent) => oneAtATime(item, () => settleNow(item, seen));

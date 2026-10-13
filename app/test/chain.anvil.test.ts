@@ -108,8 +108,15 @@ test("a Deposit counts from its own block time on, not before", async () => {
   await anvil.mine(3000, 3);
   const key = keyOf(repoIdOf(REPO), "pr", 41);
   const chain = escrowChain();
-  const deposit = { depositor: anvil.contributor, amount: 1_000_000n, txHash };
+  const { serial } = (await anvil.client.readContract({
+    address: anvil.escrow,
+    abi: anvil.escrowAbi,
+    functionName: "depositOf",
+    args: [key],
+  })) as { serial: bigint };
+  const deposit = { depositor: anvil.contributor, amount: 1_000_000n, txHash, serial };
 
+  expect(serial).toBeGreaterThan(0n);
   expect(await chain.depositSince(key, seconds(at, -3600))).toEqual(deposit);
   expect(await chain.depositSince(key, at)).toEqual(deposit);
   expect(await chain.depositSince(key, seconds(at, 1))).toBeNull();
@@ -140,7 +147,7 @@ test("a forfeited Deposit no longer counts, even given its Deposited event", asy
   const [event] = await depositsSince(from);
   const key = keyOf(repoIdOf(REPO), "pr", 43);
   const opened = seconds(event!.blockTime, -60);
-  expect(await escrowChain().depositSince(key, opened, event)).not.toBeNull();
+  expect((await escrowChain().depositSince(key, opened, event))?.serial).toBe(event!.serial);
 
   await anvil.forfeit(REPO, "pr", 43);
 

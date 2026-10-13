@@ -2,7 +2,7 @@ import { formatUnits } from "viem";
 import type { Exemption, NewTerms } from "./app.ts";
 import { CONFIG_PATH, DAY_SECONDS, USDC_DECIMALS } from "./config.ts";
 import type { Kind } from "./keys.ts";
-import { ACCEPTED, WAIVER } from "./labels.ts";
+import { ACCEPTED, BAD_FAITH, WAIVER } from "./labels.ts";
 import { fullName, type Binding, type Deposit, type Item, type PendingBinding, type Repo } from "./ports.ts";
 
 const HOUR_SECONDS = 3600;
@@ -42,11 +42,57 @@ export function exemptText(kind: Kind, exemption: Exemption, author: string): Wo
   return { title: `No Deposit needed: ${title}`, summary };
 }
 
-export function acceptedText(kind: Kind): Wording {
+export function acceptedText(kind: Kind, approver?: string): Wording {
+  if (approver) {
+    return {
+      title: `No Deposit needed: @${approver} approved it`,
+      summary: `@${approver}, who can push to this repo, approved this ${WORDS[kind].noun}, so it needs no Deposit.`,
+    };
+  }
   return {
     title: "No Deposit needed: a Maintainer accepted it",
     summary: `A Maintainer accepted this ${WORDS[kind].noun} with the \`${ACCEPTED}\` label, so it needs no Deposit.`,
   };
+}
+
+// Triage's notes. The reasons come from a model, already made plain text by triage.
+
+const AUTOMATED = "An automated reviewer read this";
+const MAINTAINER_DECIDES = "This is only a suggestion: the Maintainer decides.";
+
+/** Triage's note when the model suggests the item is good-faith work. */
+export function triageAcceptNote(kind: Kind, reasons: string[]): string {
+  const noun = WORDS[kind].noun;
+  const accept =
+    kind === "pr"
+      ? `approve the PR or add the \`${ACCEPTED}\` label`
+      : `add the \`${ACCEPTED}\` label or close the issue as completed`;
+  return [
+    "**Suggestion: this looks like good-faith work**",
+    "",
+    `${AUTOMATED} ${noun}. ${MAINTAINER_DECIDES}`,
+    "",
+    ...reasons.map((reason) => `- ${reason}`),
+    "",
+    `A Maintainer who agrees can ${accept}, and the Deposit is refunded in full now.`,
+  ].join("\n");
+}
+
+/** Triage's draft verdict when the model suggests the item is bad faith. It forfeits nothing. */
+export function triageDraftNote(kind: Kind, reasons: string[], signLink: string): string {
+  const noun = WORDS[kind].noun;
+  const refunded = kind === "pr" ? "when the PR is merged or accepted" : "when the issue is accepted";
+  return [
+    "**Draft verdict: this may be bad faith**",
+    "",
+    `${AUTOMATED} ${noun} and drafted a verdict for the Maintainer. ${MAINTAINER_DECIDES}`,
+    "Nothing has been forfeited: only the Maintainer's signature can forfeit the Deposit.",
+    "",
+    ...reasons.map((reason) => `- ${reason}`),
+    "",
+    `- **If the Maintainer agrees:** add the \`${BAD_FAITH}\` label, then [sign the Forfeit](${signLink}) with the Maintainer's wallet.`,
+    `- **If not:** do nothing. The Deposit is refunded in full ${refunded}, or at the Timeout.`,
+  ].join("\n");
 }
 
 export function depositLink(pageUrl: string, item: Item): string {

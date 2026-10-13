@@ -31,7 +31,7 @@ test("deploy/.env.example lists exactly the variables the App reads", () => {
 });
 
 test("deploy/.env.example leaves every secret empty, so an unfilled copy can't run with a known secret", () => {
-  const secrets = [...variablesListed()].filter(([name]) => /(SECRET|PRIVATE_KEY)$/.test(name));
+  const secrets = [...variablesListed()].filter(([name]) => /(SECRET|PRIVATE_KEY|API_KEY)$/.test(name));
 
   expect(secrets.length).toBeGreaterThan(0);
   expect(secrets.filter(([, value]) => value !== "")).toEqual([]);

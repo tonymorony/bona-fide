@@ -35,8 +35,11 @@ export function createWebhookHandler({ secret, app, keeper }: WebhookDeps): (req
 type Payload = any;
 
 function itemFrom(event: string | null, payload: Payload): Item | null {
-  if (!concerns(payload)) return null;
   const pr = payload.pull_request;
+  if (event === "pull_request_review") {
+    return approves(payload) ? { ...itemFields(payload, pr), kind: "pr", headSha: pr.head.sha } : null;
+  }
+  if (!concerns(payload)) return null;
   if (event === "pull_request") return { ...itemFields(payload, pr), kind: "pr", headSha: pr.head.sha };
   if (event === "issues") return { ...itemFields(payload, payload.issue), kind: "issue" };
   return null;
@@ -74,6 +77,11 @@ function concerns(payload: Payload): boolean {
   if (["opened", "reopened", "synchronize"].includes(payload.action)) return true;
   const label = payload.label?.name;
   return (payload.action === "labeled" || payload.action === "unlabeled") && (label === WAIVER || label === ACCEPTED);
+}
+
+// An approval may accept the PR: the check reads who approved and whether they can push.
+function approves(payload: Payload): boolean {
+  return payload.action === "submitted" && String(payload.review?.state).toLowerCase() === "approved";
 }
 
 async function isSignedBy(secret: string, body: Uint8Array, header: string | null): Promise<boolean> {
