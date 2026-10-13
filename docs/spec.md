@@ -35,6 +35,13 @@ nobody has vouched for yet: a small deposit that honest contributors always get 
      and a short allowlist of maintenance bots. A Maintainer can also waive any single item with
      the label `bona-fide:waive`. PRs and issues opened before the repo's first Binding took effect
      are exempt too.
+   - **A good record (optional):** a Contributor whose Bona Fide record, across every repo, scores at
+     least the repo's `record_threshold` (Refunds on accepted work in public repos, plus up to two
+     merged PRs elsewhere), who never had a Deposit forfeited anywhere and isn't denounced, gets a
+     Record Exemption if an automated reviewer of the record agrees. The reviewer can hold it back,
+     never grant it alone. The check then says why, such as "No Deposit needed: 4 Refunds, 0
+     Forfeits across 3 repos", citing public repos only. A later Forfeit ends it, and a repo turns it
+     off with `record_exemption: off`.
    - **Denounced** in `VOUCHED.td`: the check fails and no Deposit is offered. A denouncement
      outranks the waiver label.
    - Otherwise the check asks for a Deposit, or a vouch from a Maintainer. It links to a deposit
@@ -53,7 +60,8 @@ nobody has vouched for yet: a small deposit that honest contributors always get 
    good work it suggests acceptance; for likely bad faith it drafts a verdict with reasons and asks
    the Maintainer to review and sign. It never forfeits and never refunds on its own: only the
    Maintainer's signature can forfeit, as the escrow requires.
-6. **Decision log.** Every triage suggestion and every early Refund on acceptance is recorded with
+6. **Decision log.** Every triage suggestion, every Record Exemption the reviewer was asked about,
+   and every early Refund on acceptance is recorded with
    what was read, what the model suggested, the facts checked, what was done, its transaction and
    its model cost. Each public repo's page shows the log and how many decisions the App made
    versus left to the Maintainer. Private repos' decisions are never published.
@@ -145,3 +153,6 @@ invariant suites in `contracts/test`.
   and the Keeper refunds them.
 - The (repo, number) key links a Depositor address to a GitHub account. Use a fresh address if
   that matters to you.
+- A Contributor's record links Deposits to GitHub logins, not addresses, so someone running several
+  accounts could build a record by accepting their own work under another login. The witnesses, the
+  reviewer, and the Maintainer's Waiver label and denouncements stand against that.

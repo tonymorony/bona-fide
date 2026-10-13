@@ -13,6 +13,10 @@ export interface Config {
   exemptBots: readonly string[];
   /** Whether triage reads the repo's items that hold a Deposit, when the host has a model to ask. */
   triage: boolean;
+  /** Whether a good Bona Fide record can exempt a Contributor, when the host has a model to ask. */
+  recordExemption: boolean;
+  /** The score a Contributor's record needs for a Record Exemption. */
+  recordThreshold: number;
 }
 
 export const DEFAULTS: Config = {
@@ -21,6 +25,8 @@ export const DEFAULTS: Config = {
   timeoutSeconds: 7 * DAY_SECONDS,
   exemptBots: [],
   triage: true,
+  recordExemption: true,
+  recordThreshold: 3,
 };
 
 /**
@@ -63,7 +69,10 @@ export function parseConfig(text: string): ParsedConfig {
   if (typeof settings !== "object" || Array.isArray(settings)) {
     return { ok: false, problems: ["The file must hold settings such as `amount: 1`."] };
   }
-  const { amount, forfeit, timeout, exempt_bots, triage } = settings as Record<string, unknown>;
+  const { amount, forfeit, timeout, exempt_bots, triage, record_exemption, record_threshold } = settings as Record<
+    string,
+    unknown
+  >;
   const problems: string[] = [];
   const config: Config = {
     amount: isSet(amount) ? parseAmount(String(amount), problems) : DEFAULTS.amount,
@@ -71,6 +80,10 @@ export function parseConfig(text: string): ParsedConfig {
     timeoutSeconds: isSet(timeout) ? parseTimeout(String(timeout), problems) : DEFAULTS.timeoutSeconds,
     exemptBots: isSet(exempt_bots) ? parseLogins(exempt_bots, problems) : DEFAULTS.exemptBots,
     triage: isSet(triage) ? parseSwitch(triage, "triage", problems) : DEFAULTS.triage,
+    recordExemption: isSet(record_exemption)
+      ? parseSwitch(record_exemption, "record_exemption", problems)
+      : DEFAULTS.recordExemption,
+    recordThreshold: isSet(record_threshold) ? parseThreshold(record_threshold, problems) : DEFAULTS.recordThreshold,
   };
   return problems.length === 0 ? { ok: true, config } : { ok: false, problems };
 }
@@ -95,6 +108,13 @@ function parseSwitch(value: unknown, key: string, problems: string[]): boolean {
   if (["off", "false", "no"].includes(text)) return false;
   problems.push(`\`${key}\` must be on or off.`);
   return true;
+}
+
+function parseThreshold(value: unknown, problems: string[]): number {
+  const text = typeof value === "string" ? value.trim() : "";
+  const threshold = /^\d+$/.test(text) ? Number(text) : NaN;
+  if (!(threshold >= 1 && threshold <= 100)) problems.push("`record_threshold` must be a whole number from 1 to 100.");
+  return threshold;
 }
 
 function parseAmount(text: string, problems: string[]): bigint {

@@ -3,7 +3,9 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createApp } from "../../src/app.ts";
 import { createDecisionLog } from "../../src/decisions/log.ts";
-import type { Binding, Decision, Reviewer } from "../../src/ports.ts";
+import type { Advisor, Binding, Decision, DecisionLog, Reviewer } from "../../src/ports.ts";
+import { createRecordExemptions } from "../../src/records/exemption.ts";
+import { createRecordIndex } from "../../src/records/records.ts";
 import { createTriage, type TriageDecision } from "../../src/triage/triage.ts";
 import { createWebhookHandler } from "../../src/webhook.ts";
 import { FakeChain } from "./fake-chain.ts";
@@ -32,9 +34,14 @@ export interface HarnessOptions {
   explorerUrl?: string;
   /** The model triage asks; without it, triage is off. */
   reviewer?: Reviewer;
+  /** The model that weighs Contributors' records; without it, there are no Record Exemptions. */
+  advisor?: Advisor;
+  /** The decision log, such as one kept in a file; by default one in memory that `logged` sees. */
+  log?: DecisionLog;
 }
 
-export function harness({ config, binding = {}, startedAt, now, explorerUrl, reviewer }: HarnessOptions = {}) {
+export function harness(options: HarnessOptions = {}) {
+  const { config, binding = {}, startedAt, now, explorerUrl, reviewer, advisor } = options;
   const github = new FakeGitHub();
   const chain = new FakeChain();
   github.addRepo(REPO);
@@ -43,7 +50,7 @@ export function harness({ config, binding = {}, startedAt, now, explorerUrl, rev
   const decisions: TriageDecision[] = [];
   /** Every decision appended to the log, private repos' included. */
   const logged: Decision[] = [];
-  const log = createDecisionLog({ write: (decision) => logged.push(decision) });
+  const log = options.log ?? createDecisionLog({ write: (decision) => logged.push(decision) });
   const triage =
     reviewer &&
     createTriage({
@@ -53,6 +60,10 @@ export function harness({ config, binding = {}, startedAt, now, explorerUrl, rev
       record: (decision) => decisions.push(decision),
       decisions: log,
     });
+  // The record index reads the escrow from its first block, as the host reads it from ESCROW_FROM_BLOCK.
+  const records = createRecordIndex({ chain, github, fromBlock: 0n });
+  const recordExemptions =
+    advisor && createRecordExemptions({ github, records, advisor, decisions: log, ...(now ? { now: () => now } : {}) });
   const app = createApp({
     github,
     chain,
@@ -60,9 +71,10 @@ export function harness({ config, binding = {}, startedAt, now, explorerUrl, rev
     setupPageUrl: SETUP_PAGE,
     explorerUrl,
     triage,
+    recordExemptions,
     ...(now ? { now: () => now } : {}),
   });
   const handle = createWebhookHandler({ secret: SECRET, app });
   const deliver = (event: string, body: unknown) => handle(signed(event, body));
-  return { github, chain, app, handle, deliver, triage, decisions, log, logged };
+  return { github, chain, app, handle, deliver, triage, decisions, log, logged, records, recordExemptions };
 }

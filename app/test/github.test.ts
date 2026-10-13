@@ -483,6 +483,72 @@ test("a PR and an issue are read with their author, creation time, labels and he
   expect(await github.getItem(REPO, "pr", 1)).toBeNull();
 });
 
+test("an item's outcome is its author and whether it was merged, completed by someone else, or labelled ok", async () => {
+  const pr = fixture("pull_request.opened").pull_request;
+  const issue = fixture("issues.opened").issue;
+  const closedBy = (login: string) => ({ state: "closed", state_reason: "completed", closed_by: { login } });
+  const ok = [{ name: "bona-fide:ok" }];
+  const { github } = fakeApi({
+    [`GET ${API}/pulls/2`]: { status: 200, body: { ...pr, merged: true } },
+    [`GET ${API}/pulls/3`]: { status: 200, body: { ...pr, number: 3, merged: false } },
+    [`GET ${API}/pulls/4`]: { status: 200, body: { ...pr, number: 4, merged: false, labels: ok } },
+    [`GET ${API}/pulls/5`]: { status: 200, body: { ...pr, number: 5, user: null } },
+    [`GET ${API}/issues/1`]: { status: 200, body: { ...issue, ...closedBy("mo") } },
+    [`GET ${API}/issues/6`]: { status: 200, body: { ...issue, number: 6, ...closedBy("Codertocat") } },
+    [`GET ${API}/issues/7`]: { status: 200, body: { ...issue, number: 7, state_reason: "not_planned" } },
+    [`GET ${API}/issues/8`]: { status: 200, body: { ...issue, number: 8, labels: ok } },
+    [`GET ${API}/issues/9`]: { status: 200, body: { ...issue, number: 9, pull_request: { url: pr.url } } },
+  });
+
+  const outcomes = await Promise.all([
+    github.outcomeOf(REPO, "pr", 2),
+    github.outcomeOf(REPO, "pr", 3),
+    github.outcomeOf(REPO, "pr", 4),
+    github.outcomeOf(REPO, "pr", 5),
+    github.outcomeOf(REPO, "issue", 1),
+    github.outcomeOf(REPO, "issue", 6),
+    github.outcomeOf(REPO, "issue", 7),
+    github.outcomeOf(REPO, "issue", 8),
+    github.outcomeOf(REPO, "issue", 9),
+    github.outcomeOf(REPO, "issue", 404),
+  ]);
+
+  const by = (accepted: boolean) => ({ author: "Codertocat", accepted });
+  expect(outcomes).toEqual([by(true), by(false), by(true), null, by(true), by(false), by(false), by(true), null, null]);
+});
+
+test("a profile is the account's public numbers and a search count of merged PRs in other people's repos", async () => {
+  const { github, sent } = fakeApi({
+    "GET /users/mo": {
+      status: 200,
+      body: { login: "mo", created_at: "2020-01-02T03:04:05Z", public_repos: 12, followers: 30, bio: "Hi @all" },
+    },
+    "GET /search/issues": { status: 200, body: { total_count: 57, items: [] } },
+  });
+
+  expect(await github.profileOf(REPO, "mo")).toEqual({
+    createdAt: new Date("2020-01-02T03:04:05Z"),
+    publicRepos: 12,
+    followers: 30,
+    mergedElsewhere: 57,
+  });
+  expect(await github.profileOf(REPO, "nobody")).toBeNull();
+  expect(sent[1]?.query.get("q")).toBe("is:pr is:merged author:mo -user:mo -user:Codertocat");
+  expect(sent[1]?.query.get("per_page")).toBe("1");
+});
+
+test("a login that search refuses has no merged PRs elsewhere", async () => {
+  const { github } = fakeApi({
+    "GET /users/Copilot": {
+      status: 200,
+      body: { login: "Copilot", created_at: "2025-01-01T00:00:00Z", public_repos: 0, followers: 0 },
+    },
+    "GET /search/issues": { status: 422, body: { message: "Validation Failed" } },
+  });
+
+  expect(await github.profileOf(REPO, "Copilot")).toMatchObject({ mergedElsewhere: 0 });
+});
+
 test("the App's Octokit logger drops expected 404s and keeps warnings", async () => {
   const sink = { warn: vi.fn() };
   const fetch = async () => new Response(JSON.stringify({ message: "Not Found" }), { status: 404 });

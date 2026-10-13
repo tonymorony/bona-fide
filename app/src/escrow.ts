@@ -13,6 +13,8 @@ import type { Binding, Chain, DepositedEvent, EscrowEvent } from "./ports.ts";
 export const escrowAbi = parseAbi([
   "event Deposited(bytes32 indexed key, uint64 serial, bytes32 indexed repoId, uint8 kind, uint64 number, address indexed depositor, uint256 amount, uint64 deadline)",
   "event RepoActivated(bytes32 indexed repoId, address indexed maintainer, uint16 forfeitBps, uint32 timeout, uint256 amount)",
+  "event Refunded(bytes32 indexed key, uint64 serial, address indexed depositor, uint256 amount, bool byKeeper)",
+  "event Forfeited(bytes32 indexed key, uint64 serial, uint256 forfeited, uint256 refunded)",
   "function depositOf(bytes32 key) view returns ((address depositor, uint64 deadline, uint8 status, address maintainer, uint16 forfeitBps, uint64 serial, uint256 amount))",
   "function keyOf(bytes32 repoId, uint8 kind, uint64 number) pure returns (bytes32)",
   "function activeConfig(bytes32 repoId) view returns ((address maintainer, uint16 forfeitBps, uint32 timeout, uint256 amount))",
@@ -21,6 +23,8 @@ export const escrowAbi = parseAbi([
 
 const DEPOSITED = escrowAbi[0];
 const REPO_ACTIVATED = escrowAbi[1];
+const REFUNDED = escrowAbi[2];
+const FORFEITED = escrowAbi[3];
 const STATUS_ACTIVE = 1;
 
 interface RepoConfig {
@@ -180,7 +184,7 @@ export function createEscrowChain({ client, escrow, fromBlock = 0n }: EscrowChai
     async escrowEvents(from, to) {
       const logs = await client.getLogs({
         address: escrow,
-        events: [DEPOSITED, REPO_ACTIVATED],
+        events: [DEPOSITED, REPO_ACTIVATED, REFUNDED, FORFEITED],
         fromBlock: from,
         toBlock: to,
         strict: true,
@@ -189,6 +193,11 @@ export function createEscrowChain({ client, escrow, fromBlock = 0n }: EscrowChai
       for (const log of logs) {
         if (log.eventName === "RepoActivated") {
           events.push({ type: "activated", repoId: log.args.repoId });
+          continue;
+        }
+        if (log.eventName === "Refunded" || log.eventName === "Forfeited") {
+          const type = log.eventName === "Refunded" ? "refunded" : "forfeited";
+          events.push({ type, key: log.args.key, serial: log.args.serial });
           continue;
         }
         const kind = KINDS[log.args.kind];

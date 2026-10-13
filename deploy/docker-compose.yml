@@ -13,7 +13,8 @@ services:
     environment:
       PORT: "3000"
       DECISIONS_PATH: /data/decisions.jsonl
-    # The decision log outlives the container. The rest of the filesystem is read-only.
+      RECORDS_PATH: /data/records.jsonl
+    # The decision log and the Contributor records outlive the container. The rest of the filesystem is read-only.
     volumes:
       - bona-fide-data:/data
     # Loopback only: Caddy on this host is the one way in.

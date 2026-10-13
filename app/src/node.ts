@@ -3,7 +3,9 @@
 // beside them.
 // With RELAYER_PRIVATE_KEY set, it also relays signed Deposits at POST /relay/deposit.
 // With ANTHROPIC_API_KEY set as well as the Keeper's key, triage asks Claude about each item that
-// holds a Deposit.
+// holds a Deposit. With ANTHROPIC_API_KEY set, Claude also weighs the record of each Contributor
+// whose Bona Fide record reaches a repo's threshold, for a Record Exemption; the records' links are
+// kept in the JSONL file at RECORDS_PATH.
 // It keeps the decision log in the JSONL file at DECISIONS_PATH and serves it at GET /decisions.
 // Start it with `node src/node.ts`; Node 24 runs the TypeScript directly.
 
@@ -24,6 +26,10 @@ import { createKeeperEscrow, keeperAccount } from "./keeper/escrow.ts";
 import { createKeeper } from "./keeper/keeper.ts";
 import { BINDING_PROOF_PATH, createKeeperRoutes, FORFEIT_PATH } from "./keeper/routes.ts";
 import { createTimeoutRefunder } from "./keeper/timeouts.ts";
+import { createClaudeAdvisor } from "./records/claude.ts";
+import { createRecordExemptions } from "./records/exemption.ts";
+import { DEFAULT_RECORDS_PATH, openRecordFile } from "./records/file.ts";
+import { createRecordIndex } from "./records/records.ts";
 import { createDepositRelay, RELAY_DEPOSIT_PATH, relayerAccount } from "./relay/deposit.ts";
 import { createClaudeReviewer, DEFAULT_TRIAGE_MODEL } from "./triage/claude.ts";
 import { createTriage, decisionLine } from "./triage/triage.ts";
@@ -92,12 +98,13 @@ console.log(
 
 // Triage's notes promise Refunds on acceptance and link the sign page, which only the Keeper serves.
 const anthropicKey = process.env.ANTHROPIC_API_KEY;
+const anthropic = anthropicKey ? new Anthropic({ apiKey: anthropicKey }) : null;
 const triageModel = process.env.TRIAGE_MODEL || DEFAULT_TRIAGE_MODEL;
 const triage =
-  keeper && anthropicKey
+  keeper && anthropic
     ? createTriage({
         github,
-        reviewer: createClaudeReviewer({ client: new Anthropic({ apiKey: anthropicKey }), model: triageModel }),
+        reviewer: createClaudeReviewer({ client: anthropic, model: triageModel }),
         signPageUrl: env("SIGN_PAGE_URL"),
         record: (decision) => console.log(decisionLine(decision)),
         decisions,
@@ -107,6 +114,40 @@ if (triage) console.log(`Triage asks ${triageModel} about each PR and issue that
 else if (anthropicKey) console.log("Triage off: it needs the Keeper. Set KEEPER_PRIVATE_KEY too.");
 else console.log("Triage off: set ANTHROPIC_API_KEY to have Claude suggest verdicts to Maintainers.");
 
+// A Record Exemption needs only the model: the check passes on its own, and a Deposit made meanwhile
+// is refunded by the Keeper, if there is one, as for any Exemption.
+const recordsPath = process.env.RECORDS_PATH || DEFAULT_RECORDS_PATH;
+const recordFile = anthropic && (await openRecordFile(recordsPath));
+const recordIndex =
+  recordFile &&
+  createRecordIndex({
+    chain,
+    github,
+    fromBlock: BigInt(process.env.ESCROW_FROM_BLOCK ?? "0"),
+    links: recordFile.links,
+    save: recordFile.save,
+  });
+const recordExemptions =
+  anthropic &&
+  recordIndex &&
+  createRecordExemptions({
+    github,
+    records: recordIndex,
+    advisor: createClaudeAdvisor({ client: anthropic, model: triageModel }),
+    decisions,
+    record: (decision) => console.log(JSON.stringify({ event: "waive", ...decision })),
+  });
+if (recordFile) {
+  const notLinks =
+    recordFile.skipped === 1 ? "1 line that isn't a link" : `${recordFile.skipped} lines that aren't links`;
+  console.log(
+    `Record Exemptions ask ${triageModel} about Contributors whose Bona Fide record reaches a repo's threshold. ` +
+      `${count(recordFile.links.length, "link")} read from ${recordsPath}.` +
+      (recordFile.skipped > 0 ? ` Skipped ${notLinks}.` : ""),
+  );
+} else
+  console.log("Record Exemptions off: set ANTHROPIC_API_KEY to let a good Bona Fide record stand in for a Deposit.");
+
 const app = createApp({
   github,
   chain,
@@ -115,6 +156,7 @@ const app = createApp({
   explorerUrl: process.env.EXPLORER_URL || undefined,
   afterVerdict: keeper?.afterVerdict,
   triage,
+  recordExemptions: recordExemptions || undefined,
 });
 const webhook = createWebhookHandler({ secret: env("WEBHOOK_SECRET"), app, keeper: keeper ?? undefined });
 const keeperRoutes = keeper && createKeeperRoutes(keeper);
@@ -259,8 +301,15 @@ const stopRefunding = keeperEscrow
     )
   : () => {};
 
+const stopIndexing = recordIndex
+  ? pollDeposits(recordIndex, Number(process.env.POLL_MS ?? 1000), (error) =>
+      console.error("contributor records failed:", error),
+    )
+  : () => {};
+
 process.on("SIGTERM", () => {
   stopWatching();
+  stopIndexing();
   stopActivating();
   stopRefunding();
   server.close();

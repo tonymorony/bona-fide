@@ -16,8 +16,9 @@ each Deposit. A GitHub App asks Contributors nobody has vouched for to make one,
 | **Forfeit** | The Maintainer's signed bad-faith verdict: up to 50% goes to the Forfeit sink, the rest is refunded | slash, penalty, confiscation |
 | **Forfeit sink** | The escrow's single immutable address for forfeited USDC. At launch it is the Charity router | treasury, pool |
 | **Charity router** | An immutable contract with one fixed recipient, an open-source sustainability fund. Anyone can flush its balance to that fund through CCTP | donation wallet, burn |
-| **Exemption** | A reason a Contributor needs no Deposit: repo collaborator, vouched in `VOUCHED.td`, a prior merged PR, a Waiver, or a PR or issue opened before the repo's first Binding took effect | whitelist |
+| **Exemption** | A reason a Contributor needs no Deposit: repo collaborator, vouched in `VOUCHED.td`, a prior merged PR, a Waiver, a PR or issue opened before the repo's first Binding took effect, or a Record Exemption | whitelist |
 | **Waiver** | A Maintainer's `bona-fide:waive` label that exempts one PR or issue | skip, bypass |
+| **Record Exemption** | An Exemption the App grants for one PR or issue from its Contributor's Bona Fide record: enough Refunds on accepted work across public repos, no Forfeit in any repo, not denounced, and an automated reviewer that didn't hold it back. A later Forfeit ends it | auto-waiver, waiver (that is the Maintainer's label), trust score, reputation |
 | **Binding** | A repo's on-chain configuration (Maintainer, amount, forfeit share, Timeout). The Keeper proposes it only after the Maintainer's signed proof of wallet control, and it takes effect 24 hours later | registration |
 | **Timeout** | How long the Maintainer has to decide after a Deposit. After it, anyone can Refund | expiry |
 | **Serial** | A Deposit's unique number. A Forfeit signature names it, so the signature can't be replayed | nonce |

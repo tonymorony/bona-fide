@@ -1,4 +1,4 @@
-export { createApp, type App, type AppDeps, type Exemption } from "./app.ts";
+export { createApp, type App, type AppDeps, type Exemption, type SettleOptions } from "./app.ts";
 export { CONFIG_PATH, DEFAULTS, parseConfig, type Config, type ParsedConfig } from "./config.ts";
 export {
   createDecisionLog,
@@ -70,3 +70,22 @@ export {
   type TriageDeps,
 } from "./triage/triage.ts";
 export { BINDING_TYPES, escrowDomain, FORFEIT_TYPES } from "./keeper/signatures.ts";
+export {
+  createRecordIndex,
+  LOOKUPS_PER_TICK,
+  type RecordIndex,
+  type RecordIndexDeps,
+  type RecordLink,
+} from "./records/records.ts";
+export {
+  createRecordExemptions,
+  FLAG_MARKER,
+  MERGED_CAP,
+  PROFILE_TTL_MS,
+  scoreOf,
+  type RecordAction,
+  type RecordCheck,
+  type RecordExemptionDeps,
+  type RecordExemptions,
+  type RecordGrant,
+} from "./records/exemption.ts";

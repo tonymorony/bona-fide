@@ -37,7 +37,8 @@ deployed there.
 - **The App's decision log,** `GET /decisions?repo=owner/name` on the same origin, from the repo
   page: how many decisions Bona Fide made versus left to the Maintainer, and the latest 50, each with
   what was suggested and why, the facts checked, what was done and its transaction, and the model's
-  cost. Every string in it is shown as text. If the App doesn't answer, or answers out of shape, the
+  cost. A Record Exemption also shows the record the model read: the Contributor's counts in public
+  repos and their GitHub profile's numbers. Every string in it is shown as text. If the App doesn't answer, or answers out of shape, the
   page says it couldn't read the log rather than showing zeros.
 - **The network's public RPC,** for every on-chain read: terms, Deposits, balances, and the repo
   page's history, which it reads in ranges of 10,000 blocks, the most Arc's RPC answers at once.
@@ -94,8 +95,8 @@ The tests need Foundry (`forge`, `anvil`), the contracts' submodules
   the ABIs against the Foundry artifacts, and the repo page's history;
 - each page in headless Chrome against anvil, with a mock wallet: a one-signature Deposit that the
   App's relay sends and that ends in a `Deposited` event, two transactions, a verdict, a Binding
-  proof, a Refund and a flush, the relay's refusals, the repo page's decision log (full, empty, and
-  unreadable), and every page at 1280 and 390 px with no
+  proof, a Refund and a flush, the relay's refusals, the repo page's decision log (full, with Record
+  Exemptions, empty, and unreadable), and every page at 1280 and 390 px with no
   console errors, no sideways scroll, and no request to another site.
 
 `CHROME` points the tests at another Chrome binary. With `SCREENSHOTS=<folder>`, the browser tests

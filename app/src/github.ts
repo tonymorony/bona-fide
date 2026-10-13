@@ -1,6 +1,7 @@
 import type { Octokit } from "@octokit/rest";
 import type { Hex } from "viem";
 import { repoIdOf } from "./keys.ts";
+import { ACCEPTED } from "./labels.ts";
 import { fullName, type GitHub, type ItemFields, type Permission, type Repo } from "./ports.ts";
 
 export const CHECK_NAME = "Bona Fide";
@@ -281,6 +282,57 @@ export function createGitHub({ appId, app, installation }: GitHubOptions): GitHu
       };
     },
 
+    // Only someone with write access can merge. Anyone can close their own issue as completed, so that
+    // counts only when someone else closed it. A deleted account's item is nobody's.
+    async outcomeOf(repo, kind, number) {
+      try {
+        if (kind === "pr") {
+          const { data } = await api(repo).rest.pulls.get({ ...repoParams(repo), pull_number: number });
+          if (!data.user) return null;
+          return { author: data.user.login, accepted: data.merged === true || labelled(data.labels, ACCEPTED) };
+        }
+        const { data } = await api(repo).rest.issues.get({ ...repoParams(repo), issue_number: number });
+        if (data.pull_request || !data.user) return null;
+        const author = data.user.login;
+        const closer = data.closed_by?.login?.toLowerCase();
+        const completed = data.state_reason === "completed" && closer !== undefined && closer !== author.toLowerCase();
+        return { author, accepted: completed || labelled(data.labels, ACCEPTED) };
+      } catch (error) {
+        if (isNotFound(error)) return null;
+        throw error;
+      }
+    },
+
+    // Two reads: the account, and a search count of merged PRs in other people's repos. Merged PRs in
+    // the Contributor's own repos, or in the checked repo's owner's, don't count.
+    async profileOf(repo, login) {
+      const octokit = api(repo);
+      let user;
+      try {
+        ({ data: user } = await octokit.rest.users.getByUsername({ username: login }));
+      } catch (error) {
+        if (isNotFound(error)) return null;
+        throw error;
+      }
+      let mergedElsewhere = 0;
+      try {
+        const { data } = await octokit.rest.search.issuesAndPullRequests({
+          q: `is:pr is:merged author:${login} -user:${login} -user:${repo.owner}`,
+          per_page: 1,
+        });
+        mergedElsewhere = data.total_count;
+      } catch (error) {
+        // As for hasMergedPullRequest: search refuses some logins, such as "Copilot".
+        if ((error as { status?: number } | null)?.status !== 422) throw error;
+      }
+      return {
+        createdAt: new Date(user.created_at),
+        publicRepos: user.public_repos,
+        followers: user.followers,
+        mergedElsewhere,
+      };
+    },
+
     async getItem(repo, kind, number) {
       try {
         if (kind === "pr") {
@@ -312,6 +364,10 @@ function itemFields(repo: Repo, data: RestItem): ItemFields {
     createdAt: new Date(data.created_at),
     labels: data.labels.map((label) => (typeof label === "string" ? label : (label.name ?? ""))),
   };
+}
+
+function labelled(labels: (string | { name?: string })[], wanted: string): boolean {
+  return labels.some((label) => (typeof label === "string" ? label : label.name) === wanted);
 }
 
 function isNotFound(error: unknown): boolean {

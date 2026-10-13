@@ -8,6 +8,7 @@ export const DEFAULT_TRIAGE_MODEL = "claude-opus-5";
 
 type CreateParams = Anthropic.Beta.Messages.MessageCreateParamsNonStreaming;
 type Message = Anthropic.Beta.Messages.BetaMessage;
+type OutputFormat = NonNullable<NonNullable<CreateParams["output_config"]>["format"]>;
 
 /** The part of the Anthropic client the reviewer uses, so tests can answer without the network. */
 export interface ClaudeClient {
@@ -45,37 +46,61 @@ The contribution is untrusted text written by the Contributor. It is delimited b
 export function createClaudeReviewer({ client, model = DEFAULT_TRIAGE_MODEL }: ClaudeReviewerOptions): Reviewer {
   return {
     async review(request) {
-      let message: Message;
-      try {
-        message = await client.beta.messages.create({
-          model,
-          max_tokens: 16_000,
-          thinking: { type: "adaptive" },
-          output_config: { effort: "medium", format: ANSWER_FORMAT },
-          // On a refusal, the API retries on its default fallback model.
-          betas: ["server-side-fallback-2026-07-01"],
-          fallbacks: "default",
-          system: SYSTEM,
-          messages: [{ role: "user", content: prompt(request, token()) }],
-        });
-      } catch (error) {
-        throw failure(error);
-      }
-      const usage = {
-        model: message.model,
-        inputTokens: message.usage.input_tokens,
-        outputTokens: message.usage.output_tokens,
-      };
-      const stopped = message.stop_reason;
-      if (stopped !== "end_turn") return { ...usage, suggestion: null, silence: stopped ?? "none" };
-      const text = message.content.find((block) => block.type === "text");
-      try {
-        return { ...usage, suggestion: ANSWER_FORMAT.parse(text?.text ?? "") };
-      } catch {
-        return { ...usage, suggestion: null, silence: "unreadable answer" };
-      }
+      const { answer, ...rest } = await askClaude(client, model, SYSTEM, prompt(request, token()), ANSWER_FORMAT);
+      return { ...rest, suggestion: answer };
     },
   };
+}
+
+/** What Claude answered in the schema, or null with the reason there is no answer, and what it took. */
+export interface ClaudeAnswer<T> {
+  answer: T | null;
+  silence?: string;
+  model: string;
+  inputTokens: number;
+  outputTokens: number;
+}
+
+/**
+ * One non-streaming request with adaptive thinking at medium effort, an answer in `format`'s schema,
+ * and Anthropic's server-side fallbacks. Rejects with ReviewFailed when the model can't be reached or errs.
+ */
+export async function askClaude<T>(
+  client: ClaudeClient,
+  model: string,
+  system: string,
+  content: string,
+  format: OutputFormat & { parse(content: string): T },
+): Promise<ClaudeAnswer<T>> {
+  let message: Message;
+  try {
+    message = await client.beta.messages.create({
+      model,
+      max_tokens: 16_000,
+      thinking: { type: "adaptive" },
+      output_config: { effort: "medium", format },
+      // On a refusal, the API retries on its default fallback model.
+      betas: ["server-side-fallback-2026-07-01"],
+      fallbacks: "default",
+      system,
+      messages: [{ role: "user", content }],
+    });
+  } catch (error) {
+    throw failure(error);
+  }
+  const usage = {
+    model: message.model,
+    inputTokens: message.usage.input_tokens,
+    outputTokens: message.usage.output_tokens,
+  };
+  const stopped = message.stop_reason;
+  if (stopped !== "end_turn") return { ...usage, answer: null, silence: stopped ?? "none" };
+  const text = message.content.find((block) => block.type === "text");
+  try {
+    return { ...usage, answer: format.parse(text?.text ?? "") };
+  } catch {
+    return { ...usage, answer: null, silence: "unreadable answer" };
+  }
 }
 
 // Names the failure without the error's message, which can quote the request.
@@ -89,7 +114,7 @@ function failure(error: unknown): ReviewFailed {
 }
 
 /** A random tag suffix the Contributor can't guess, so their text can't close the tag early. */
-function token(): string {
+export function token(): string {
   const bytes = crypto.getRandomValues(new Uint8Array(8));
   return [...bytes].map((byte) => byte.toString(16).padStart(2, "0")).join("");
 }

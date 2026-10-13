@@ -75,6 +75,28 @@ export interface GitHub {
   suitePullRequests(repo: Repo, suiteId: number): Promise<number[]>;
   /** Up to `max` of the repo's open PRs and issues, the most recently updated first, and whether more are open. */
   openItems(repo: Repo, max: number): Promise<{ items: { kind: Kind; number: number }[]; more: boolean }>;
+  /** Who opened the PR or issue and whether it was accepted, for a Contributor's record, or null if there is none. */
+  outcomeOf(repo: Repo, kind: Kind, number: number): Promise<ItemOutcome | null>;
+  /** What GitHub shows publicly about `login`, or null if there is no such account. `repo` is the repo being checked. */
+  profileOf(repo: Repo, login: string): Promise<GitHubProfile | null>;
+}
+
+/**
+ * Whose PR or issue a Deposit was for, and whether it was accepted: a PR merged, an issue closed as
+ * completed by someone other than its author, or either labelled bona-fide:ok.
+ */
+export interface ItemOutcome {
+  author: string;
+  accepted: boolean;
+}
+
+/** A Contributor's public GitHub profile, as a Record Exemption reads it. Numbers only. */
+export interface GitHubProfile {
+  createdAt: Date;
+  publicRepos: number;
+  followers: number;
+  /** Merged PRs in repos owned by neither the Contributor nor the owner of the repo being checked. */
+  mergedElsewhere: number;
 }
 
 export interface ChangedFile {
@@ -113,10 +135,13 @@ export interface DepositedEvent extends Deposit {
 }
 
 /**
- * What the watcher reads from the escrow's logs: a Deposit, or a repo's Binding taking effect (the
- * escrow's RepoActivated event, whoever activated it).
+ * What the watcher reads from the escrow's logs: a Deposit, a repo's Binding taking effect (the
+ * escrow's RepoActivated event, whoever activated it), or a Deposit refunded or forfeited.
  */
-export type EscrowEvent = { type: "deposited"; deposit: DepositedEvent } | { type: "activated"; repoId: Hex };
+export type EscrowEvent =
+  | { type: "deposited"; deposit: DepositedEvent }
+  | { type: "activated"; repoId: Hex }
+  | { type: "refunded" | "forfeited"; key: Hex; serial: bigint };
 
 /** A repo's on-chain configuration: its Maintainer, and the terms each new Deposit takes. */
 export interface Binding {
@@ -145,7 +170,7 @@ export interface Chain {
    */
   depositSince(key: Hex, since: Date, seen?: DepositedEvent): Promise<Deposit | null>;
   latestBlock(): Promise<bigint>;
-  /** The Deposits and activated Bindings in these blocks, in the order they happened, read in one log query. */
+  /** The Deposits, activated Bindings, Refunds and Forfeits in these blocks, in the order they happened, read in one log query. */
   escrowEvents(fromBlock: bigint, toBlock: bigint): Promise<EscrowEvent[]>;
   bindingOf(repoId: Hex): Promise<RepoBinding>;
   /**
@@ -192,8 +217,65 @@ export interface Reviewer {
 }
 
 /**
- * What the decision log records: triage's suggestions and the Keeper's early Refunds. `waive`, `pay`
- * and `hold` are kept for decisions the App doesn't make yet.
+ * A Contributor's Bona Fide record: their Deposits across every repo the App can see, each linked
+ * to them through the author of the PR or issue it was for. The counts are of public repos only,
+ * so a record never shows who contributes to a private repo.
+ */
+export interface ContributorRecord {
+  /** Refunds on accepted work in public repos the Contributor doesn't own. The score counts these. */
+  refunds: number;
+  /** How many public repos those Refunds are in. */
+  repos: number;
+  /** Other Refunds in public repos: at the Timeout, of a Deposit that wasn't needed, or in their own repos. */
+  otherRefunds: number;
+  forfeits: number;
+  active: number;
+  /** Forfeits in every repo the App can see, private ones included. Only ever shown as none. */
+  forfeitsAnywhere: number;
+  /** Whether every Forfeit the escrow made so far is linked to its Contributor. Until then, no Record Exemption is granted. */
+  complete: boolean;
+}
+
+export interface ContributorRecords {
+  recordOf(login: string): ContributorRecord;
+}
+
+/** A suggestion on a Contributor's record: pass the check with no Deposit, ask for it, or ask for it and flag the item. */
+export type Advice = "waive" | "require" | "flag";
+
+/** What a Record Exemption shows the model: numbers from the Contributor's record and GitHub profile. */
+export interface AdviceRequest {
+  repo: string;
+  kind: Kind;
+  number: number;
+  login: string;
+  record: Pick<ContributorRecord, "refunds" | "repos" | "otherRefunds" | "forfeits" | "active">;
+  profile: { accountAgeDays: number; publicRepos: number; followers: number; mergedElsewhere: number };
+}
+
+export interface AdviceAnswer {
+  /** The model's suggestion, or null when it gave none, such as when it declined. */
+  suggestion: { verdict: Advice; reasons: string[] } | null;
+  /** Why there is no suggestion, such as "refusal". */
+  silence?: string;
+  /** The model that answered, which may be a fallback. */
+  model: string;
+  inputTokens: number;
+  outputTokens: number;
+}
+
+/**
+ * A model that reads a Contributor's record and suggests whether their item needs a Deposit. It can
+ * hold a Record Exemption back, never grant one alone: the App's own witnesses must hold too.
+ */
+export interface Advisor {
+  /** Rejects with ReviewFailed when the model can't be reached or errs. */
+  advise(request: AdviceRequest): Promise<AdviceAnswer>;
+}
+
+/**
+ * What the decision log records: triage's suggestions, the Keeper's early Refunds and the Record
+ * Exemptions the model was asked about. `pay` and `hold` are kept for decisions the App doesn't make yet.
  */
 export type DecisionType = "triage" | "early-refund" | "waive" | "pay" | "hold";
 
@@ -234,7 +316,7 @@ export interface Decision {
   /** A summary of what was read, such as sizes and cuts. Never the item's text. */
   inputs: Record<string, string | number | boolean> | null;
   /** The model's suggestion with its reasons as plain lines, or null when no model suggested anything. */
-  suggestion: { verdict: Suggestion; reasons: string[] } | null;
+  suggestion: { verdict: Suggestion | Advice; reasons: string[] } | null;
   witnesses: Witness[];
   /** What the App did, such as "refunded", "noted-accept" or "failed: rate limited". Never an error's text. */
   action: string;
@@ -250,4 +332,9 @@ export interface DecisionLog {
   /** Up to `max` of the repo's latest published decisions, the newest first. */
   latest(repo: string, max: number): Decision[];
   counts(repo: string): Record<DecisionOutcome, number>;
+  /**
+   * The latest `waive` decision about the item, in any repo, private ones included: the App reads it
+   * to keep a Record Exemption it granted. It is never served.
+   */
+  waiverOf(repo: string, kind: Kind, number: number): Decision | null;
 }

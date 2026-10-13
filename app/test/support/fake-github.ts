@@ -1,6 +1,15 @@
 import type { Hex } from "viem";
 import { repoIdOf, type Kind } from "../../src/keys.ts";
-import type { CheckRun, GitHub, Item, ItemContent, Permission, Repo } from "../../src/ports.ts";
+import type {
+  CheckRun,
+  GitHub,
+  GitHubProfile,
+  Item,
+  ItemContent,
+  ItemOutcome,
+  Permission,
+  Repo,
+} from "../../src/ports.ts";
 
 interface RepoState {
   repo: Repo;
@@ -18,6 +27,8 @@ interface RepoState {
   contents: Map<string, ItemContent>;
   /** The commit of each of the App's check suites. */
   suites: Map<number, string>;
+  /** Items merged, or closed as completed by someone other than their author. */
+  accepted: Set<string>;
 }
 
 // An in-memory GitHub. It keeps what the App would leave visible on github.com: the latest
@@ -28,6 +39,9 @@ export class FakeGitHub implements GitHub {
   /** Milliseconds each call waits, like a network round trip, so concurrent work interleaves. */
   latency = 0;
   private readonly broken = new Map<string, number>();
+  private readonly profiles = new Map<string, GitHubProfile>();
+  /** The logins profileOf was asked about, in order. */
+  readonly profileReads: string[] = [];
 
   addRepo(fullName: string, installationId = 1, isPrivate = false): RepoState {
     const [owner = "", name = ""] = fullName.split("/");
@@ -45,9 +59,14 @@ export class FakeGitHub implements GitHub {
       approvals: new Map(),
       contents: new Map(),
       suites: new Map(),
+      accepted: new Set(),
     };
     this.repos.set(fullName.toLowerCase(), state);
     return state;
+  }
+
+  hasRepo(fullName: string): boolean {
+    return this.repos.has(fullName.toLowerCase());
   }
 
   setFile(fullName: string, path: string, content: string): void {
@@ -105,6 +124,16 @@ export class FakeGitHub implements GitHub {
   /** What contentOf returns for an item: by default a title and a body, and for a PR one file and its diff. */
   setContent(fullName: string, kind: Kind, number: number, content: ItemContent): void {
     this.state(fullName).contents.set(`${kind}#${number}`, content);
+  }
+
+  /** Marks the item merged, or closed as completed by someone else, as its outcome shows it. */
+  accept(fullName: string, kind: Kind, number: number): void {
+    this.state(fullName).accepted.add(`${kind}#${number}`);
+  }
+
+  /** The public profile profileOf answers for `login`. Without one, the account doesn't exist. */
+  setProfile(login: string, profile: GitHubProfile): void {
+    this.profiles.set(login.toLowerCase(), profile);
   }
 
   labelsOn(fullName: string, number: number): string[] {
@@ -229,6 +258,19 @@ export class FakeGitHub implements GitHub {
     const sha = state.suites.get(suiteId);
     const number = Number(sha === undefined ? undefined : state.checks.get(sha)?.externalId);
     return Number.isSafeInteger(number) && number > 0 ? [number] : [];
+  }
+
+  async outcomeOf(repo: Repo, kind: Kind, number: number): Promise<ItemOutcome | null> {
+    const item = await this.getItem(repo, kind, number);
+    if (!item) return null;
+    const accepted = this.state(fullNameOf(repo)).accepted.has(`${kind}#${number}`);
+    return { author: item.author, accepted: accepted || item.labels.includes("bona-fide:ok") };
+  }
+
+  async profileOf(_repo: Repo, login: string): Promise<GitHubProfile | null> {
+    await this.roundTrip();
+    this.profileReads.push(login);
+    return this.profiles.get(login.toLowerCase()) ?? null;
   }
 
   private async roundTrip(): Promise<void> {

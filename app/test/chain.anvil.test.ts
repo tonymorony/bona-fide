@@ -3,8 +3,10 @@ import { formatAbiItem } from "viem/utils";
 import { afterAll, beforeAll, expect, test } from "vitest";
 import { createEscrowChain, escrowAbi } from "../src/escrow.ts";
 import { keyOf, kindCode, repoIdOf, type Kind } from "../src/keys.ts";
+import { createRecordIndex } from "../src/records/records.ts";
 import { artifact, startAnvil, type Anvil } from "./support/anvil.ts";
-import { REPO } from "./support/webhooks.ts";
+import { FakeGitHub } from "./support/fake-github.ts";
+import { HELLO_WORLD, NEWCOMER, REPO } from "./support/webhooks.ts";
 
 let anvil: Anvil;
 /** When REPO's Binding took effect, a few blocks after the escrow's deploy. */
@@ -100,6 +102,49 @@ test("a Binding taking effect comes in block order with the Deposits, whoever ac
     { type: "activated", repoId: repoIdOf(repo) },
     { type: "deposited", deposit: expect.objectContaining({ number: 46 }) },
   ]);
+}, 30_000);
+
+test("Refunds and Forfeits come in block order with the Deposits, with their key and Serial", async () => {
+  const from = (await anvil.blockNumber()) + 1n;
+  await anvil.deposit(REPO, "pr", 47);
+  await anvil.deposit(REPO, "issue", 47);
+  await anvil.refund(REPO, "pr", 47);
+  await anvil.forfeit(REPO, "issue", 47);
+
+  const events = await escrowChain().escrowEvents(from, await anvil.blockNumber());
+
+  const [pr, issue] = events.flatMap((event) => (event.type === "deposited" ? [event.deposit] : []));
+  expect(events).toEqual([
+    { type: "deposited", deposit: expect.objectContaining({ kind: "pr", number: 47 }) },
+    { type: "deposited", deposit: expect.objectContaining({ kind: "issue", number: 47 }) },
+    { type: "refunded", key: pr!.key, serial: pr!.serial },
+    { type: "forfeited", key: issue!.key, serial: issue!.serial },
+  ]);
+}, 30_000);
+
+test("a Contributor's record is read from the escrow's events, from its deploy block on", async () => {
+  const github = new FakeGitHub();
+  github.addRepo(REPO);
+  for (const number of [48, 49, 50]) {
+    github.addItem({
+      repo: HELLO_WORLD,
+      kind: "pr",
+      number,
+      author: NEWCOMER,
+      createdAt: new Date(0),
+      labels: [],
+      headSha: "abc",
+    });
+    await anvil.deposit(REPO, "pr", number);
+  }
+  github.accept(REPO, "pr", 48);
+  await anvil.refund(REPO, "pr", 48);
+  await anvil.forfeit(REPO, "pr", 49);
+  const index = createRecordIndex({ chain: escrowChain(), github, fromBlock: anvil.deployBlock });
+
+  for (let i = 0; i < 3; i++) await index.tick();
+
+  expect(index.recordOf(NEWCOMER)).toMatchObject({ refunds: 1, repos: 1, forfeits: 1, active: 1, complete: true });
 }, 30_000);
 
 test("a Deposit counts from its own block time on, not before", async () => {

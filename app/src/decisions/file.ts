@@ -62,7 +62,7 @@ export async function openDecisionFile(path: string): Promise<DecisionFile> {
 }
 
 /** The file's last character, "" if it is empty, or null if there is no file. */
-async function lastByte(path: string): Promise<string | null> {
+export async function lastByte(path: string): Promise<string | null> {
   let file;
   try {
     file = await open(path, "r");

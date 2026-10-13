@@ -15,7 +15,8 @@ export class FakeChain implements Chain {
   private readonly events: DepositedEvent[] = [];
   private readonly log: { blockNumber: bigint; event: EscrowEvent }[] = [];
   private blocks = 0n;
-  private readonly forfeited = new Set<Hex>();
+  /** Refunded or forfeited Deposits, by `key:serial`. */
+  private readonly resolved = new Set<string>();
   private readonly bindings = new Map<Hex, RepoBinding>();
   private readonly starts = new Map<Hex, Date>();
   /** Runs after each depositSince read, to model a Deposit landing right after it. */
@@ -70,14 +71,20 @@ export class FakeChain implements Chain {
     return event;
   }
 
+  /** Forfeits the key's latest Deposit in a new block. */
   forfeit(key: Hex): void {
-    this.forfeited.add(key);
+    this.resolve("forfeited", key);
+  }
+
+  /** Refunds the key's latest Deposit in a new block. */
+  refund(key: Hex): void {
+    this.resolve("refunded", key);
   }
 
   async depositSince(key: Hex, since: Date, seen?: DepositedEvent): Promise<Deposit | null> {
     const latest = this.events.filter((e) => e.key === key).at(-1);
     await this.afterRead?.();
-    if (!latest || this.forfeited.has(key)) return null;
+    if (!latest || this.resolved.has(`${key}:${latest.serial}`)) return null;
     const madeAt = seen?.serial === latest.serial ? seen.blockTime : latest.blockTime;
     return madeAt >= since ? latest : null;
   }
@@ -98,6 +105,12 @@ export class FakeChain implements Chain {
 
   async startedAt(repoId: Hex): Promise<Date | null> {
     return this.starts.get(repoId) ?? null;
+  }
+
+  private resolve(type: "refunded" | "forfeited", key: Hex): void {
+    const serial = this.events.filter((e) => e.key === key).at(-1)?.serial ?? 0n;
+    this.resolved.add(`${key}:${serial}`);
+    this.log.push({ blockNumber: ++this.blocks, event: { type, key, serial } });
   }
 
   private bindingFor(repo: string): RepoBinding {

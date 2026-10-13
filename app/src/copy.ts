@@ -4,6 +4,7 @@ import { CONFIG_PATH, DAY_SECONDS, USDC_DECIMALS } from "./config.ts";
 import type { Kind } from "./keys.ts";
 import { ACCEPTED, BAD_FAITH, WAIVER } from "./labels.ts";
 import { fullName, type Binding, type Deposit, type Item, type PendingBinding, type Repo } from "./ports.ts";
+import type { RecordGrant } from "./records/exemption.ts";
 
 const HOUR_SECONDS = 3600;
 
@@ -18,10 +19,10 @@ const WORDS: Record<Kind, { noun: string; accepted: string; notAccepted: string;
   issue: { noun: "issue", accepted: "Accepted", notAccepted: "Not accepted", notice: "comment" },
 };
 
-export function exemptText(kind: Kind, exemption: Exemption, author: string): Wording {
+export function exemptText(kind: Kind, exemption: Exclude<Exemption, "record">, author: string): Wording {
   const noun = WORDS[kind].noun;
   const needsNone = `so this ${noun} needs no Deposit.`;
-  const reasons: Record<Exemption, Wording> = {
+  const reasons: Record<Exclude<Exemption, "record">, Wording> = {
     waiver: { title: "a Maintainer waived it", summary: `A Maintainer added the \`${WAIVER}\` label, ${needsNone}` },
     collaborator: { title: `@${author} is a collaborator`, summary: `@${author} can push to this repo, ${needsNone}` },
     vouched: { title: `@${author} is vouched for`, summary: `@${author} is vouched for in VOUCHED.td, ${needsNone}` },
@@ -40,6 +41,29 @@ export function exemptText(kind: Kind, exemption: Exemption, author: string): Wo
   };
   const { title, summary } = reasons[exemption];
   return { title: `No Deposit needed: ${title}`, summary };
+}
+
+// A Record Exemption's check cites public repos' counts only, as they were when it was granted. A
+// Forfeit anywhere ends it, so it always has none.
+export function recordExemptText(kind: Kind, author: string, grant: RecordGrant): Wording {
+  const { refunds, repos, mergedElsewhere } = grant;
+  const title =
+    refunds > 0
+      ? `${count(refunds, "Refund")}, 0 Forfeits across ${count(repos, "repo")}`
+      : `${count(mergedElsewhere, "merged PR")} elsewhere, 0 Forfeits`;
+  const record = [
+    `@${author}'s Bona Fide record: ${count(refunds, "Deposit")} refunded on accepted work across ${count(repos, "public repo")}, and none forfeited in any repo.`,
+  ];
+  if (mergedElsewhere > 0)
+    record.push(`They also have ${count(mergedElsewhere, "merged PR")} in other people's repos.`);
+  return {
+    title: `No Deposit needed: ${title}`,
+    summary: [
+      record.join(" "),
+      "",
+      `An automated reviewer read the record and agreed, so this ${WORDS[kind].noun} needs no Deposit. A Forfeit of any of @${author}'s Deposits ends this. Maintainers can turn it off with \`record_exemption: off\` in ${CONFIG_PATH}.`,
+    ].join("\n"),
+  };
 }
 
 export function acceptedText(kind: Kind, approver?: string): Wording {
@@ -92,6 +116,20 @@ export function triageDraftNote(kind: Kind, reasons: string[], signLink: string)
     "",
     `- **If the Maintainer agrees:** add the \`${BAD_FAITH}\` label, then [sign the Forfeit](${signLink}) with the Maintainer's wallet.`,
     `- **If not:** do nothing. The Deposit is refunded in full ${refunded}, or at the Timeout.`,
+  ].join("\n");
+}
+
+/** The note when the model flags a Contributor's record. The Deposit is still needed. */
+export function recordFlagNote(kind: Kind, reasons: string[]): string {
+  const noun = WORDS[kind].noun;
+  return [
+    "**Flagged for the Maintainer: the Contributor's record**",
+    "",
+    `An automated reviewer read the Contributor's Bona Fide record and public GitHub profile, and suggests a Maintainer look at it before this ${noun} goes ahead without a Deposit. ${MAINTAINER_DECIDES}`,
+    "",
+    ...reasons.map((reason) => `- ${reason}`),
+    "",
+    `The Deposit is still needed. A Maintainer who trusts the Contributor can add the \`${WAIVER}\` label.`,
   ].join("\n");
 }
 

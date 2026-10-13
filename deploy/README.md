@@ -17,7 +17,7 @@ Caddy gets the site's TLS certificate and caps request bodies at 1 MB. The App l
 | File in `deploy/` | What it is |
 |---|---|
 | `Dockerfile` | The App's image: production dependencies only, runs as `node`, checks `/health` |
-| `docker-compose.yml` | The `bona-fide-app` service: port 8930 on 127.0.0.1, settings from `.env`, restarts unless stopped, read-only filesystem except the `bona-fide-data` volume, no capabilities, 512 MB of memory |
+| `docker-compose.yml` | The `bona-fide-app` service: port 8930 on 127.0.0.1, settings from `.env`, restarts unless stopped, read-only filesystem except the `bona-fide-data` volume for the decision log and Contributor records, no capabilities, 512 MB of memory |
 | `Caddyfile.bonafide` | The site block. Its first line is the site's host name: change it to run your own instance |
 | `.env.example` | Every setting the App reads, with a line on each |
 | `deploy.sh` | The command you run from your machine |
@@ -150,7 +150,12 @@ Caddy's own logs: `journalctl -u caddy` for the host service, or `docker logs <c
 The App keeps its [decision log](../app/README.md#decision-log) in `/data/decisions.jsonl` on the
 `bona-fide-data` Docker volume, so it survives deploys, rebuilds and restarts; `docker-compose.yml`
 sets `DECISIONS_PATH` to it. It holds private repos' decisions too, though the App never serves
-those. To read it or back it up:
+those. With `ANTHROPIC_API_KEY` set, the same volume holds `/data/records.jsonl` (`RECORDS_PATH`),
+which links each Deposit to its Contributor for [Record Exemptions](../app/README.md#record-exemption).
+It names who deposited in private repos, so treat it like the log. A lost file is rebuilt from the
+chain and GitHub, a few Deposits a second; the Record Exemptions granted are in the decision log.
+
+To read the log or back it up:
 
 ```shell
 ssh <ssh host> 'docker exec bona-fide-app tail -n 20 /data/decisions.jsonl'

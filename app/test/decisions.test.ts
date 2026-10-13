@@ -96,6 +96,22 @@ test("each appended decision is written once, private ones too", () => {
   expect(written).toEqual(added);
 });
 
+test("the latest waive decision about an item is kept for the App, private repos' too, and never served", () => {
+  const log = createDecisionLog();
+  const item = { kind: "pr", number: 7 } as const;
+  log.append(decision("acme/widgets", { type: "waive", item, action: "required", outcome: "escalated" }));
+  const waived = decision("acme/widgets", { type: "waive", item, action: "waived" });
+  log.append(waived);
+  log.append(decision("acme/widgets", { type: "triage", item, action: "noted-accept" }));
+  const secret = decision("acme/secret", { type: "waive", item, action: "waived", private: true });
+  log.append(secret);
+
+  expect(log.waiverOf("Acme/Widgets", "pr", 7)).toEqual(waived);
+  expect(log.waiverOf("acme/secret", "pr", 7)).toEqual(secret);
+  expect(log.waiverOf("acme/widgets", "issue", 7)).toBeNull();
+  expect(log.latest("acme/secret", 50)).toEqual([]);
+});
+
 test.each([
   ["claude-opus-5", 1_000_000, 1_000_000, 30],
   ["claude-opus-5", 1_200, 80, 0.008],

@@ -83,6 +83,63 @@ test("an early Refund says it refunded the Deposit, with no suggestion, reading 
   });
 });
 
+const waive: Decision = {
+  ...triage,
+  serial: null,
+  type: "waive",
+  inputs: {
+    login: "newcomer",
+    refunds: 4,
+    repos: 3,
+    otherRefunds: 1,
+    forfeits: 0,
+    active: 0,
+    accountAgeDays: 1_826,
+    publicRepos: 12,
+    followers: 1,
+    mergedElsewhere: 57,
+  },
+  suggestion: { verdict: "waive", reasons: ["Four accepted Deposits in three repos."] },
+  action: "waived",
+  cost: { model: "claude-opus-5", inputTokens: 600, outputTokens: 40, usd: 0.004 },
+};
+
+test("a Record Exemption says what the model suggested, the record it read, what was done and what it cost", () => {
+  expect(decisionWords(waive)).toEqual({
+    kind: "Record Exemption",
+    outcome: "Decided",
+    suggestion: "Suggested: no Deposit needed",
+    done: "Passed the check: no Deposit needed.",
+    read: "Read: @newcomer's record in public repos: 4 Refunds on accepted work in 3 repos, 1 other Refund, 0 Forfeits, 0 open Deposits. On GitHub: account 1,826 days old, 12 public repos, 1 follower, 57 merged PRs elsewhere.",
+    cost: "Model cost: claude-opus-5: 600 tokens in, 40 out, about $0.004.",
+  });
+});
+
+test.each([
+  [
+    { suggestion: { verdict: "require", reasons: [] }, action: "required" },
+    "Suggested: ask for the Deposit",
+    "Kept asking for the Deposit.",
+  ],
+  [
+    { suggestion: { verdict: "flag", reasons: [] }, action: "flagged" },
+    "Suggested: ask for the Deposit, and flag the record for the Maintainer",
+    "Kept asking for the Deposit, and posted a note for the Maintainer.",
+  ],
+  [{ suggestion: null, action: "silent" }, "The model gave no suggestion.", "Kept asking for the Deposit."],
+  [
+    { suggestion: null, action: "failed: rate limited" },
+    null,
+    "The model couldn't be asked (rate limited). The Deposit is still needed.",
+  ],
+])("a Record Exemption held back, %j, is worded %j and %j", (more, suggestion, done) => {
+  expect(decisionWords({ ...waive, ...more, outcome: "escalated" })).toMatchObject({
+    outcome: "Left to the Maintainer",
+    suggestion,
+    done,
+  });
+});
+
 test("a decision the page doesn't know yet is shown as the App names it", () => {
   const words = decisionWords({ ...triage, type: "audit", action: "logged", suggestion: null, inputs: null });
 

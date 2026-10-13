@@ -16,6 +16,7 @@ import {
   depositNeededText,
   exemptText,
   inactiveText,
+  recordExemptText,
   setupLink,
 } from "./copy.ts";
 import { keyOf, repoIdOf, type Kind } from "./keys.ts";
@@ -34,6 +35,7 @@ import {
   type PullRequest,
   type Repo,
 } from "./ports.ts";
+import type { RecordExemptions, RecordGrant } from "./records/exemption.ts";
 import type { Triage } from "./triage/triage.ts";
 import { VOUCHED_PATHS, vouchStatus } from "./vouched.ts";
 
@@ -51,18 +53,25 @@ export interface AppDeps {
   afterVerdict?(item: Item, verdict: Verdict): Promise<void>;
   /** Reads each item whose check counts a Deposit and suggests a verdict to the Maintainer. */
   triage?: Pick<Triage, "afterVerdict">;
+  /** Weighs the record of each Contributor asked for a Deposit, and keeps the Record Exemptions it grants. */
+  recordExemptions?: Pick<RecordExemptions, "exemptionOf" | "afterVerdict">;
+}
+
+export interface SettleOptions {
+  /** The item was reopened or its check re-run: the model weighs its Contributor's record again. */
+  askAgain?: boolean;
 }
 
 export interface App {
   /** Brings the item's check, or its comment and label, up to date. `seen` is a Deposit the caller already read. */
-  settle(item: Item, seen?: DepositedEvent): Promise<void>;
+  settle(item: Item, seen?: DepositedEvent, options?: SettleOptions): Promise<void>;
   /** Reads the PR or issue from GitHub and settles it, as a re-run of its check asks. Does nothing if there's none. */
-  recheck(repo: Repo, kind: Kind, number: number): Promise<void>;
+  recheck(repo: Repo, kind: Kind, number: number, options?: SettleOptions): Promise<void>;
   /** Rechecks the PR of each of the App's runs in a check suite, as "Re-run all checks" asks. */
   recheckSuite(repo: Repo, suiteId: number): Promise<void>;
 }
 
-export type Exemption = "waiver" | "collaborator" | "vouched" | "bot" | "merged" | "grandfathered";
+export type Exemption = "waiver" | "collaborator" | "vouched" | "bot" | "merged" | "grandfathered" | "record";
 
 /** Terms in the config that the active Binding doesn't have yet. */
 export interface NewTerms {
@@ -73,7 +82,9 @@ export interface NewTerms {
 export type Verdict =
   /** Accepted with the bona-fide:ok label, or by `approver`'s approval of the PR, with the access they have. */
   | { kind: "accepted"; approver?: string; access?: "admin" | "write" }
-  | { kind: "exempt"; exemption: Exemption }
+  | { kind: "exempt"; exemption: Exclude<Exemption, "record"> }
+  /** A Record Exemption the App granted for the item, with the counts its check cites. */
+  | { kind: "exempt"; exemption: "record"; grant: RecordGrant }
   | { kind: "denounced" }
   | { kind: "deposited"; deposit: Deposit }
   | { kind: "needed"; binding: Binding; newTerms: NewTerms | null }
@@ -88,6 +99,7 @@ export function createApp({
   now = () => new Date(),
   afterVerdict,
   triage,
+  recordExemptions,
 }: AppDeps): App {
   async function readVouched(item: Item): Promise<string> {
     for (const path of VOUCHED_PATHS) {
@@ -120,6 +132,10 @@ export function createApp({
     if (binding.active && openedBefore(item, await chain.startedAt(repoId))) {
       return { kind: "exempt", exemption: "grandfathered" };
     }
+    // Granted after the check first asked for a Deposit, and read from memory: it outranks a Deposit
+    // made meanwhile, which the Keeper then refunds, as for any Exemption.
+    const grant = recordExemptions?.exemptionOf(item, config);
+    if (grant) return { kind: "exempt", exemption: "record", grant };
     if (deposit) return { kind: "deposited", deposit };
     // Until the repo's Binding is active the escrow refuses Deposits, so asking for one would be a dead end.
     if (!binding.active) return { kind: "inactive", pending: binding.pending };
@@ -141,6 +157,9 @@ export function createApp({
       case "accepted":
         return { conclusion: "success", ...acceptedText(item.kind, verdict.approver) };
       case "exempt":
+        if (verdict.exemption === "record") {
+          return { conclusion: "success", ...recordExemptText(item.kind, item.author, verdict.grant) };
+        }
         return { conclusion: "success", ...exemptText(item.kind, verdict.exemption, item.author) };
       case "denounced":
         return { conclusion: "failure", ...denouncedText(item) };
@@ -213,7 +232,7 @@ export function createApp({
     return run;
   }
 
-  async function settleNow(item: Item, seen?: DepositedEvent): Promise<void> {
+  async function settleNow(item: Item, seen?: DepositedEvent, options: SettleOptions = {}): Promise<void> {
     const text = await github.readFile(item.repo, CONFIG_PATH);
     if (text === null) return;
     const parsed = parseConfig(text);
@@ -227,6 +246,10 @@ export function createApp({
     const posted = await publish(item, verdict);
     await afterVerdict?.(item, verdict);
     await triage?.afterVerdict(item, verdict, parsed.config);
+    await recordExemptions?.afterVerdict(item, verdict, parsed.config, {
+      askAgain: options.askAgain === true,
+      recheck: () => recheck(item.repo, item.kind, item.number),
+    });
     if (verdict.kind !== "needed") return;
     // A watcher elsewhere may have reported a Deposit between the read above and this post.
     const late = await chain.depositSince(key, countsFrom(item));
@@ -236,18 +259,21 @@ export function createApp({
     await triage?.afterVerdict(posted, counted, parsed.config);
   }
 
-  const settle = (item: Item, seen?: DepositedEvent) => oneAtATime(item, () => settleNow(item, seen));
+  const settle = (item: Item, seen?: DepositedEvent, options?: SettleOptions) =>
+    oneAtATime(item, () => settleNow(item, seen, options));
 
-  async function recheck(repo: Repo, kind: Kind, number: number): Promise<void> {
+  async function recheck(repo: Repo, kind: Kind, number: number, options?: SettleOptions): Promise<void> {
     const item = await github.getItem(repo, kind, number);
-    if (item) await settle(item);
+    if (item) await settle(item, undefined, options);
   }
 
   return {
     settle,
     recheck,
     async recheckSuite(repo, suiteId) {
-      for (const number of await github.suitePullRequests(repo, suiteId)) await recheck(repo, "pr", number);
+      for (const number of await github.suitePullRequests(repo, suiteId)) {
+        await recheck(repo, "pr", number, { askAgain: true });
+      }
     },
   };
 }

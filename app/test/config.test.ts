@@ -71,6 +71,11 @@ test.each([
   ["exempt_bots:\n  - name: a[bot]\n", "`exempt_bots` must be a list of GitHub logins."],
   ["triage: sometimes\n", "`triage` must be on or off."],
   ["triage:\n  - off\n", "`triage` must be on or off."],
+  ["record_exemption: maybe\n", "`record_exemption` must be on or off."],
+  ["record_threshold: 0\n", "`record_threshold` must be a whole number from 1 to 100."],
+  ["record_threshold: 2.5\n", "`record_threshold` must be a whole number from 1 to 100."],
+  ["record_threshold: 101\n", "`record_threshold` must be a whole number from 1 to 100."],
+  ["record_threshold: three\n", "`record_threshold` must be a whole number from 1 to 100."],
 ])("config %j pauses the App with a neutral check: %s", async (config, problem) => {
   const check = await checkWith(config);
 
@@ -87,6 +92,18 @@ test.each([
   ["triage: Off\n", false],
 ])("config %j has triage on: %s", (config, on) => {
   expect(parseConfig(config)).toMatchObject({ ok: true, config: { triage: on } });
+});
+
+test.each([
+  ["", true, 3],
+  ["record_exemption: off\n", false, 3],
+  ["record_exemption: on\nrecord_threshold: 5\n", true, 5],
+  ["record_threshold: 1\n", true, 1],
+])("config %j has the Record Exemption on: %s, from a score of %i", (config, on, threshold) => {
+  expect(parseConfig(config)).toMatchObject({
+    ok: true,
+    config: { recordExemption: on, recordThreshold: threshold },
+  });
 });
 
 test("a config error posts nothing on issues", async () => {

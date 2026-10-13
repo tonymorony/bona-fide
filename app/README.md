@@ -3,8 +3,9 @@
 The App decides who must put down a Deposit to open a PR or an issue, asks for it, and notices it
 on-chain. Its Keeper refunds Deposits, relays the Forfeits Maintainers sign, and binds repos to
 their Maintainer's wallet. With [triage](#triage) on, an automated reviewer reads each PR or issue
-that holds a Deposit and suggests a verdict to the Maintainer. Terms such as Binding and Exemption are defined in
-[../CONTEXT.md](../CONTEXT.md).
+that holds a Deposit and suggests a verdict to the Maintainer. With a [Record Exemption](#record-exemption),
+a Contributor whose Bona Fide record is good enough needs no Deposit. Terms such as Binding and
+Exemption are defined in [../CONTEXT.md](../CONTEXT.md).
 
 ## Turn it on for a repo
 
@@ -18,10 +19,12 @@ timeout: 7 days    # how long the Maintainer has to decide: 1 to 60 whole days
 exempt_bots:       # optional: bots that need no Deposit
   - pre-commit-ci[bot]
 triage: on         # on or off: whether triage reads PRs and issues that hold a Deposit
+record_exemption: on  # on or off: whether a good Bona Fide record can stand in for a Deposit
+record_threshold: 3   # the score a record needs for that: a whole number from 1 to 100
 ```
 
-Every key is optional, and the amount, forfeit share, timeout and triage setting above are the
-defaults. The Keeper
+Every key is optional, and the amount, forfeit share, timeout, triage and Record Exemption settings
+above are the defaults. The Keeper
 also reads `maintainer`, the Maintainer's wallet address, when it proposes the repo's Binding. If a
 value can't be read, the App pauses: PRs get a neutral check that names the problem, and issues get
 nothing.
@@ -76,7 +79,10 @@ In order:
    - anyone with write, maintain or admin access;
    - anyone with a merged PR in the repo;
    - a PR or issue opened before the repo's first Binding took effect (see
-     [The Binding comes first](#the-binding-comes-first)).
+     [The Binding comes first](#the-binding-comes-first));
+   - a [Record Exemption](#record-exemption) granted for this PR or issue: its Contributor's Bona
+     Fide record is good enough. It is granted after the check first asks for a Deposit, and it
+     outranks a Deposit made meanwhile, which the Keeper then refunds as for any Exemption.
 4. **Deposited:** a Deposit for this PR or issue, made after it was opened, turns the check green
    and shows who paid, with a link to its transaction on Arc's block explorer.
 5. **Not live yet:** the repo's Binding isn't active, so the check is neutral (see above).
@@ -92,7 +98,8 @@ can replace a check's link but not remove it.
 
 The check is evaluated again when the PR or issue is reopened, when a PR gets new commits, when the
 `bona-fide:waive` or `bona-fide:ok` label is added or removed, when a PR is approved, when a Deposit
-lands, and when someone presses **Re-run** on the check or **Re-run all checks** on its suite.
+lands, when a Record Exemption is granted, and when someone presses **Re-run** on the check or
+**Re-run all checks** on its suite.
 
 ### Clock skew
 
@@ -119,7 +126,7 @@ The Keeper refunds a Deposit in full to its Depositor when:
 - someone with write, maintain or admin access approves the PR, or the check runs again while their
   approval stands. Not while the PR carries `bona-fide:bad-faith`;
 - the check doesn't count the Deposit: its block is more than `CLOCK_SKEW_SECONDS` older than the
-  PR or issue (see [Clock skew](#clock-skew)), or the item is exempt, or its Contributor is
+  PR or issue (see [Clock skew](#clock-skew)), or the item is exempt (a Record Exemption too), or its Contributor is
   denounced. Anyone can deposit for a PR number that doesn't exist yet, which would keep the real
   Contributor from depositing, so the Keeper refunds such a Deposit as soon as the item opens;
 - its Timeout has passed.
@@ -239,6 +246,102 @@ the model that answered, its verdict and reasons; the action (`noted-accept`, `d
 such as `failed: rate limited`, never the error's text. Each time the model was asked, the decision
 also goes into the [decision log](#decision-log).
 
+## Record Exemption
+
+With `ANTHROPIC_API_KEY` set, a Contributor whose Bona Fide record is good enough needs no Deposit.
+It is an Exemption like the others, named so it isn't taken for a Maintainer's Waiver label. A repo
+turns it off with `record_exemption: off` in `.github/bona-fide.yml`, and sets how good a record must
+be with `record_threshold` (3 by default). Without the key there are no Record Exemptions, and no
+record is kept.
+
+**The record.** A Contributor's Deposits across every repo the App is installed on, each linked to
+them through the author of the PR or issue it was for: Deposits are keyed by repo, kind and number,
+and anyone can pay one. The App reads the escrow's `Deposited`, `Refunded` and `Forfeited` events
+from `ESCROW_FROM_BLOCK` on, as the Keeper does, and looks each Deposit up on GitHub when it is made
+and again when it ends. A Refund counts as **on accepted work** when, as it is looked up, the PR was
+merged, or the issue was closed as completed by someone other than its author, or either carries
+`bona-fide:ok`. Other Refunds don't count, at the Timeout or of a Deposit that wasn't needed: an
+ignored item is refunded too. Nor does a PR approved but not yet merged when its Deposit was
+refunded, or a Refund in the Contributor's own repo (one whose owner is their login).
+
+**The score,** in one line:
+
+```
+score = Refunds on accepted work in public repos + min(merged PRs in other people's repos, 2)
+```
+
+Merged PRs in other people's repos are GitHub's search count for `is:pr is:merged author:<login>
+-user:<login> -user:<owner of the repo being checked>`. At most 2 count (`MERGED_CAP` in
+`src/records/exemption.ts`), below the default threshold of 3, so there a Record Exemption needs at
+least one Refund on accepted work.
+
+**The witnesses.** A Record Exemption is granted only when all of these hold, and the model can't
+change any of them:
+
+1. the score is at least the repo's `record_threshold`;
+2. none of the Contributor's Deposits was ever forfeited, in any repo the App can see, private ones
+   included;
+3. the repo doesn't denounce them in `VOUCHED.td` (a denouncement is checked first, as always);
+4. `record_exemption` is on;
+5. and the model suggests `waive`.
+
+The model answers `waive`, `require` or `flag`, with 1 to 3 reasons. It can hold a Record Exemption
+back, never grant one alone: it reads the record's numbers and the Contributor's public GitHub
+profile, never the threshold or the witnesses.
+
+- **`waive`:** the check is evaluated again and passes, citing the counts: "No Deposit needed: 4
+  Refunds, 0 Forfeits across 3 repos". A Deposit made meanwhile is refunded by the Keeper, as for
+  any Exemption.
+- **`require`,** or a model that declines or fails: nothing changes and nothing is posted. The
+  check keeps asking for the Deposit.
+- **`flag`:** the check keeps asking for the Deposit, and a note for the Maintainer lists the
+  model's reasons, made safe as triage's are: plain lines, links removed, HTML escaped, `@mentions`
+  broken, at most 3 of at most 300 characters. It says a Maintainer who trusts the Contributor can
+  add `bona-fide:waive`.
+
+**Private repos.** The counts the check shows, and the model reads, are of public repos only, so a
+record never reveals who contributes to a private repo. A Forfeit in a private repo still blocks a
+Record Exemption; the check only ever says "0 Forfeits", which is true in every repo.
+
+**When it runs.** When the check asks a Contributor for a Deposit: they aren't denounced or
+otherwise exempt, no Deposit counts yet, and the repo's Binding is active. The check is posted first,
+asking for the Deposit, and the record is weighed in the background, since the model can take longer
+than GitHub waits for a webhook. The witnesses come first, from memory and one cached GitHub read:
+when one fails, the model isn't asked and nothing is recorded. The model is asked once per PR or
+issue and author: new commits, labels, approvals and Deposits don't ask again. Reopening the item,
+or pressing **Re-run** on its check, does, while the check still asks for a Deposit.
+
+**It stays.** A Record Exemption granted for an item stays its Exemption on every later check and
+across restarts: the App reads it back from the [decision log](#decision-log)'s latest `waive`
+decision for the item, which is on disk. It ends on the next check after any of the Contributor's
+Deposits is forfeited, anywhere, and while the repo has `record_exemption: off`. A higher threshold
+later doesn't end it.
+
+**What goes to Anthropic's API:** the repo's name, the item's kind and number, the Contributor's
+login, and numbers: their Refunds, other Refunds, Forfeits and open Deposits in public repos, and
+their GitHub account's age, public repos, followers and merged PRs elsewhere. No text anyone wrote.
+The request is triage's: `TRIAGE_MODEL`, adaptive thinking at medium effort, a JSON schema
+(`verdict` and `reasons`), and Anthropic's server-side fallbacks. The record sits between tags
+carrying a random token, and the model is told it is data.
+
+**GitHub reads.** The profile and the search count are read at most once an hour per Contributor
+(`PROFILE_TTL_MS`). The record looks up at most 5 Deposits per watcher poll (`LOOKUPS_PER_TICK` in
+`src/records/records.ts`), Forfeits first, so catching up on a long history stays under GitHub's
+rate limit. Until the escrow's history has been read once, and while a Forfeit isn't linked to its
+Contributor, no Record Exemption is granted. One granted before a restart stands meanwhile; a
+Forfeit that landed while the App was down ends it once the record has caught up.
+
+**Storage.** The Node host appends each Deposit's link (its repo, whether the repo is private, its
+author and how it ended) as one JSON line to `RECORDS_PATH` (`data/records.jsonl` by default),
+readable by its owner only. On start it reads them back, so only Deposits that ended while it was
+down are looked up again. A line that isn't a link is skipped.
+
+**Known limits.** The record links Deposits through GitHub logins, not addresses. Someone with
+several GitHub accounts could build a record by accepting their own work under another login, in
+repos they control; the witnesses, the cap on merged PRs, the model, and the Maintainer's Waiver
+label and denouncements stand against that. A Forfeit in a repo the App was uninstalled from, or on
+an item since deleted, can't be linked, and doesn't count.
+
 ## Decision log
 
 The App records each decision it makes, or leaves to the Maintainer, so anyone can check why money
@@ -251,30 +354,34 @@ moved or didn't. Each public repo's page shows the log and the counts, read from
 - **Early Refunds on acceptance:** the Keeper refunds a Deposit because the PR was merged, the issue
   was closed as completed by someone other than its author, the `bona-fide:ok` label was added, or
   someone with write, maintain or admin access approved the PR.
+- **Record Exemptions,** each time the model was asked to weigh a Contributor's record: what it
+  suggested and why, the witnesses, and what the App did.
 
 Each decision has an id, a time, the repo and the PR or issue, the Deposit's Serial, and:
 
 | Field | What it holds |
 |---|---|
-| `type` | `triage` or `early-refund`. `waive`, `pay` and `hold` are kept for decisions the App doesn't make yet |
-| `inputs` | A summary of what was read: for triage, the sizes of the title, body, file list and diff and how much of each was cut; for a Refund, where it was found, such as `webhook pull_request closed` or `check`. Never the item's text |
-| `suggestion` | The model's verdict and reasons, as plain lines with links removed, or null when no model suggested anything |
-| `witnesses` | The facts checked, as `{name, value}`: the Deposit and who paid it, the Exemption status, the labels (read again after the model answered), who merged, closed or approved and with what access |
-| `action` | What was done: `noted-accept`, `drafted-verdict`, `silent`, `skipped: a Maintainer decided`, `failed: <kind>` or `refunded`. Never an error's text |
+| `type` | `triage`, `early-refund` or `waive` (a Record Exemption). `pay` and `hold` are kept for decisions the App doesn't make yet |
+| `inputs` | A summary of what was read: for triage, the sizes of the title, body, file list and diff and how much of each was cut; for a Refund, where it was found, such as `webhook pull_request closed` or `check`; for a Record Exemption, the Contributor's login and the numbers the model read. Never the item's text |
+| `suggestion` | The model's verdict (`accept`, `bad-faith` or `unsure` for triage; `waive`, `require` or `flag` for a Record Exemption) and reasons, as plain lines with links removed, or null when no model suggested anything |
+| `witnesses` | The facts checked, as `{name, value}`: the Deposit and who paid it, the Exemption status, the labels (read again after the model answered), who merged, closed or approved and with what access; for a Record Exemption, the score and threshold, the Forfeits, the denouncement and the setting |
+| `action` | What was done: `noted-accept`, `drafted-verdict`, `silent`, `skipped: a Maintainer decided`, `failed: <kind>` or `refunded`; for a Record Exemption, `waived`, `required`, `flagged`, `silent` or `failed: <kind>`. Never an error's text |
 | `txHash` | The Refund's transaction, when money moved |
 | `outcome` | `decided` or `escalated`, below |
 | `cost` | The model, its input and output tokens, and an estimate in USD from its list price (`claude-opus-5`: $5 in and $25 out per million tokens), or null when the model has no price on file |
 
 **Decided or escalated.** A decision is `decided` when the App acted on its own: an early Refund,
-or a note suggesting the Maintainer accept the item. It is `escalated` when the App left it to the
-Maintainer: a draft bad-faith verdict, an unsure model, a model that declined or failed, or a
-Maintainer who decided while the model read.
+a note suggesting the Maintainer accept the item, or a Record Exemption granted. It is `escalated`
+when the App left it to the Maintainer: a draft bad-faith verdict, an unsure model, a model that
+declined or failed, a Maintainer who decided while the model read, or a Record Exemption the model
+held back (`required` or `flagged`: the Deposit ask stands, and the Maintainer can still waive it).
 
 **What is never recorded.** Refunds at the Timeout, and Refunds of a Deposit the check doesn't count
 (one made before its item was opened, or on an item that is exempt or whose Contributor is
 denounced): those decide nothing. Nor triage that never asked the model: triage off, a Maintainer's
 label already on the item, a Deposit triaged before, or a GitHub failure before the model was asked,
-which the next check tries again. No item text and no error text is ever recorded.
+which the next check tries again. Nor a Record Exemption the witnesses ruled out before the model
+was asked. No item text and no error text is ever recorded.
 
 **Private repos.** Each decision records whether GitHub says the repo is private, from the webhook's
 or the installation's repository data; when that isn't known, it counts as private. A private repo's
@@ -296,10 +403,13 @@ The log sits behind the `DecisionLog` port in `src/ports.ts`, so another host ca
 | Permission | Access | Used for |
 |---|---|---|
 | Checks | Read and write | The "Bona Fide" check on each PR |
-| Issues | Read and write | The comment and label on issues |
-| Pull requests | Read and write | Reading a PR when a Deposit lands or its check is re-run, finding merged PRs, reading approvals, reading a PR's files and diff for triage, and the Keeper's and triage's notes on PRs |
+| Issues | Read and write | The comment and label on issues, and how a Deposit's issue was closed for a Contributor's record |
+| Pull requests | Read and write | Reading a PR when a Deposit lands or its check is re-run, finding merged PRs, reading approvals, reading a PR's files and diff for triage, whether a Deposit's PR was merged for a Contributor's record, and the Keeper's, triage's and Record Exemption's notes on PRs |
 | Contents | Read | `.github/bona-fide.yml` and `VOUCHED.td` on the default branch |
 | Metadata | Read | Required by GitHub |
+
+A Record Exemption also reads a Contributor's public profile and a search count of their merged PRs,
+which need no other permission.
 
 Events:
 
@@ -326,9 +436,11 @@ npm start
 [`GET /decisions`](#get-decisions), a watcher that polls the escrow for Deposits, and, with `KEEPER_PRIVATE_KEY` set, [the Keeper](#the-keeper) and its
 [endpoints](#endpoints). With `RELAYER_PRIVATE_KEY` set, it also runs the
 [deposit relay](#post-relaydeposit), and with `ANTHROPIC_API_KEY` set as well as the Keeper's key,
-[triage](#triage). It and the decision file it opens, `src/decisions/file.ts`, are the only files
-that use Node: everything `src/index.ts` exports also bundles for a Workers-style runtime. Triage's Claude reviewer, `src/triage/claude.ts`, isn't among
-those exports: Anthropic's SDK looks for Node's globals when they exist, and the bundle check allows
+[triage](#triage). With `ANTHROPIC_API_KEY` set, it also follows Contributors' records for
+[Record Exemptions](#record-exemption), on the watcher's timer. It and the files it opens,
+`src/decisions/file.ts` and `src/records/file.ts`, are the only files that use Node: everything
+`src/index.ts` exports also bundles for a Workers-style runtime. The Claude reviewer and advisor,
+`src/triage/claude.ts` and `src/records/claude.ts`, aren't among those exports: Anthropic's SDK looks for Node's globals when they exist, and the bundle check allows
 none, so a host imports it directly.
 
 The host reads these environment variables:
@@ -352,9 +464,10 @@ The host reads these environment variables:
 | `ACTIVATE_MS` | `30000` | How often the Keeper looks for Bindings to activate |
 | `REFUND_MS` | `30000` | How often the Keeper looks for Deposits past their Timeout to refund |
 | `RELAYER_PRIVATE_KEY` | unset | Signs and pays the gas for relayed Deposits. It may be the Keeper's key |
-| `ANTHROPIC_API_KEY` | unset | Turns [triage](#triage) on, with the Keeper. Sends each PR's or issue's text and diff to Anthropic's API |
-| `TRIAGE_MODEL` | `claude-opus-5` | The Claude model triage asks |
+| `ANTHROPIC_API_KEY` | unset | Turns [triage](#triage) on, with the Keeper, and [Record Exemptions](#record-exemption). Sends each PR's or issue's text and diff, and the numbers of some Contributors' records, to Anthropic's API |
+| `TRIAGE_MODEL` | `claude-opus-5` | The Claude model triage and Record Exemptions ask |
 | `DECISIONS_PATH` | `data/decisions.jsonl` | The [decision log](#decision-log)'s JSONL file. Put it on storage that outlives the process |
+| `RECORDS_PATH` | `data/records.jsonl` | The JSONL file of the Deposits linked to Contributors for [Record Exemptions](#record-exemption). Put it beside `DECISIONS_PATH` |
 | `TRUST_PROXY` | unset | `1` makes the per-IP limits count the rightmost `X-Forwarded-For` address instead of the connection's. Set it only behind a reverse proxy that overwrites `X-Forwarded-For`; see [Limits](#limits) |
 
 The Keeper's address needs a little USDC on Arc for gas, and nothing more: no Deposit or Forfeit can

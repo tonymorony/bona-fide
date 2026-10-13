@@ -26,8 +26,12 @@ interface RepoDecisions {
 // everything it had.
 export function createDecisionLog({ write }: DecisionLogOptions = {}): DecisionLog {
   const repos = new Map<string, RepoDecisions>();
+  /** The latest `waive` decision about each item, private repos' too. Only the App reads it. */
+  const waivers = new Map<string, Decision>();
 
   function add(decision: Decision): void {
+    if (decision.type === "waive")
+      waivers.set(itemId(decision.repo, decision.item.kind, decision.item.number), decision);
     const id = decision.repo.toLowerCase();
     let repo = repos.get(id);
     if (!repo || decision.private !== repo.private) {
@@ -59,7 +63,15 @@ export function createDecisionLog({ write }: DecisionLogOptions = {}): DecisionL
     counts(repo) {
       return { ...(published(repo)?.counts ?? { decided: 0, escalated: 0 }) };
     },
+
+    waiverOf(repo, kind, number) {
+      return waivers.get(itemId(repo, kind, number)) ?? null;
+    },
   };
+}
+
+function itemId(repo: string, kind: string, number: number): string {
+  return `${repo}#${kind}${number}`.toLowerCase();
 }
 
 /** What asking `model` cost, with an estimate in USD from its list price. A dated model id takes its model's price. */

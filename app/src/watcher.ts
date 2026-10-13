@@ -128,7 +128,9 @@ export function createDepositWatcher({ chain, github, app, fromBlock }: WatcherD
       await blocks.scan(await chain.latestBlock(), async (from, to) => {
         for (const event of await chain.escrowEvents(from, to)) {
           if (event.type === "deposited") await attempt(() => notice(event.deposit), 0, failures);
-          else await attempt((failed) => recheckOpenItems(event.repoId, failed), 0, failures);
+          else if (event.type === "activated") {
+            await attempt((failed) => recheckOpenItems(event.repoId, failed), 0, failures);
+          }
         }
       });
       if (failures.length > 0) {

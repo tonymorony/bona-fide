@@ -296,11 +296,11 @@ function inputsOf(request: ReviewRequest): TriageDecision["inputs"] {
 
 // The model read text anyone can write, so its answer is untrusted too. A reason is one plain line
 // with no links; in the note it also can't ping anyone or carry HTML.
-function plainReasons(reasons: string[]): string[] {
+export function plainReasons(reasons: string[], max = MAX_REASONS): string[] {
   return reasons
     .map(plainReason)
     .filter((reason) => reason !== "")
-    .slice(0, MAX_REASONS);
+    .slice(0, max);
 }
 
 function plainReason(reason: string): string {
@@ -312,7 +312,7 @@ function plainReason(reason: string): string {
   return line.length > MAX_REASON_CHARS ? `${line.slice(0, MAX_REASON_CHARS - 1).trimEnd()}…` : line;
 }
 
-function markdownSafe(line: string): string {
+export function markdownSafe(line: string): string {
   return (
     line
       .replace(/&/g, "&amp;")

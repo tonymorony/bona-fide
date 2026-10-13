@@ -137,6 +137,73 @@ function seedDecisions() {
       txHash: REFUND_TX,
       outcome: "decided",
     },
+    {
+      ...base,
+      serial: null,
+      at: "2026-09-04T09:45:00.000Z",
+      item: { kind: "pr", number: 30 },
+      type: "waive",
+      inputs: {
+        login: "fresh-account",
+        refunds: 3,
+        repos: 1,
+        otherRefunds: 6,
+        forfeits: 0,
+        active: 4,
+        accountAgeDays: 9,
+        publicRepos: 0,
+        followers: 0,
+        mergedElsewhere: 0,
+      },
+      suggestion: {
+        verdict: "flag",
+        reasons: ["The account is nine days old.", "Six Deposits were refunded only at the Timeout."],
+      },
+      witnesses: [
+        {
+          name: "Score",
+          value: "3, threshold 3: 3 Refunds on accepted work, and 0 merged PRs elsewhere (at most 2 count)",
+        },
+        { name: "Forfeits", value: "none, in any repo" },
+        { name: "Denounced in VOUCHED.td", value: "no" },
+        { name: "Record Exemption in bona-fide.yml", value: "on" },
+      ],
+      action: "flagged",
+      outcome: "escalated",
+      cost: { model: "claude-opus-5", inputTokens: 612, outputTokens: 44, usd: 0.0042 },
+    },
+    {
+      ...base,
+      serial: null,
+      at: "2026-09-05T14:20:00.000Z",
+      item: { kind: "issue", number: 31 },
+      type: "waive",
+      inputs: {
+        login: "newcomer",
+        refunds: 4,
+        repos: 3,
+        otherRefunds: 1,
+        forfeits: 0,
+        active: 0,
+        accountAgeDays: 1_826,
+        publicRepos: 12,
+        followers: 30,
+        mergedElsewhere: 57,
+      },
+      suggestion: { verdict: "waive", reasons: ["Four accepted Deposits in three repos over five years."] },
+      witnesses: [
+        {
+          name: "Score",
+          value: "6, threshold 3: 4 Refunds on accepted work, and 2 merged PRs elsewhere (at most 2 count)",
+        },
+        { name: "Forfeits", value: "none, in any repo" },
+        { name: "Denounced in VOUCHED.td", value: "no" },
+        { name: "Record Exemption in bona-fide.yml", value: "on" },
+      ],
+      action: "waived",
+      outcome: "decided",
+      cost: { model: "claude-opus-5", inputTokens: 600, outputTokens: 40, usd: 0.004 },
+    },
   ];
   logged.forEach((decision, i) => decisionLog.append({ id: `seeded-${i}`, ...decision }));
   decisionLog.append({ ...logged[0]!, id: "secret", repo: "Acme/Secret", private: true });
@@ -526,13 +593,13 @@ test("the repo page shows the decision log: the counts, and what was suggested, 
   const decisions = `document.querySelectorAll("[data-decisions] > li").length`;
 
   await page.open(site.url("repo.html?repo=Acme/Widgets"));
-  await page.waitFor(`${decisions} === 4`, "the decisions");
+  await page.waitFor(`${decisions} === 6`, "the decisions");
   await page.waitFor(`!document.body.innerText.includes("Reading Deposits")`);
   await frame(page, "repo-decisions-1280");
 
   const text = await page.text();
-  expect(text).toMatch(/2\s+Decided by Bona Fide/);
-  expect(text).toMatch(/2\s+Left to the Maintainer/);
+  expect(text).toMatch(/3\s+Decided by Bona Fide/);
+  expect(text).toMatch(/3\s+Left to the Maintainer/);
   expect(text).toContain("Suggested: likely bad faith");
   expect(text).toContain("It links to a <img src=x onerror=alert(1)> casino.");
   expect(text).toContain("Posted a draft bad-faith verdict for the Maintainer. Nothing was forfeited.");
@@ -547,12 +614,48 @@ test("the repo page shows the decision log: the counts, and what was suggested, 
   const order = await page.evaluate<string[]>(
     `[...document.querySelectorAll("[data-decisions] [data-cell=item]")].map((a) => a.textContent)`,
   );
-  expect(order).toEqual(["PR #21", "PR #22", "PR #21", "Issue #8"]);
+  expect(order).toEqual(["Issue #31", "PR #30", "PR #21", "PR #22", "PR #21", "Issue #8"]);
   const links = await page.evaluate<string[]>(
     `[...document.querySelectorAll("[data-decisions] a")].map((a) => a.href)`,
   );
   expect(links).toContain("https://github.com/Acme/Widgets/pull/21");
   expect(links).toContain(`${stack.network.explorerUrl}/tx/${REFUND_TX}`);
+  expect(page.errors).toEqual([]);
+  await page.close();
+}, 60_000);
+
+test("the repo page shows a Record Exemption: the record read, the witnesses, and whether the check passed", async () => {
+  const page = await chrome.newPage({ intercept: github });
+
+  await page.open(site.url("repo.html?repo=Acme/Widgets"));
+  await page.waitFor(`document.querySelectorAll("[data-decisions] > li").length === 6`, "the decisions");
+  await page.waitFor(`!document.body.innerText.includes("Reading Deposits")`);
+  await frame(page, "repo-decisions-waive-1280");
+
+  const [waived, flagged] = await page.evaluate<string[]>(
+    `[...document.querySelectorAll("[data-decisions] > li")].slice(0, 2).map((li) => li.innerText)`,
+  );
+  expect(waived).toContain("Issue #31");
+  expect(waived).toContain("Record Exemption");
+  expect(waived).toContain("Suggested: no Deposit needed");
+  expect(waived).toContain("Four accepted Deposits in three repos over five years.");
+  expect(waived).toContain("6, threshold 3: 4 Refunds on accepted work, and 2 merged PRs elsewhere (at most 2 count)");
+  expect(waived).toContain("none, in any repo");
+  expect(waived).toContain("Passed the check: no Deposit needed.");
+  expect(waived).toContain(
+    "Read: @newcomer's record in public repos: 4 Refunds on accepted work in 3 repos, 1 other Refund, 0 Forfeits, 0 open Deposits. On GitHub: account 1,826 days old, 12 public repos, 30 followers, 57 merged PRs elsewhere.",
+  );
+  expect(waived).toMatch(/Decided/);
+  expect(flagged).toContain("Suggested: ask for the Deposit, and flag the record for the Maintainer");
+  expect(flagged).toContain("Six Deposits were refunded only at the Timeout.");
+  expect(flagged).toContain("Kept asking for the Deposit, and posted a note for the Maintainer.");
+  expect(flagged).toMatch(/Left to the Maintainer/);
+
+  await page.open(site.url("repo.html?repo=Acme/Widgets"), PHONE);
+  await page.waitFor(`document.querySelectorAll("[data-decisions] > li").length === 6`, "the decisions");
+  await page.waitFor(`!document.body.innerText.includes("Reading Deposits")`);
+  await frame(page, "repo-decisions-waive-390");
+  expect(await page.overflow()).toBeLessThanOrEqual(0);
   expect(page.errors).toEqual([]);
   await page.close();
 }, 60_000);
@@ -578,7 +681,7 @@ test("with no decisions the repo page says so, and when the log can't be read it
 
     decisionsMode = "log";
     await page.click('[data-action="reload-decisions"]');
-    await page.waitFor(`document.querySelectorAll("[data-decisions] > li").length === 4`, "the decisions");
+    await page.waitFor(`document.querySelectorAll("[data-decisions] > li").length === 6`, "the decisions");
     expect(besides(page.errors, "/decisions")).toEqual([]);
   } finally {
     decisionsMode = "log";

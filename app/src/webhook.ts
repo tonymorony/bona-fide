@@ -20,9 +20,10 @@ export function createWebhookHandler({ secret, app, keeper }: WebhookDeps): (req
     const event = request.headers.get("x-github-event");
     const payload = JSON.parse(new TextDecoder().decode(body));
     const item = itemFrom(event, payload);
-    if (item) await app.settle(item);
+    // Reopening an item, like re-running its check, weighs its Contributor's record again.
+    if (item) await app.settle(item, undefined, { askAgain: payload.action === "reopened" });
     const rerun = rerunFrom(event, payload);
-    if (rerun) await app.recheck(rerun.repo, "pr", rerun.number);
+    if (rerun) await app.recheck(rerun.repo, "pr", rerun.number, { askAgain: true });
     if (event === "check_suite" && payload.action === "rerequested") {
       await app.recheckSuite(repoOf(payload), payload.check_suite.id);
     }
