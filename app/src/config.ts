@@ -17,6 +17,8 @@ export interface Config {
   recordExemption: boolean;
   /** The score a Contributor's record needs for a Record Exemption. */
   recordThreshold: number;
+  /** Whether the Keeper pays the repo's Bounties on its own, when the host has a Bounty wallet factory. */
+  bounties: boolean;
 }
 
 export const DEFAULTS: Config = {
@@ -27,6 +29,7 @@ export const DEFAULTS: Config = {
   triage: true,
   recordExemption: true,
   recordThreshold: 3,
+  bounties: true,
 };
 
 /**
@@ -45,7 +48,7 @@ export const ARC_EXPLORER_URL = "https://explorer.arc.io";
  */
 export const MAX_WEBHOOK_BODY_BYTES = 1024 * 1024;
 
-/** The same limit for the JSON endpoints: POST /relay/deposit, /forfeit and /binding-proof. */
+/** The same limit for the JSON endpoints: POST /relay/deposit, /forfeit, /binding-proof and /bounty/payout. */
 export const MAX_JSON_BODY_BYTES = 16 * 1024;
 
 /** Maintenance bots every repo exempts. Any other bot, AI coding agents included, is treated like anyone else. */
@@ -69,10 +72,8 @@ export function parseConfig(text: string): ParsedConfig {
   if (typeof settings !== "object" || Array.isArray(settings)) {
     return { ok: false, problems: ["The file must hold settings such as `amount: 1`."] };
   }
-  const { amount, forfeit, timeout, exempt_bots, triage, record_exemption, record_threshold } = settings as Record<
-    string,
-    unknown
-  >;
+  const { amount, forfeit, timeout, exempt_bots, triage, record_exemption, record_threshold, bounties } =
+    settings as Record<string, unknown>;
   const problems: string[] = [];
   const config: Config = {
     amount: isSet(amount) ? parseAmount(String(amount), problems) : DEFAULTS.amount,
@@ -84,6 +85,7 @@ export function parseConfig(text: string): ParsedConfig {
       ? parseSwitch(record_exemption, "record_exemption", problems)
       : DEFAULTS.recordExemption,
     recordThreshold: isSet(record_threshold) ? parseThreshold(record_threshold, problems) : DEFAULTS.recordThreshold,
+    bounties: isSet(bounties) ? parseSwitch(bounties, "bounties", problems) : DEFAULTS.bounties,
   };
   return problems.length === 0 ? { ok: true, config } : { ok: false, problems };
 }

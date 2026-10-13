@@ -560,3 +560,162 @@ test("the App's Octokit logger drops expected 404s and keeps warnings", async ()
 
   expect(sink.warn.mock.calls).toEqual([["a deprecated endpoint"]]);
 });
+
+test("a PR's facts come from GraphQL: its merge, the issues in this repo it closes, and who wrote and last edited each text", async () => {
+  const { github, sent } = fakeApi({
+    "POST /graphql": {
+      status: 200,
+      body: {
+        data: {
+          repository: {
+            pullRequest: {
+              number: 7,
+              merged: true,
+              mergedAt: "2026-09-30T12:00:00Z",
+              mergedBy: { login: "maintainer" },
+              headRefOid: "abc123",
+              author: { login: "newcomer" },
+              editor: null,
+              body: "Fixes #42.",
+              createdAt: "2026-09-29T08:00:00Z",
+              closingIssuesReferences: {
+                nodes: [
+                  { number: 42, repository: { nameWithOwner: "codertocat/hello-world" } },
+                  { number: 9, repository: { nameWithOwner: "someone/else" } },
+                ],
+              },
+              comments: {
+                nodes: [
+                  { author: null, editor: null, body: "Nice", createdAt: "2026-09-29T09:00:00Z" },
+                  {
+                    author: { login: "newcomer" },
+                    editor: { login: "maintainer" },
+                    body: "Bounty wallet: 0x…",
+                    createdAt: "2026-09-29T10:00:00Z",
+                  },
+                ],
+              },
+            },
+          },
+        },
+      },
+    },
+  });
+
+  expect(await github.pullRequestFacts(REPO, 7)).toEqual({
+    number: 7,
+    author: "newcomer",
+    merged: true,
+    mergedAt: new Date("2026-09-30T12:00:00Z"),
+    mergedBy: "maintainer",
+    headSha: "abc123",
+    closes: [42],
+    body: { author: "newcomer", editor: null, text: "Fixes #42.", createdAt: new Date("2026-09-29T08:00:00Z") },
+    comments: [
+      { author: null, editor: null, text: "Nice", createdAt: new Date("2026-09-29T09:00:00Z") },
+      {
+        author: "newcomer",
+        editor: "maintainer",
+        text: "Bounty wallet: 0x…",
+        createdAt: new Date("2026-09-29T10:00:00Z"),
+      },
+    ],
+  });
+  expect(sent[0]?.body.variables).toEqual({ owner: "Codertocat", name: "Hello-World", number: 7 });
+  expect(sent[0]?.body.query).toContain("closingIssuesReferences(first: 25)");
+});
+
+test("a PR or issue GraphQL can't find is null, or has no closing PRs", async () => {
+  const notFound = {
+    status: 200,
+    body: {
+      data: { repository: { pullRequest: null, issue: null } },
+      errors: [{ type: "NOT_FOUND", path: ["repository", "pullRequest"], message: "Could not resolve" }],
+    },
+  };
+  const { github } = fakeApi({ "POST /graphql": notFound });
+
+  expect(await github.pullRequestFacts(REPO, 404)).toBeNull();
+  expect(await github.closingPullRequests(REPO, 404)).toEqual([]);
+});
+
+test("the PRs that close an issue are those in this repo, open, closed or merged", async () => {
+  const { github, sent } = fakeApi({
+    "POST /graphql": {
+      status: 200,
+      body: {
+        data: {
+          repository: {
+            issue: {
+              closedByPullRequestsReferences: {
+                nodes: [
+                  { number: 5, mergedAt: null, repository: { nameWithOwner: "Codertocat/Hello-World" } },
+                  {
+                    number: 7,
+                    mergedAt: "2026-09-30T12:00:00Z",
+                    repository: { nameWithOwner: "Codertocat/Hello-World" },
+                  },
+                  { number: 8, mergedAt: "2026-09-30T11:00:00Z", repository: { nameWithOwner: "fork/Hello-World" } },
+                ],
+              },
+            },
+          },
+        },
+      },
+    },
+  });
+
+  expect(await github.closingPullRequests(REPO, 42)).toEqual([
+    { number: 5, mergedAt: null },
+    { number: 7, mergedAt: new Date("2026-09-30T12:00:00Z") },
+  ]);
+  expect(sent[0]?.body.query).toContain("includeClosedPrs: true");
+});
+
+test("a commit's checks are its latest check runs and commit statuses, without the App's own check", async () => {
+  const run = (name: string, status: string, conclusion: string | null, appId = 99) => ({
+    name,
+    status,
+    conclusion,
+    app: { id: appId },
+  });
+  const { github, sent } = fakeApi({
+    [`GET ${API}/commits/abc/check-runs`]: {
+      status: 200,
+      body: {
+        total_count: 6,
+        check_runs: [
+          run("test", "completed", "success"),
+          run("docs", "completed", "skipped"),
+          run("lint", "completed", "failure"),
+          run("e2e", "in_progress", null),
+          run("deploy", "completed", "cancelled"),
+          run("Bona Fide", "completed", "action_required", APP_ID),
+        ],
+      },
+    },
+    [`GET ${API}/commits/abc/status`]: {
+      status: 200,
+      body: {
+        state: "pending",
+        statuses: [
+          { context: "ci/legacy", state: "success" },
+          { context: "ci/slow", state: "pending" },
+          { context: "ci/broken", state: "error" },
+        ],
+      },
+    },
+  });
+
+  expect(await github.checksOf(REPO, "abc")).toEqual([
+    { name: "test", state: "success" },
+    { name: "docs", state: "success" },
+    { name: "lint", state: "failure" },
+    { name: "e2e", state: "pending" },
+    { name: "deploy", state: "failure" },
+    { name: "ci/legacy", state: "success" },
+    { name: "ci/slow", state: "pending" },
+    { name: "ci/broken", state: "failure" },
+  ]);
+  expect(sent.find((s) => s.path.endsWith("/check-runs"))?.query.get("filter")).toBe("latest");
+});

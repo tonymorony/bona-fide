@@ -148,11 +148,19 @@ and trust model are in [../contracts/README.md](../contracts/README.md#bounty-wa
   `Payout(uint256 issueNumber,uint256 serial,address payee,uint256 amount,uint256 deadline)` at any
   amount, or `ownerPay`.
 
-**The App and the pages (next phases).** When a PR that closes an issue with a Bounty is merged,
-the agent checks the witnesses: merged, linked to the issue, required checks green, the payee's
-wallet known, and within limits. It also asks a model whether the PR resolves the issue. The model
-can hold or escalate a Payout, never trigger one on its own. Within the limits the Keeper pays;
-above them the Maintainer signs. Every Payout links its transaction.
+**The App (built).** Details are in [../app/README.md](../app/README.md#bounties). When a PR that
+GitHub links as closing an issue with an open Bounty is merged, the App checks the witnesses: merged,
+linked to the issue, the first merged PR that closes it, every check on its head commit green, a
+payee wallet its author named in a `Bounty wallet: 0x…` line of their own, the Keeper switch on, and
+the amount within the per-payout limit and the period's allowance. Only then does it ask a model
+whether the PR resolves the issue. The model can hold a Payout back, never trigger one: only
+`resolves` lets the Keeper call `keeperPay`. Anything else, and anything above the limits, gets a
+note linking the Maintainer to the Bounty page (`?repo=owner/name&issue=N&payee=0x…`), where they
+sign the Payout; the App relays it at `POST /bounty/payout`. Each run reads the Bounty on-chain
+first, so nothing is paid twice. Every Payout's note links its transaction, and each Payout or hold
+is a `pay` or `hold` decision in the decision log.
+
+**The pages (next phase).** The Bounty page, and Bounties on the repo page.
 
 ## Scope
 
@@ -182,6 +190,10 @@ above them the Maintainer signs. Every Payout links its transaction.
   anything else.
 - A Keeper period starts at the first Keeper Payout after the last one ended, so within any span
   of one period length the Keeper can pay up to twice the period limit.
+- The App pays the author of the first merged PR that GitHub links as closing the issue, to the
+  wallet they named. A collaborator who can push could merge their own PR to claim a Bounty; the
+  checks, the model, the limits and the Keeper switch stand against that, and the Maintainer can
+  cancel a Bounty before a merge.
 - A Contributor's record links Deposits to GitHub logins, not addresses, so someone running several
   accounts could build a record by accepting their own work under another login. The witnesses, the
   reviewer, and the Maintainer's Waiver label and denouncements stand against that.

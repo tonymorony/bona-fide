@@ -172,6 +172,14 @@ export async function startAnvil({
       await send(deployer!, escrow, escrowArtifact.abi, "forfeit", [key, sigDeadline, signature]);
     },
 
+    /** Sends a transaction as `from`, one of anvil's unlocked accounts or the Keeper, and waits for its receipt. */
+    send,
+
+    /** Mints MockUSDC to `to`. */
+    async mint(to: Address, amount: bigint) {
+      await send(deployer!, usdc, usdcArtifact.abi, "mint", [to, amount]);
+    },
+
     /** Deploys a contract from contracts/, such as a mock. */
     deployArtifact(name: string, args: unknown[]): Promise<Address> {
       const { abi, bytecode } = artifact(name);

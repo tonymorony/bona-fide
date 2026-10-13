@@ -6,7 +6,7 @@ Caddy, on one origin. You deploy with one command from your machine.
 ## How it fits together
 
 ```
-                ┌─ /webhook, /relay/*, /forfeit, /binding-proof, /decisions, /health ─> App container (127.0.0.1:8930)
+                ┌─ /webhook, /relay/*, /forfeit, /binding-proof, /bounty/payout, /decisions, /health ─> App container (127.0.0.1:8930)
 client ─443─> Caddy
                 └─ everything else ─> static pages in /opt/bona-fide/site/pages
 ```
@@ -79,6 +79,10 @@ On the server, everything lives in `/opt/bona-fide`:
    - `KEEPER_PRIVATE_KEY`: the key of the address the escrow names as its Keeper.
      `RELAYER_PRIVATE_KEY` may be the same key or a new one (`cast wallet new`). Arc gas is paid in
      USDC, so send each address a little USDC on Arc.
+   - `BOUNTY_FACTORY_ADDRESS`, for [Bounties](../app/README.md#bounties): the `BountyWalletFactory`
+     deployed with the same Keeper address as the escrow, with its deploy block in
+     `BOUNTY_FACTORY_FROM_BLOCK`. Subscribe the GitHub App to **Issue comment** events too, so a
+     Contributor who names their wallet after the merge is paid.
 
 5. **Deploy again.** `deploy/deploy.sh <ssh host>` starts the App, then adds the site to Caddy.
    It finds Caddy as the container that publishes port 443, or else the `caddy` service on the
@@ -137,7 +141,8 @@ ssh <ssh host> 'cd /opt/bona-fide && docker compose logs -f --tail=100'
 ```
 
 With triage on, each triage decision is one JSON line with `"event":"triage"`; `grep '"event":"triage"'`
-picks them out.
+picks them out. With Bounties on, each Payout is one with `"event":"pay"`, and each Bounty left to the
+Maintainer one with `"event":"hold"`.
 
 The App logs its errors in full, and an RPC error can include the RPC's URL. If `RPC_URL` holds an
 API key, don't share the logs as they are. `docker compose config` prints every value in `.env`, so

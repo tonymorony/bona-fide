@@ -11,7 +11,7 @@ bonafide.lysakov.com {
 
 	encode zstd gzip
 
-	@app path /webhook /relay/* /forfeit /binding-proof /decisions /health
+	@app path /webhook /relay/* /forfeit /binding-proof /bounty/payout /decisions /health
 	handle @app {
 		reverse_proxy {$BONA_FIDE_UPSTREAM:127.0.0.1:8930}
 	}

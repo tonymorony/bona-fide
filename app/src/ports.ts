@@ -79,6 +79,51 @@ export interface GitHub {
   outcomeOf(repo: Repo, kind: Kind, number: number): Promise<ItemOutcome | null>;
   /** What GitHub shows publicly about `login`, or null if there is no such account. `repo` is the repo being checked. */
   profileOf(repo: Repo, login: string): Promise<GitHubProfile | null>;
+  /** What a Payout reads of a PR: whether it was merged, what it closes, and its author's words. Null if there is no such PR. */
+  pullRequestFacts(repo: Repo, number: number): Promise<PullRequestFacts | null>;
+  /** The PRs in the repo that GitHub links as closing the issue, open, closed or merged. Empty if there is no such issue. */
+  closingPullRequests(repo: Repo, issueNumber: number): Promise<ClosingPullRequest[]>;
+  /** The latest check runs and commit statuses on a commit, other than the App's own check. */
+  checksOf(repo: Repo, sha: string): Promise<CommitCheck[]>;
+}
+
+/** A PR's body or one of its comments, with who wrote it and who last edited it. */
+export interface AuthoredText {
+  /** Null for a deleted account. */
+  author: string | null;
+  /** Who last edited it, or null if nobody has. */
+  editor: string | null;
+  text: string;
+  createdAt: Date;
+}
+
+/** A PR as a Payout reads it. */
+export interface PullRequestFacts {
+  number: number;
+  /** Null for a deleted account. */
+  author: string | null;
+  merged: boolean;
+  mergedAt: Date | null;
+  mergedBy: string | null;
+  /** The commit the PR's checks ran on. */
+  headSha: string;
+  /** The issues in the same repo GitHub links the PR to as closing them: by a closing keyword or by hand. */
+  closes: number[];
+  body: AuthoredText;
+  /** The PR's latest 100 comments, oldest first. */
+  comments: AuthoredText[];
+}
+
+export interface ClosingPullRequest {
+  number: number;
+  /** Null unless it was merged. */
+  mergedAt: Date | null;
+}
+
+/** A check run or commit status, as green, still running or not green. */
+export interface CommitCheck {
+  name: string;
+  state: "success" | "pending" | "failure";
 }
 
 /**
@@ -273,9 +318,49 @@ export interface Advisor {
   advise(request: AdviceRequest): Promise<AdviceAnswer>;
 }
 
+/** A suggestion on whether a merged PR resolves the issue it closes, which a Bounty is on. */
+export type Resolution = "resolves" | "partial" | "unrelated";
+
+/** What a Payout shows the model: the issue's text and the PR's, cut to fixed budgets, with how much was left out. */
+export interface ResolutionRequest {
+  repo: string;
+  repoDescription: string | null;
+  issue: { number: number; title: string; body: { text: string; leftOut: number } };
+  pr: {
+    number: number;
+    author: string;
+    title: string;
+    body: { text: string; leftOut: number };
+    files?: { listed: ChangedFile[]; leftOut: number };
+    /** Null when GitHub made no diff. */
+    diff?: { text: string; leftOut: number } | null;
+  };
+}
+
+export interface ResolutionAnswer {
+  /** The model's suggestion, or null when it gave none, such as when it declined. */
+  suggestion: { verdict: Resolution; reasons: string[] } | null;
+  /** Why there is no suggestion, such as "refusal". */
+  silence?: string;
+  /** The model that answered, which may be a fallback. */
+  model: string;
+  inputTokens: number;
+  outputTokens: number;
+}
+
 /**
- * What the decision log records: triage's suggestions, the Keeper's early Refunds and the Record
- * Exemptions the model was asked about. `pay` and `hold` are kept for decisions the App doesn't make yet.
+ * A model that reads an issue and the merged PR that closes it, and suggests whether the PR resolves
+ * it. It can hold a Payout back, never make one alone: the App's own witnesses must hold too.
+ */
+export interface Resolver {
+  /** Rejects with ReviewFailed when the model can't be reached or errs. */
+  resolve(request: ResolutionRequest): Promise<ResolutionAnswer>;
+}
+
+/**
+ * What the decision log records: triage's suggestions, the Keeper's early Refunds, the Record
+ * Exemptions the model was asked about, and each Payout of a Bounty (`pay`) or Bounty held for the
+ * Maintainer (`hold`).
  */
 export type DecisionType = "triage" | "early-refund" | "waive" | "pay" | "hold";
 
@@ -309,16 +394,17 @@ export interface Decision {
   repo: string;
   /** Whether the repo was private. A private repo's decisions are kept, but never published. */
   private: boolean;
+  /** The PR or issue. For a Bounty, its issue. */
   item: { kind: Kind; number: number };
-  /** The Deposit's Serial, as a decimal string, if one is involved. */
+  /** The Deposit's or the Bounty's Serial, as a decimal string, if one is involved. */
   serial: string | null;
   type: DecisionType;
   /** A summary of what was read, such as sizes and cuts. Never the item's text. */
   inputs: Record<string, string | number | boolean> | null;
   /** The model's suggestion with its reasons as plain lines, or null when no model suggested anything. */
-  suggestion: { verdict: Suggestion | Advice; reasons: string[] } | null;
+  suggestion: { verdict: Suggestion | Advice | Resolution; reasons: string[] } | null;
   witnesses: Witness[];
-  /** What the App did, such as "refunded", "noted-accept" or "failed: rate limited". Never an error's text. */
+  /** What the App did, such as "refunded", "noted-accept", "paid" or "failed: rate limited". Never an error's text. */
   action: string;
   /** The transaction, when money moved. */
   txHash: Hex | null;

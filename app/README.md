@@ -4,8 +4,9 @@ The App decides who must put down a Deposit to open a PR or an issue, asks for i
 on-chain. Its Keeper refunds Deposits, relays the Forfeits Maintainers sign, and binds repos to
 their Maintainer's wallet. With [triage](#triage) on, an automated reviewer reads each PR or issue
 that holds a Deposit and suggests a verdict to the Maintainer. With a [Record Exemption](#record-exemption),
-a Contributor whose Bona Fide record is good enough needs no Deposit. Terms such as Binding and
-Exemption are defined in [../CONTEXT.md](../CONTEXT.md).
+a Contributor whose Bona Fide record is good enough needs no Deposit. With [Bounties](#bounties) on,
+the Keeper pays a Maintainer's Bounty on an issue when a PR that closes it is merged. Terms such as
+Binding, Exemption and Payout are defined in [../CONTEXT.md](../CONTEXT.md).
 
 ## Turn it on for a repo
 
@@ -21,10 +22,11 @@ exempt_bots:       # optional: bots that need no Deposit
 triage: on         # on or off: whether triage reads PRs and issues that hold a Deposit
 record_exemption: on  # on or off: whether a good Bona Fide record can stand in for a Deposit
 record_threshold: 3   # the score a record needs for that: a whole number from 1 to 100
+bounties: on       # on or off: whether the Keeper pays the repo's Bounties on its own
 ```
 
-Every key is optional, and the amount, forfeit share, timeout, triage and Record Exemption settings
-above are the defaults. The Keeper
+Every key is optional, and the amount, forfeit share, timeout, triage, Record Exemption and Bounty
+settings above are the defaults. The Keeper
 also reads `maintainer`, the Maintainer's wallet address, when it proposes the repo's Binding. If a
 value can't be read, the App pauses: PRs get a neutral check that names the problem, and issues get
 nothing.
@@ -113,7 +115,9 @@ the item was opened. It works the other way for a repo's start: a PR or issue op
 
 The Keeper is the App's signer. Every transaction it sends is one of the escrow's `refund`,
 `forfeit`, `proposeRepo` or `activateRepo`, so it can move USDC only the ways the escrow allows: to a
-Deposit's own Depositor, or at most half of a Deposit to the Forfeit sink. See
+Deposit's own Depositor, or at most half of a Deposit to the Forfeit sink. With
+[Bounties](#bounties) on, it also sends a Bounty wallet's `keeperPay` and `payWithSignature`, which
+pay a posted Bounty in full to one payee and never to the Keeper. See
 [../contracts/README.md](../contracts/README.md#trust-model).
 
 ### Refunds
@@ -174,9 +178,10 @@ Binding delay, 24 hours at launch; the Keeper activates it then.
 
 - The key comes only from `KEEPER_PRIVATE_KEY`. The host prints the Keeper's address, never the key,
   and a malformed key stops it with a message that doesn't repeat it.
-- Each transaction is simulated with `eth_call` first, so one the escrow would reject costs no gas.
-  Transactions go out one at a time, with nonces from viem's shared nonce manager, so another
-  sender in the App with the same key never reuses one.
+- Each transaction is simulated with `eth_call` first, so one the escrow or a Bounty wallet would
+  reject costs no gas. Transactions go out one at a time, escrow and Bounty wallets alike, with
+  nonces from viem's shared nonce manager, so another sender in the App with the same key never
+  reuses one.
 - Each action reads the on-chain state first, so a redelivered webhook or a repeated request does
   nothing twice.
 - If a transaction fails, for example because the RPC is down, the webhook answers 500 and GitHub
@@ -342,6 +347,125 @@ repos they control; the witnesses, the cap on merged PRs, the model, and the Mai
 label and denouncements stand against that. A Forfeit in a repo the App was uninstalled from, or on
 an item since deleted, can't be linked, and doesn't count.
 
+## Bounties
+
+A Maintainer funds Bounties on issues from their repo's Bounty wallet (see
+[../contracts/README.md](../contracts/README.md#bounty-wallet)). When a PR that closes an issue with
+an open Bounty is merged, the App checks the witnesses below and asks a model whether the PR
+resolves the issue. If everything holds, the Keeper pays the Bounty in full to the wallet the PR's
+author named, within the Maintainer's limits. Anything else is left to the Maintainer, who can sign
+the Payout. Every Payout's note links its transaction.
+
+**Setup.** Set `BOUNTY_FACTORY_ADDRESS` (and `BOUNTY_FACTORY_FROM_BLOCK`, its deploy block) and
+`BOUNTY_PAGE_URL`, with the Keeper's key: the Keeper pays, so Bounties need it. The factory must name
+the same Keeper. A repo's Bounty wallet is `factory.walletOf(repoId, maintainer)`, where
+`maintainer` is the repo's active Binding's Maintainer: a wallet anyone else creates for the repo is
+ignored, and a repo without an active Binding or a wallet has no Bounties. A repo turns the Keeper's
+payouts off with `bounties: off` in `.github/bona-fide.yml`; a Maintainer's signed Payout is still
+relayed. Without `ANTHROPIC_API_KEY` the App still checks every merge, but each Bounty waits for the
+Maintainer: only the model can confirm a PR resolves its issue.
+
+**When it runs.** On these deliveries, after the webhook is answered, since the model can take
+longer than GitHub waits:
+
+- `pull_request` `closed` with `merged: true`: each issue in the same repo the PR closes;
+- `issues` `closed` as completed: the first merged PR that closes it, so a missed PR delivery is
+  caught up by the issue's;
+- `issue_comment` `created` or `edited` on a merged PR, by its author, with a `Bounty wallet:` line,
+  and `pull_request` `edited` on a merged PR whose body has one: the author naming their wallet.
+
+**Which issues a PR closes.** GitHub's own links, read through GraphQL: the PR's
+`closingIssuesReferences`, the issues its closing keywords (`Fixes #42`) or the Development sidebar
+link to, in the same repo; and, the other way, an issue's `closedByPullRequestsReferences`, to find
+the first merged one. These are the links GitHub closes issues by on merge, so they hold after a
+restart or a redelivery, where a timeline or a parse of the body could miss a sidebar link.
+
+**The witnesses.** The Keeper pays only when all of these hold, and the model can't change any:
+
+1. the PR is merged;
+2. GitHub links it as closing the issue;
+3. it is the first merged PR that closes the issue. A later one waits for the Maintainer;
+4. every check on the PR's head commit is green: each latest check run is `success`, `neutral` or
+   `skipped`, and each commit status `success`. One that failed, or is still running, holds the
+   Payout. The App reads all of them, not only a branch protection's required checks, which GitHub
+   only shows an App with the Administration permission. Its own "Bona Fide" check is left out: it
+   is about the Deposit, not the code. A commit with no checks at all passes;
+5. the PR's author named a wallet the Bounty wallet can pay: not the zero address, the wallet
+   itself or the Keeper's;
+6. the Bounty is open, the Keeper's payouts are on, and its amount is within `perPayoutLimit` and
+   what is left of the period's `keeperAllowance()`;
+7. `bounties` is on in `.github/bona-fide.yml`;
+8. and the model says the PR `resolves` the issue, with at least one reason.
+
+The witnesses are read first. When one fails, the model isn't asked.
+
+**Naming the payee.** The PR's author adds a line of its own to the PR description or to a comment
+of their own on the PR:
+
+```
+Bounty wallet: 0x5aAeb6053F3E94C9b9A09f33669435E7Ef1BeAed
+```
+
+The label's case doesn't matter, and the address may be in backticks. A mixed-case address must
+match its EIP-55 checksum; an all-lowercase one is taken as it is. Only the author's own words count:
+a description or comment someone else wrote, or edited last, is ignored, since anyone who can push to
+the repo can edit both. The latest declaration wins: a comment over the description, a later comment
+over an earlier one, and in one text the last line. Editing the description doesn't make it later
+than a comment, so to change the wallet after commenting, comment again. Comments are read from the
+PR's latest 100.
+
+Without a wallet, or with one that isn't an address or can't be paid, the App posts a note on the PR
+asking the author to add the line, once per Bounty, and records a `hold`. When the author adds it,
+the `issue_comment` or `pull_request` `edited` delivery runs the Payout again.
+
+**What the model reads.** As for triage: the repo's name and description, the issue's title and
+body, and the PR's number, author, title, body, first 100 changed files and diff, each cut to
+triage's budgets and said where it was cut. The issue and the PR each sit between tags carrying a
+random token, and the model is told their text is data. It answers `resolves`, `partial` or
+`unrelated`, with 1 to 3 reasons, and is told to say `partial` when in doubt. The request is
+triage's: `TRIAGE_MODEL`, adaptive thinking at medium effort, a JSON schema and Anthropic's
+server-side fallbacks. **Privacy:** with Bounties on, the issue's and the merged PR's text and diff
+are sent to Anthropic's API, but only for a PR that closes an issue with an open Bounty and passes
+every witness.
+
+**Held for the Maintainer.** A failing witness (other than a missing wallet), `partial`,
+`unrelated`, a model that declines, gives no reasons or fails, no model at all, or a wallet that
+refuses the Keeper's payout at the last moment: the Keeper pays nothing and posts a note on the PR
+that says why, lists the model's reasons if it gave any (made plain and safe as triage's are), and
+links the Maintainer to the [Bounty page](#the-bounty-page) to sign the Payout. A Bounty above the
+limits gets the same note: it needs the Maintainer's signature. A held Bounty stays held for that
+PR: later deliveries don't ask the model again, so nobody can ask until it says `resolves`.
+
+**Paying.** `keeperPay(issueNumber, payee)` through the Keeper's usual path: the Bounty is read again
+just before sending and paid only if it is still open under the same serial, the call is simulated,
+and the transaction goes out in turn with the escrow's. Then a note on the PR and one on the issue
+say how much went to which wallet, and link the transaction on `EXPLORER_URL`. A transaction that
+reverts, or a wallet that would revert it, leaves the Bounty to the Maintainer as above. An RPC or
+GitHub error before the Payout is logged and changes nothing: redeliver the webhook from the App's
+advanced settings, or any later delivery for the PR or issue tries again.
+
+**Never twice.** Each run reads the Bounty on-chain first: a paid or cancelled Bounty is never paid
+again, whether by a redelivery, a restart, both of a merge's deliveries at once, or a second PR. The
+runs for one issue go one at a time. The notes start with hidden markers naming the issue and the
+Bounty's Serial, `<!-- bona-fide:bounty-paid issue=N serial=S -->` (and `bounty-held`,
+`bounty-payee`), so each is posted once. A Bounty found already paid, by the Maintainer's signature,
+by the Maintainer directly or by the Keeper before a crash cut its notes short, still gets its note
+on the issue, with the transaction read from the wallet's `Paid` event; the PR gets one only if the
+Bounty went to the wallet its author named.
+
+### The Bounty page
+
+Notes link the Maintainer to `BOUNTY_PAGE_URL` with this query:
+
+```
+?repo=owner/name&issue=42&payee=0x5aAeb6053F3E94C9b9A09f33669435E7Ef1BeAed
+```
+
+`payee` is the checksummed wallet the PR's author named, and is left out while there is none or it
+can't be paid. The page reads the Bounty from the repo's wallet, has the Maintainer sign the Payout,
+and either sends `payWithSignature` itself or relays it through
+[`POST /bounty/payout`](#post-bountypayout), so the Maintainer needn't pay gas.
+
 ## Decision log
 
 The App records each decision it makes, or leaves to the Maintainer, so anyone can check why money
@@ -356,32 +480,38 @@ moved or didn't. Each public repo's page shows the log and the counts, read from
   someone with write, maintain or admin access approved the PR.
 - **Record Exemptions,** each time the model was asked to weigh a Contributor's record: what it
   suggested and why, the witnesses, and what the App did.
+- **Bounties:** each Payout the Keeper made (`pay`), each Bounty it left to the Maintainer or held
+  until the author names a wallet (`hold`), and each Payout the Maintainer signed that the App
+  relayed (`pay`). The item is the Bounty's issue, and the Serial the Bounty's.
 
 Each decision has an id, a time, the repo and the PR or issue, the Deposit's Serial, and:
 
 | Field | What it holds |
 |---|---|
-| `type` | `triage`, `early-refund` or `waive` (a Record Exemption). `pay` and `hold` are kept for decisions the App doesn't make yet |
-| `inputs` | A summary of what was read: for triage, the sizes of the title, body, file list and diff and how much of each was cut; for a Refund, where it was found, such as `webhook pull_request closed` or `check`; for a Record Exemption, the Contributor's login and the numbers the model read. Never the item's text |
-| `suggestion` | The model's verdict (`accept`, `bad-faith` or `unsure` for triage; `waive`, `require` or `flag` for a Record Exemption) and reasons, as plain lines with links removed, or null when no model suggested anything |
-| `witnesses` | The facts checked, as `{name, value}`: the Deposit and who paid it, the Exemption status, the labels (read again after the model answered), who merged, closed or approved and with what access; for a Record Exemption, the score and threshold, the Forfeits, the denouncement and the setting |
-| `action` | What was done: `noted-accept`, `drafted-verdict`, `silent`, `skipped: a Maintainer decided`, `failed: <kind>` or `refunded`; for a Record Exemption, `waived`, `required`, `flagged`, `silent` or `failed: <kind>`. Never an error's text |
-| `txHash` | The Refund's transaction, when money moved |
+| `type` | `triage`, `early-refund`, `waive` (a Record Exemption), `pay` (a Payout of a Bounty) or `hold` (a Bounty left to the Maintainer) |
+| `inputs` | A summary of what was read: for triage, the sizes of the title, body, file list and diff and how much of each was cut; for a Refund, where it was found, such as `webhook pull_request closed` or `check`; for a Record Exemption, the Contributor's login and the numbers the model read; for a Bounty, the delivery, the PR's number, the `method` (`keeper` or `signature`) and the sizes of what the model read. Never the item's text |
+| `suggestion` | The model's verdict (`accept`, `bad-faith` or `unsure` for triage; `waive`, `require` or `flag` for a Record Exemption; `resolves`, `partial` or `unrelated` for a Bounty) and reasons, as plain lines with links removed, or null when no model suggested anything |
+| `witnesses` | The facts checked, as `{name, value}`: the Deposit and who paid it, the Exemption status, the labels (read again after the model answered), who merged, closed or approved and with what access; for a Record Exemption, the score and threshold, the Forfeits, the denouncement and the setting; for a Bounty, each witness above with its value: merged by whom, the closing link, the first merged PR, the checks, the payee, the Bounty, the Keeper switch, the limits and the setting |
+| `action` | What was done: `noted-accept`, `drafted-verdict`, `silent`, `skipped: a Maintainer decided`, `failed: <kind>` or `refunded`; for a Record Exemption, `waived`, `required`, `flagged`, `silent` or `failed: <kind>`; for a Bounty, `paid`, `held: <why>` (such as `held: checks not green`, `held: above the per-payout limit`, `held: model said partial`, `held: payee wallet needed`), `silent` or `failed: <kind>`. Never an error's text |
+| `txHash` | The Refund's or Payout's transaction, when money moved |
 | `outcome` | `decided` or `escalated`, below |
 | `cost` | The model, its input and output tokens, and an estimate in USD from its list price (`claude-opus-5`: $5 in and $25 out per million tokens), or null when the model has no price on file |
 
 **Decided or escalated.** A decision is `decided` when the App acted on its own: an early Refund,
-a note suggesting the Maintainer accept the item, or a Record Exemption granted. It is `escalated`
-when the App left it to the Maintainer: a draft bad-faith verdict, an unsure model, a model that
-declined or failed, a Maintainer who decided while the model read, or a Record Exemption the model
-held back (`required` or `flagged`: the Deposit ask stands, and the Maintainer can still waive it).
+a note suggesting the Maintainer accept the item, a Record Exemption granted, or the Keeper's
+Payout of a Bounty. It is `escalated` when the App left it to the Maintainer: a draft bad-faith
+verdict, an unsure model, a model that declined or failed, a Maintainer who decided while the model
+read, a Record Exemption the model held back (`required` or `flagged`: the Deposit ask stands, and
+the Maintainer can still waive it), or a held Bounty. A Payout the Maintainer signed is `escalated`
+too: the Maintainer decided it, and the App only relayed it.
 
 **What is never recorded.** Refunds at the Timeout, and Refunds of a Deposit the check doesn't count
 (one made before its item was opened, or on an item that is exempt or whose Contributor is
 denounced): those decide nothing. Nor triage that never asked the model: triage off, a Maintainer's
 label already on the item, a Deposit triaged before, or a GitHub failure before the model was asked,
 which the next check tries again. Nor a Record Exemption the witnesses ruled out before the model
-was asked. No item text and no error text is ever recorded.
+was asked. Nor a Bounty run that changes nothing: one already held, a payee still missing after the
+author was asked, or a Bounty already paid. No item text and no error text is ever recorded.
 
 **Private repos.** Each decision records whether GitHub says the repo is private, from the webhook's
 or the installation's repository data; when that isn't known, it counts as private. A private repo's
@@ -402,9 +532,10 @@ The log sits behind the `DecisionLog` port in `src/ports.ts`, so another host ca
 
 | Permission | Access | Used for |
 |---|---|---|
-| Checks | Read and write | The "Bona Fide" check on each PR |
-| Issues | Read and write | The comment and label on issues, and how a Deposit's issue was closed for a Contributor's record |
-| Pull requests | Read and write | Reading a PR when a Deposit lands or its check is re-run, finding merged PRs, reading approvals, reading a PR's files and diff for triage, whether a Deposit's PR was merged for a Contributor's record, and the Keeper's, triage's and Record Exemption's notes on PRs |
+| Checks | Read and write | The "Bona Fide" check on each PR, and a merged PR's check runs for a Bounty |
+| Commit statuses | Read | A merged PR's commit statuses for a Bounty. Only with Bounties on |
+| Issues | Read and write | The comment and label on issues, how a Deposit's issue was closed for a Contributor's record, and the Bounty notes on issues |
+| Pull requests | Read and write | Reading a PR when a Deposit lands or its check is re-run, finding merged PRs, reading approvals, reading a PR's files and diff for triage, whether a Deposit's PR was merged for a Contributor's record, the issues a merged PR closes and its author's comments for a Bounty, and the Keeper's, triage's, Record Exemption's and Bounty notes on PRs |
 | Contents | Read | `.github/bona-fide.yml` and `VOUCHED.td` on the default branch |
 | Metadata | Read | Required by GitHub |
 
@@ -413,8 +544,11 @@ which need no other permission.
 
 Events:
 
-- **Pull request.** The App acts on opened, reopened, synchronize, labeled, unlabeled and closed.
+- **Pull request.** The App acts on opened, reopened, synchronize, labeled, unlabeled and closed,
+  and with Bounties on, edited.
 - **Issues.** The App acts on opened, reopened, labeled, unlabeled and closed.
+- **Issue comment.** With Bounties on, the App acts on created and edited: a merged PR's author
+  naming their wallet. Subscribe to it when you turn Bounties on.
 - **Pull request review.** The App acts on submitted with the state approved: it checks the PR
   again, and an approval from someone with write, maintain or admin access accepts it.
 - **Check run.** The App acts on rerequested, which GitHub sends when someone presses **Re-run** on
@@ -436,11 +570,12 @@ npm start
 [`GET /decisions`](#get-decisions), a watcher that polls the escrow for Deposits, and, with `KEEPER_PRIVATE_KEY` set, [the Keeper](#the-keeper) and its
 [endpoints](#endpoints). With `RELAYER_PRIVATE_KEY` set, it also runs the
 [deposit relay](#post-relaydeposit), and with `ANTHROPIC_API_KEY` set as well as the Keeper's key,
-[triage](#triage). With `ANTHROPIC_API_KEY` set, it also follows Contributors' records for
+[triage](#triage). With `BOUNTY_FACTORY_ADDRESS` set as well as the Keeper's key, it pays
+[Bounties](#bounties). With `ANTHROPIC_API_KEY` set, it also follows Contributors' records for
 [Record Exemptions](#record-exemption), on the watcher's timer. It and the files it opens,
 `src/decisions/file.ts` and `src/records/file.ts`, are the only files that use Node: everything
-`src/index.ts` exports also bundles for a Workers-style runtime. The Claude reviewer and advisor,
-`src/triage/claude.ts` and `src/records/claude.ts`, aren't among those exports: Anthropic's SDK looks for Node's globals when they exist, and the bundle check allows
+`src/index.ts` exports also bundles for a Workers-style runtime. The Claude reviewer, advisor and
+resolver, `src/triage/claude.ts`, `src/records/claude.ts` and `src/bounties/claude.ts`, aren't among those exports: Anthropic's SDK looks for Node's globals when they exist, and the bundle check allows
 none, so a host imports it directly.
 
 The host reads these environment variables:
@@ -464,8 +599,11 @@ The host reads these environment variables:
 | `ACTIVATE_MS` | `30000` | How often the Keeper looks for Bindings to activate |
 | `REFUND_MS` | `30000` | How often the Keeper looks for Deposits past their Timeout to refund |
 | `RELAYER_PRIVATE_KEY` | unset | Signs and pays the gas for relayed Deposits. It may be the Keeper's key |
-| `ANTHROPIC_API_KEY` | unset | Turns [triage](#triage) on, with the Keeper, and [Record Exemptions](#record-exemption). Sends each PR's or issue's text and diff, and the numbers of some Contributors' records, to Anthropic's API |
-| `TRIAGE_MODEL` | `claude-opus-5` | The Claude model triage and Record Exemptions ask |
+| `ANTHROPIC_API_KEY` | unset | Turns [triage](#triage) on, with the Keeper, and [Record Exemptions](#record-exemption), and lets the Keeper pay [Bounties](#bounties). Sends each PR's or issue's text and diff, and the numbers of some Contributors' records, to Anthropic's API |
+| `TRIAGE_MODEL` | `claude-opus-5` | The Claude model triage, Record Exemptions and Bounties ask |
+| `BOUNTY_FACTORY_ADDRESS` | unset | The `BountyWalletFactory`. With the Keeper's key, turns [Bounties](#bounties) on |
+| `BOUNTY_FACTORY_FROM_BLOCK` | `0` | The factory's deploy block. The App looks for a Bounty's `Paid` event from here on |
+| `BOUNTY_PAGE_URL` | required with the factory | The [Bounty page](#the-bounty-page), linked with `?repo=owner/repo&issue=N&payee=0x…` |
 | `DECISIONS_PATH` | `data/decisions.jsonl` | The [decision log](#decision-log)'s JSONL file. Put it on storage that outlives the process |
 | `RECORDS_PATH` | `data/records.jsonl` | The JSONL file of the Deposits linked to Contributors for [Record Exemptions](#record-exemption). Put it beside `DECISIONS_PATH` |
 | `TRUST_PROXY` | unset | `1` makes the per-IP limits count the rightmost `X-Forwarded-For` address instead of the connection's. Set it only behind a reverse proxy that overwrites `X-Forwarded-For`; see [Limits](#limits) |
@@ -476,12 +614,13 @@ reach it.
 ## Endpoints
 
 With the Keeper on, the host serves `POST /forfeit` and `POST /binding-proof` next to the
-webhook, and it always serves [`GET /decisions`](#get-decisions). Both take and return JSON. A refusal is `{"error": "…"}` with status 400 (the request is
+webhook, with Bounties on also [`POST /bounty/payout`](#post-bountypayout), and it always serves
+[`GET /decisions`](#get-decisions). They take and return JSON. A refusal is `{"error": "…"}` with status 400 (the request is
 wrong), 404 (nothing to act on), 409 (the on-chain state doesn't allow it) or 429 (try again after
 `Retry-After` seconds; see [Limits](#limits)).
 
-Neither endpoint takes credentials: the signature in the body authorizes the action. So both answer
-a CORS preflight and allow any origin, and a sign page on another origin can call them. Any method
+None of them takes credentials: the signature in the body authorizes the action. So each answers a
+CORS preflight and allows any origin, and a sign page on another origin can call them. Any method
 other than `POST` gets 405.
 
 ### `POST /forfeit`
@@ -584,6 +723,41 @@ The Keeper doesn't store nonces, so a proof works until its deadline; keep the d
 Sending a proof again proposes what `bona-fide.yml` says at that moment, and sends nothing if that
 Binding is already pending or active.
 
+### `POST /bounty/payout`
+
+Relays a Payout the Maintainer signed, so the Bounty page needn't make them pay gas.
+
+```json
+{
+  "repo": "octocat/hello-world",
+  "issue": 42,
+  "payee": "0x5aAeb6053F3E94C9b9A09f33669435E7Ef1BeAed",
+  "deadline": 1790000000,
+  "signature": "0x…"
+}
+```
+
+- `issue` is the issue's number. `payee` is an address, in any case.
+  `deadline` is Unix seconds, as a number or a decimal string.
+- The signature is EIP-712 over
+  `Payout(uint256 issueNumber,uint256 serial,address payee,uint256 amount,uint256 deadline)` in the
+  domain `{name: "BonaFide Bounty", version: "1", chainId, verifyingContract: <the repo's Bounty
+  wallet>}`, where `serial` and `amount` are the open Bounty's (`bountyOf(issue)`). See
+  [../contracts/README.md](../contracts/README.md#signatures).
+- The Keeper finds the repo's wallet from its active Binding's Maintainer, reads the Bounty, checks
+  the payee is one the wallet can pay and the signature against the wallet's owner, as the wallet
+  does: an ERC-1271 wallet, or a 65-byte signature with `v` 27 or 28 and a low `s`. Then it simulates
+  `payWithSignature` and sends it. The limits and the Keeper switch don't apply: the signature is
+  the Maintainer's.
+- `200 {"txHash": "0x…"}` once the transaction is mined. The App then posts the paid note on the
+  issue, and on the first merged PR that closes it, and records a `pay` decision.
+- `404` if Bona Fide isn't installed on the repo, the repo has no Bounty wallet, or the issue no
+  Bounty; `409` if the Bounty was already paid or cancelled; `400` for an expired signature, a
+  payee the wallet can't pay, or a signature that isn't the owner's.
+- `502 {"error": "…", "txHash": "0x…"}` if the transaction passed simulation but reverted on-chain,
+  so no funds moved. The Keeper then relays no Payout for that Bounty, or signed by that owner, for
+  10 minutes.
+
 ### `GET /decisions`
 
 Served whenever the App runs, with or without the Keeper. `GET /decisions?repo=owner/name` answers a
@@ -635,7 +809,8 @@ limit gets `413 {"error": "…"}` as soon as it passes it, or at once if its `Co
 and the host closes the connection without reading the rest. GitHub's deliveries for the events the
 App acts on are far smaller.
 
-Each client IP may send 10 requests a minute to `POST /forfeit` and `POST /binding-proof` together,
+Each client IP may send 10 requests a minute to `POST /forfeit`, `POST /binding-proof` and
+`POST /bounty/payout` together,
 10 to `POST /relay/deposit`, and 30 to `GET /decisions`; the relay also takes 30 a minute per repo.
 Every request counts, well-formed or not. Past a limit the answer is `429` with `Retry-After`.
 
@@ -651,7 +826,8 @@ A relayed transaction can pass simulation and still revert on-chain, for instanc
 smart-contract wallet answers ERC-1271 differently in the transaction than in the simulation, and
 each revert costs gas. So after a relayed Forfeit reverts, the Keeper relays no Forfeit for that
 Deposit, or signed by its Maintainer's wallet, for 10 minutes (`REVERT_COOLDOWN_MS` in
-`src/relay/rate-limit.ts`). After a relayed Deposit reverts, the relay sends no Deposit for that PR
+`src/relay/rate-limit.ts`), and after a relayed Payout reverts, no Payout for that Bounty or signed
+by its wallet's owner. After a relayed Deposit reverts, the relay sends no Deposit for that PR
 or issue, or from that wallet, for the same 10 minutes. Meanwhile each gets `429` with
 `Retry-After`, and a Contributor can still deposit from their own wallet.
 

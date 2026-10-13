@@ -1,4 +1,5 @@
 import type { App } from "./app.ts";
+import type { Bounties } from "./bounties/bounties.ts";
 import { CHECK_NAME } from "./github.ts";
 import type { Keeper } from "./keeper/keeper.ts";
 import { ACCEPTED, WAIVER } from "./labels.ts";
@@ -9,9 +10,16 @@ export interface WebhookDeps {
   app: App;
   /** Hears every verified delivery, to refund on merges, completions and labels. */
   keeper?: Pick<Keeper, "onWebhook">;
+  /** Hears every verified delivery, to pay a Bounty when a PR that closes its issue is merged. */
+  bounties?: Pick<Bounties, "onWebhook">;
 }
 
-export function createWebhookHandler({ secret, app, keeper }: WebhookDeps): (request: Request) => Promise<Response> {
+export function createWebhookHandler({
+  secret,
+  app,
+  keeper,
+  bounties,
+}: WebhookDeps): (request: Request) => Promise<Response> {
   return async (request) => {
     const body = new Uint8Array(await request.arrayBuffer());
     if (!(await isSignedBy(secret, body, request.headers.get("x-hub-signature-256")))) {
@@ -28,6 +36,7 @@ export function createWebhookHandler({ secret, app, keeper }: WebhookDeps): (req
       await app.recheckSuite(repoOf(payload), payload.check_suite.id);
     }
     await keeper?.onWebhook(event, payload);
+    await bounties?.onWebhook(event, payload);
     return new Response("OK", { status: 200 });
   };
 }
@@ -66,7 +75,7 @@ function rerunFrom(event: string | null, payload: Payload): { repo: Repo; number
   return { repo: repoOf(payload), number };
 }
 
-function repoOf(payload: Payload): Repo {
+export function repoOf(payload: Payload): Repo {
   return {
     owner: payload.repository.owner.login,
     name: payload.repository.name,

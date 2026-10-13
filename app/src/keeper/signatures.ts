@@ -61,6 +61,35 @@ export function bindingDigest(
   });
 }
 
+/** A Bounty wallet's EIP-712 domain: each wallet is its own verifying contract. */
+export function bountyDomain(chainId: number, wallet: Address) {
+  return { name: "BonaFide Bounty", version: "1", chainId, verifyingContract: wallet } as const;
+}
+
+export const PAYOUT_TYPES = {
+  Payout: [
+    { name: "issueNumber", type: "uint256" },
+    { name: "serial", type: "uint256" },
+    { name: "payee", type: "address" },
+    { name: "amount", type: "uint256" },
+    { name: "deadline", type: "uint256" },
+  ],
+} as const;
+
+/** `serial` and `amount` are the open Bounty's, as the wallet checks them. */
+export function payoutDigest(
+  chainId: number,
+  wallet: Address,
+  message: { issueNumber: bigint; serial: bigint; payee: Address; amount: bigint; deadline: bigint },
+): Hex {
+  return hashTypedData({
+    domain: bountyDomain(chainId, wallet),
+    types: PAYOUT_TYPES,
+    primaryType: "Payout",
+    message,
+  });
+}
+
 const ERC1271 = parseAbi(["function isValidSignature(bytes32 hash, bytes signature) view returns (bytes4)"]);
 const ERC1271_MAGIC = "0x1626ba7e";
 const HALF_CURVE_ORDER = 0x7fffffffffffffffffffffffffffffff5d576e7357a4501ddfe92f46681b20a0n;

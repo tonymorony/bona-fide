@@ -56,7 +56,7 @@ export {
   type KeeperDeps,
   type SignedForfeit,
 } from "./keeper/keeper.ts";
-export { createKeeperRoutes, type KeeperRoutesOptions } from "./keeper/routes.ts";
+export { BOUNTY_PAYOUT_PATH, createKeeperRoutes, type KeeperRoutesOptions } from "./keeper/routes.ts";
 export {
   BODY_BUDGET,
   createTriage,
@@ -69,7 +69,35 @@ export {
   type TriageDecision,
   type TriageDeps,
 } from "./triage/triage.ts";
-export { BINDING_TYPES, escrowDomain, FORFEIT_TYPES } from "./keeper/signatures.ts";
+export {
+  BINDING_TYPES,
+  bountyDomain,
+  escrowDomain,
+  FORFEIT_TYPES,
+  PAYOUT_TYPES,
+  payoutDigest,
+} from "./keeper/signatures.ts";
+export {
+  bountyMarkers,
+  createBounties,
+  type Bounties,
+  type BountyDeps,
+  type SignedPayout,
+} from "./bounties/bounties.ts";
+export { bountyLink } from "./bounties/copy.ts";
+export { payeeOf, payeeProblem, type Payee, type PayeeSource } from "./bounties/payee.ts";
+export {
+  bountyFactoryAbi,
+  BountyRejection,
+  bountyWalletAbi,
+  createBountyWallets,
+  type BountyStatus,
+  type BountyWalletError,
+  type BountyWallets,
+  type BountyWalletsOptions,
+  type WalletBounty,
+  type WalletState,
+} from "./bounties/wallet.ts";
 export {
   createRecordIndex,
   LOOKUPS_PER_TICK,

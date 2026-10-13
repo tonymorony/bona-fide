@@ -2,12 +2,15 @@ import type { Hex } from "viem";
 import { repoIdOf, type Kind } from "../../src/keys.ts";
 import type {
   CheckRun,
+  ClosingPullRequest,
+  CommitCheck,
   GitHub,
   GitHubProfile,
   Item,
   ItemContent,
   ItemOutcome,
   Permission,
+  PullRequestFacts,
   Repo,
 } from "../../src/ports.ts";
 
@@ -29,6 +32,12 @@ interface RepoState {
   suites: Map<number, string>;
   /** Items merged, or closed as completed by someone other than their author. */
   accepted: Set<string>;
+  /** What pullRequestFacts answers for each PR. */
+  pullRequests: Map<number, PullRequestFacts>;
+  /** The check runs and statuses on each commit. */
+  commitChecks: Map<string, CommitCheck[]>;
+  /** PRs an issue lists as closing it beyond those whose `closes` name it. */
+  closingLinks: Map<number, ClosingPullRequest[]>;
 }
 
 // An in-memory GitHub. It keeps what the App would leave visible on github.com: the latest
@@ -60,6 +69,9 @@ export class FakeGitHub implements GitHub {
       contents: new Map(),
       suites: new Map(),
       accepted: new Set(),
+      pullRequests: new Map(),
+      commitChecks: new Map(),
+      closingLinks: new Map(),
     };
     this.repos.set(fullName.toLowerCase(), state);
     return state;
@@ -134,6 +146,22 @@ export class FakeGitHub implements GitHub {
   /** The public profile profileOf answers for `login`. Without one, the account doesn't exist. */
   setProfile(login: string, profile: GitHubProfile): void {
     this.profiles.set(login.toLowerCase(), profile);
+  }
+
+  /** What pullRequestFacts answers for the PR. Its `closes` also link it to those issues. */
+  setPullRequest(fullName: string, facts: PullRequestFacts): void {
+    this.state(fullName).pullRequests.set(facts.number, facts);
+  }
+
+  /** Makes the issue list a PR as closing it, whatever the PR's own facts say. */
+  linkClosing(fullName: string, issue: number, pr: ClosingPullRequest): void {
+    const links = this.state(fullName).closingLinks;
+    links.set(issue, [...(links.get(issue) ?? []), pr]);
+  }
+
+  /** The check runs and statuses on a commit. A commit without any has none. */
+  setChecks(fullName: string, sha: string, checks: CommitCheck[]): void {
+    this.state(fullName).commitChecks.set(sha, checks);
   }
 
   labelsOn(fullName: string, number: number): string[] {
@@ -271,6 +299,26 @@ export class FakeGitHub implements GitHub {
     await this.roundTrip();
     this.profileReads.push(login);
     return this.profiles.get(login.toLowerCase()) ?? null;
+  }
+
+  async pullRequestFacts(repo: Repo, number: number): Promise<PullRequestFacts | null> {
+    await this.roundTrip();
+    const facts = this.state(fullNameOf(repo)).pullRequests.get(number);
+    return facts ? structuredClone(facts) : null;
+  }
+
+  async closingPullRequests(repo: Repo, issueNumber: number): Promise<ClosingPullRequest[]> {
+    await this.roundTrip();
+    const state = this.state(fullNameOf(repo));
+    const closing = [...state.pullRequests.values()]
+      .filter((pr) => pr.closes.includes(issueNumber))
+      .map((pr) => ({ number: pr.number, mergedAt: pr.mergedAt }));
+    return [...closing, ...(state.closingLinks.get(issueNumber) ?? [])];
+  }
+
+  async checksOf(repo: Repo, sha: string): Promise<CommitCheck[]> {
+    await this.roundTrip();
+    return this.state(fullNameOf(repo)).commitChecks.get(sha) ?? [];
   }
 
   private async roundTrip(): Promise<void> {

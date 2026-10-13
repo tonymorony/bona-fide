@@ -76,6 +76,7 @@ test.each([
   ["record_threshold: 2.5\n", "`record_threshold` must be a whole number from 1 to 100."],
   ["record_threshold: 101\n", "`record_threshold` must be a whole number from 1 to 100."],
   ["record_threshold: three\n", "`record_threshold` must be a whole number from 1 to 100."],
+  ["bounties: later\n", "`bounties` must be on or off."],
 ])("config %j pauses the App with a neutral check: %s", async (config, problem) => {
   const check = await checkWith(config);
 
@@ -104,6 +105,14 @@ test.each([
     ok: true,
     config: { recordExemption: on, recordThreshold: threshold },
   });
+});
+
+test.each([
+  ["", true],
+  ["bounties: on\n", true],
+  ["bounties: off\n", false],
+])("config %j has the Keeper's Bounty payouts on: %s", (config, on) => {
+  expect(parseConfig(config)).toMatchObject({ ok: true, config: { bounties: on } });
 });
 
 test("a config error posts nothing on issues", async () => {

@@ -156,7 +156,7 @@ export function keeperAccount(privateKey: string): LocalAccount {
 }
 
 export function createKeeperEscrow({ client, account, escrow }: KeeperEscrowOptions): KeeperEscrow {
-  const inTurn = oneAtATime();
+  const inTurn = inTurnFor(account);
   const chain = createEscrowChain({ client, escrow });
   let chainId: Promise<number> | undefined;
 
@@ -172,12 +172,7 @@ export function createKeeperEscrow({ client, account, escrow }: KeeperEscrowOpti
     return { ...d, status: STATUSES[d.status] ?? "none" };
   }
 
-  async function sent(request: WriteContractParameters) {
-    const hash = await writeContract(client, request);
-    const receipt = await client.waitForTransactionReceipt({ hash });
-    if (receipt.status !== "success") throw new TransactionReverted(hash);
-    return receipt;
-  }
+  const sent = (request: WriteContractParameters) => sendAndWait(client, request);
 
   return {
     address: escrow,
@@ -313,23 +308,44 @@ async function rejecting<T>(simulation: Promise<T>): Promise<T> {
   try {
     return await simulation;
   } catch (error) {
-    const revert = error instanceof BaseError ? error.walk((e) => e instanceof ContractFunctionRevertedError) : null;
-    const reason = revert instanceof ContractFunctionRevertedError ? revert.data?.errorName : undefined;
+    const reason = revertNameOf(error);
     throw isEscrowError(reason) ? new EscrowRejection(reason) : error;
   }
+}
+
+/** The custom error a simulated call reverted with, such as "DepositNotActive", if it names one. */
+export function revertNameOf(error: unknown): string | undefined {
+  const revert = error instanceof BaseError ? error.walk((e) => e instanceof ContractFunctionRevertedError) : null;
+  return revert instanceof ContractFunctionRevertedError ? revert.data?.errorName : undefined;
+}
+
+/** Sends a simulated request and waits for it to be mined. Throws a TransactionReverted if it reverted. */
+export async function sendAndWait(client: PublicClient, request: WriteContractParameters) {
+  const hash = await writeContract(client, request);
+  const receipt = await client.waitForTransactionReceipt({ hash });
+  if (receipt.status !== "success") throw new TransactionReverted(hash);
+  return receipt;
 }
 
 function isEscrowError(name: string | undefined): name is EscrowError {
   return keeperAbi.some((item) => item.type === "error" && item.name === name);
 }
 
-// The Keeper sends one transaction at a time: its nonces stay in order, and each decision reads
-// the state the previous transaction left.
-function oneAtATime() {
-  let tail: Promise<unknown> = Promise.resolve();
-  return <T>(work: () => Promise<T>): Promise<T> => {
-    const run = tail.then(work, work);
-    tail = run.catch(() => {});
-    return run;
-  };
+// The Keeper sends one transaction at a time, whether to the escrow or to a Bounty wallet: its
+// nonces stay in order, and each decision reads the state the previous transaction left.
+const turns = new WeakMap<LocalAccount, <T>(work: () => Promise<T>) => Promise<T>>();
+
+/** Runs each piece of work after the previous one `account` started, so its transactions go out one at a time. */
+export function inTurnFor(account: LocalAccount): <T>(work: () => Promise<T>) => Promise<T> {
+  let inTurn = turns.get(account);
+  if (!inTurn) {
+    let tail: Promise<unknown> = Promise.resolve();
+    inTurn = <T>(work: () => Promise<T>): Promise<T> => {
+      const run = tail.then(work, work);
+      tail = run.catch(() => {});
+      return run;
+    };
+    turns.set(account, inTurn);
+  }
+  return inTurn;
 }

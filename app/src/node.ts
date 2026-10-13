@@ -6,6 +6,9 @@
 // holds a Deposit. With ANTHROPIC_API_KEY set, Claude also weighs the record of each Contributor
 // whose Bona Fide record reaches a repo's threshold, for a Record Exemption; the records' links are
 // kept in the JSONL file at RECORDS_PATH.
+// With BOUNTY_FACTORY_ADDRESS set as well as the Keeper's key, the Keeper pays Bounties when a PR
+// that closes their issue is merged, and relays signed Payouts at POST /bounty/payout. Without
+// ANTHROPIC_API_KEY, every Bounty waits for the Maintainer.
 // It keeps the decision log in the JSONL file at DECISIONS_PATH and serves it at GET /decisions.
 // Start it with `node src/node.ts`; Node 24 runs the TypeScript directly.
 
@@ -15,6 +18,9 @@ import { createAppAuth } from "@octokit/auth-app";
 import { Octokit } from "@octokit/rest";
 import { createPublicClient, createWalletClient, http, type Address } from "viem";
 import { createApp } from "./app.ts";
+import { createBounties } from "./bounties/bounties.ts";
+import { createClaudeResolver } from "./bounties/claude.ts";
+import { createBountyWallets } from "./bounties/wallet.ts";
 import { clientIpOf } from "./client-ip.ts";
 import { MAX_JSON_BODY_BYTES, MAX_WEBHOOK_BODY_BYTES } from "./config.ts";
 import { DEFAULT_DECISIONS_PATH, openDecisionFile } from "./decisions/file.ts";
@@ -24,7 +30,7 @@ import { createGitHub, quietLog } from "./github.ts";
 import { createBindingActivator } from "./keeper/activator.ts";
 import { createKeeperEscrow, keeperAccount } from "./keeper/escrow.ts";
 import { createKeeper } from "./keeper/keeper.ts";
-import { BINDING_PROOF_PATH, createKeeperRoutes, FORFEIT_PATH } from "./keeper/routes.ts";
+import { BINDING_PROOF_PATH, BOUNTY_PAYOUT_PATH, createKeeperRoutes, FORFEIT_PATH } from "./keeper/routes.ts";
 import { createTimeoutRefunder } from "./keeper/timeouts.ts";
 import { createClaudeAdvisor } from "./records/claude.ts";
 import { createRecordExemptions } from "./records/exemption.ts";
@@ -148,6 +154,33 @@ if (recordFile) {
 } else
   console.log("Record Exemptions off: set ANTHROPIC_API_KEY to let a good Bona Fide record stand in for a Deposit.");
 
+// Bounties need the Keeper, which pays them, and the factory, which finds each repo's Bounty wallet.
+// Only the model can confirm a PR resolves its issue, so without it every Bounty waits for the Maintainer.
+const bountyFactory = process.env.BOUNTY_FACTORY_ADDRESS;
+const bounties =
+  account && bountyFactory
+    ? createBounties({
+        github,
+        chain,
+        wallets: createBountyWallets({
+          client: createPublicClient({ transport: http(env("RPC_URL")) }),
+          account,
+          factory: bountyFactory as Address,
+          fromBlock: BigInt(process.env.BOUNTY_FACTORY_FROM_BLOCK ?? "0"),
+        }),
+        resolver: anthropic ? createClaudeResolver({ client: anthropic, model: triageModel }) : undefined,
+        bountyPageUrl: env("BOUNTY_PAGE_URL"),
+        explorerUrl: process.env.EXPLORER_URL || undefined,
+        decisions,
+        record: (decision) => console.log(JSON.stringify({ event: decision.type, ...decision })),
+      })
+    : undefined;
+if (bounties && anthropic)
+  console.log(`Bounties: the Keeper pays them once ${triageModel} agrees a PR resolves its issue.`);
+else if (bounties) console.log("Bounties wait for the Maintainer: set ANTHROPIC_API_KEY to let the Keeper pay them.");
+else if (bountyFactory) console.log("Bounties off: they need the Keeper. Set KEEPER_PRIVATE_KEY too.");
+else console.log("Bounties off: set BOUNTY_FACTORY_ADDRESS to pay Bounties from Maintainers' Bounty wallets.");
+
 const app = createApp({
   github,
   chain,
@@ -158,8 +191,8 @@ const app = createApp({
   triage,
   recordExemptions: recordExemptions || undefined,
 });
-const webhook = createWebhookHandler({ secret: env("WEBHOOK_SECRET"), app, keeper: keeper ?? undefined });
-const keeperRoutes = keeper && createKeeperRoutes(keeper);
+const webhook = createWebhookHandler({ secret: env("WEBHOOK_SECRET"), app, keeper: keeper ?? undefined, bounties });
+const keeperRoutes = keeper && createKeeperRoutes(keeper, { bounties });
 
 async function handle(request: Request, clientIp: string): Promise<Response> {
   const answered = await keeperRoutes?.(request, clientIp).catch((error: unknown) => {
@@ -193,6 +226,9 @@ async function route(request: Request, clientIp: string): Promise<Response> {
   if (path === RELAY_DEPOSIT_PATH) {
     if (relay) return relay(request, clientIp);
     return Response.json({ error: "This App doesn't relay Deposits." }, { status: 404 });
+  }
+  if (path === BOUNTY_PAYOUT_PATH && !bounties) {
+    return Response.json({ error: "This App doesn't pay Bounties." }, { status: 404 });
   }
   return handle(request, clientIp);
 }
@@ -228,7 +264,7 @@ const server = createServer(async (req, res) => {
   }
 });
 
-const JSON_PATHS = [RELAY_DEPOSIT_PATH, FORFEIT_PATH, BINDING_PROOF_PATH];
+const JSON_PATHS = [RELAY_DEPOSIT_PATH, FORFEIT_PATH, BINDING_PROOF_PATH, BOUNTY_PAYOUT_PATH];
 
 function bodyLimit(path: string): number {
   return JSON_PATHS.includes(path) ? MAX_JSON_BODY_BYTES : MAX_WEBHOOK_BODY_BYTES;

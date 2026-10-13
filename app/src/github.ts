@@ -2,7 +2,15 @@ import type { Octokit } from "@octokit/rest";
 import type { Hex } from "viem";
 import { repoIdOf } from "./keys.ts";
 import { ACCEPTED } from "./labels.ts";
-import { fullName, type GitHub, type ItemFields, type Permission, type Repo } from "./ports.ts";
+import {
+  fullName,
+  type AuthoredText,
+  type CommitCheck,
+  type GitHub,
+  type ItemFields,
+  type Permission,
+  type Repo,
+} from "./ports.ts";
 
 export const CHECK_NAME = "Bona Fide";
 const MARKER = "<!-- bona-fide -->";
@@ -58,6 +66,17 @@ export function createGitHub({ appId, app, installation }: GitHubOptions): GitHu
     } catch (error) {
       const status = (error as { status?: number } | null)?.status;
       if (status === 406 || status === 422) return null;
+      throw error;
+    }
+  }
+
+  // A missing repo, PR or issue comes back as null data with a NOT_FOUND error.
+  async function graphql<T>(repo: Repo, query: string, variables: Record<string, unknown>): Promise<T | null> {
+    try {
+      return await api(repo).graphql<T>(query, { owner: repo.owner, name: repo.name, ...variables });
+    } catch (error) {
+      const errors = (error as { errors?: { type?: string }[] } | null)?.errors;
+      if (errors?.some((e) => e.type === "NOT_FOUND")) return null;
       throw error;
     }
   }
@@ -333,6 +352,66 @@ export function createGitHub({ appId, app, installation }: GitHubOptions): GitHu
       };
     },
 
+    // GraphQL has what REST lacks: the issues GitHub links a PR to as closing them, and who last
+    // edited its body and each comment.
+    async pullRequestFacts(repo, number) {
+      const data = await graphql<{ repository: { pullRequest: GraphPullRequest | null } | null }>(
+        repo,
+        PULL_REQUEST_FACTS,
+        { number },
+      );
+      const pr = data?.repository?.pullRequest;
+      if (!pr) return null;
+      const sameRepo = fullName(repo).toLowerCase();
+      return {
+        number: pr.number,
+        author: pr.author?.login ?? null,
+        merged: pr.merged,
+        mergedAt: pr.mergedAt ? new Date(pr.mergedAt) : null,
+        mergedBy: pr.mergedBy?.login ?? null,
+        headSha: pr.headRefOid,
+        closes: pr.closingIssuesReferences.nodes
+          .filter((issue) => issue.repository.nameWithOwner.toLowerCase() === sameRepo)
+          .map((issue) => issue.number),
+        body: authored(pr),
+        comments: pr.comments.nodes.map(authored),
+      };
+    },
+
+    async closingPullRequests(repo, issueNumber) {
+      const data = await graphql<{ repository: { issue: GraphIssue | null } | null }>(repo, CLOSING_PULL_REQUESTS, {
+        number: issueNumber,
+      });
+      const issue = data?.repository?.issue;
+      if (!issue) return [];
+      const sameRepo = fullName(repo).toLowerCase();
+      return issue.closedByPullRequestsReferences.nodes
+        .filter((pr) => pr.repository.nameWithOwner.toLowerCase() === sameRepo)
+        .map((pr) => ({ number: pr.number, mergedAt: pr.mergedAt ? new Date(pr.mergedAt) : null }));
+    },
+
+    // Check runs from GitHub Apps and Actions, and statuses from older CI. The App's own check is
+    // about the Deposit, not the code, so it is left out.
+    async checksOf(repo, sha) {
+      const octokit = api(repo);
+      const [runs, { data: combined }] = await Promise.all([
+        octokit.paginate(octokit.rest.checks.listForRef, {
+          ...repoParams(repo),
+          ref: sha,
+          filter: "latest",
+          per_page: 100,
+        }),
+        octokit.rest.repos.getCombinedStatusForRef({ ...repoParams(repo), ref: sha, per_page: 100 }),
+      ]);
+      const checks: CommitCheck[] = runs
+        .filter((run) => run.app?.id !== appId)
+        .map((run) => ({ name: run.name, state: runState(run.status, run.conclusion) }));
+      for (const status of combined.statuses) {
+        checks.push({ name: status.context, state: statusState(status.state) });
+      }
+      return checks;
+    },
+
     async getItem(repo, kind, number) {
       try {
         if (kind === "pr") {
@@ -347,6 +426,77 @@ export function createGitHub({ appId, app, installation }: GitHubOptions): GitHu
       }
     },
   };
+}
+
+const PULL_REQUEST_FACTS = `query ($owner: String!, $name: String!, $number: Int!) {
+  repository(owner: $owner, name: $name) {
+    pullRequest(number: $number) {
+      number
+      merged
+      mergedAt
+      mergedBy { login }
+      headRefOid
+      author { login }
+      editor { login }
+      body
+      createdAt
+      closingIssuesReferences(first: 25) { nodes { number repository { nameWithOwner } } }
+      comments(last: 100) { nodes { author { login } editor { login } body createdAt } }
+    }
+  }
+}`;
+
+const CLOSING_PULL_REQUESTS = `query ($owner: String!, $name: String!, $number: Int!) {
+  repository(owner: $owner, name: $name) {
+    issue(number: $number) {
+      closedByPullRequestsReferences(first: 25, includeClosedPrs: true) {
+        nodes { number mergedAt repository { nameWithOwner } }
+      }
+    }
+  }
+}`;
+
+interface GraphText {
+  author: { login: string } | null;
+  editor: { login: string } | null;
+  body: string;
+  createdAt: string;
+}
+
+interface GraphPullRequest extends GraphText {
+  number: number;
+  merged: boolean;
+  mergedAt: string | null;
+  mergedBy: { login: string } | null;
+  headRefOid: string;
+  closingIssuesReferences: { nodes: { number: number; repository: { nameWithOwner: string } }[] };
+  comments: { nodes: GraphText[] };
+}
+
+interface GraphIssue {
+  closedByPullRequestsReferences: {
+    nodes: { number: number; mergedAt: string | null; repository: { nameWithOwner: string } }[];
+  };
+}
+
+function authored(text: GraphText): AuthoredText {
+  return {
+    author: text.author?.login ?? null,
+    editor: text.editor?.login ?? null,
+    text: text.body,
+    createdAt: new Date(text.createdAt),
+  };
+}
+
+// Neutral and skipped runs don't block a merge, so they count as green.
+function runState(status: string, conclusion: string | null): CommitCheck["state"] {
+  if (status !== "completed") return "pending";
+  return conclusion === "success" || conclusion === "neutral" || conclusion === "skipped" ? "success" : "failure";
+}
+
+function statusState(state: string): CommitCheck["state"] {
+  if (state === "success") return "success";
+  return state === "pending" ? "pending" : "failure";
 }
 
 interface RestItem {

@@ -1,15 +1,19 @@
-import { isAddress, type Hex } from "viem";
+import { getAddress, isAddress, type Hex } from "viem";
+import type { Bounties, SignedPayout } from "../bounties/bounties.ts";
 import { KINDS, type Kind } from "../keys.ts";
 import { fixedWindow, type RateLimit } from "../relay/rate-limit.ts";
 import { Refusal, type BindingProof, type Keeper, type SignedForfeit } from "./keeper.ts";
 
 export const FORFEIT_PATH = "/forfeit";
 export const BINDING_PROOF_PATH = "/binding-proof";
+export const BOUNTY_PAYOUT_PATH = "/bounty/payout";
 
-/** Requests per client IP to the two endpoints together. Every POST counts, well-formed or not. */
+/** Requests per client IP to the endpoints together. Every POST counts, well-formed or not. */
 const PER_IP: RateLimit = { max: 10, windowMs: 60_000 };
 
 export interface KeeperRoutesOptions {
+  /** Relays the Payouts Maintainers sign at POST /bounty/payout. Without it, that path isn't served. */
+  bounties?: Pick<Bounties, "relayPayout">;
   perIp?: RateLimit;
   /** The clock for the rate limit, in milliseconds. */
   now?: () => number;
@@ -35,7 +39,7 @@ const PREFLIGHT = {
  */
 export function createKeeperRoutes(
   keeper: Keeper,
-  { perIp = PER_IP, now = Date.now }: KeeperRoutesOptions = {},
+  { bounties, perIp = PER_IP, now = Date.now }: KeeperRoutesOptions = {},
 ): (request: Request, clientIp: string) => Promise<Response | null> {
   const ipWait = fixedWindow(perIp, now);
   const routes: Record<string, (body: unknown) => Promise<object>> = {
@@ -45,6 +49,9 @@ export function createKeeperRoutes(
       return "effectiveAt" in bound ? { ...bound, effectiveAt: Number(bound.effectiveAt) } : bound;
     },
   };
+  if (bounties) {
+    routes[BOUNTY_PAYOUT_PATH] = async (body) => ({ txHash: await bounties.relayPayout(parsePayout(body)) });
+  }
   return async (request, clientIp) => {
     const route = routes[new URL(request.url).pathname];
     if (!route) return null;
@@ -104,6 +111,21 @@ function parseBindingProof(body: unknown): BindingProof {
   if (until === null) throw badRequest("deadline must be a time in Unix seconds.");
   if (typeof signature !== "string" || !HEX.test(signature)) throw badRequest("signature must be 0x-prefixed hex.");
   return { repo, maintainer, nonce: nonce as Hex, deadline: until, signature: signature as Hex };
+}
+
+/** The request as a SignedPayout. Throws a Refusal that says what is wrong with it. */
+function parsePayout(body: unknown): SignedPayout {
+  const { repo, issue, payee, deadline, signature } = fieldsOf(body, "repo, issue, payee, deadline and signature");
+  if (typeof repo !== "string" || !REPO_NAME.test(repo))
+    throw badRequest("repo must be owner/name, such as octocat/hello-world.");
+  if (typeof issue !== "number" || !Number.isSafeInteger(issue) || issue < 1) {
+    throw badRequest("issue must be a whole number above 0.");
+  }
+  if (typeof payee !== "string" || !isAddress(payee)) throw badRequest("payee must be a wallet address.");
+  const until = unixSeconds(deadline);
+  if (until === null) throw badRequest("deadline must be a time in Unix seconds.");
+  if (typeof signature !== "string" || !HEX.test(signature)) throw badRequest("signature must be 0x-prefixed hex.");
+  return { repo, issue, payee: getAddress(payee), deadline: until, signature: signature as Hex };
 }
 
 function fieldsOf(body: unknown, names: string): Record<string, unknown> {

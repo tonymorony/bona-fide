@@ -275,7 +275,7 @@ function requestFor(item: Item, content: ItemContent): ReviewRequest {
 }
 
 /** The text up to `budget` characters, ending at a line break if one is near, and how much was left out. */
-function cut(text: string, budget: number): { text: string; leftOut: number } {
+export function cut(text: string, budget: number): { text: string; leftOut: number } {
   if (text.length <= budget) return { text, leftOut: 0 };
   const lineEnd = text.lastIndexOf("\n", budget);
   const end = lineEnd > budget * 0.9 ? lineEnd + 1 : budget;
