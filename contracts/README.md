@@ -158,10 +158,138 @@ cast send 0xffaaCCFe120f3fC47f42102cF4F28e837cd49A20 "createVestingStreams(addre
 - **Send USDC to the router as an ERC-20 transfer.** It has no `receive` function, so a native USDC transfer on Arc
   reverts.
 
+## Bounty wallet
+
+`BountyWallet` holds one repo's Bounties: USDC its Maintainer funds and posts on issues, paid when a PR that closes
+the issue is merged. Each repo's Maintainer has their own wallet, deployed by `BountyWalletFactory`. Neither has an
+admin other than the wallet's owner, an upgrade path or a pause other than the owner's Keeper switch.
+
+- **One wallet per `(repoId, owner)`.** `repoId` is the escrow's. `factory.create(repoId, perPayoutLimit,
+  periodLimit, periodLength)` deploys the caller's wallet with CREATE2 and the caller as its immutable `owner`.
+  Its address depends only on `(repoId, owner)`: `factory.predict(repoId, owner)` gives it before it exists, and
+  `factory.walletOf(repoId, owner)` once it does. The App and the pages look up the wallet of the repo's Binding
+  Maintainer; a wallet anyone else creates for the repo is ignored. The factory emits
+  `WalletCreated(repoId, owner, wallet)`.
+- **Funding.** `fund(amount)` after an `approve`, or `fundWithAuthorization(from, amount, validAfter, validBefore,
+  nonce, signature)`: one EIP-3009 `ReceiveWithAuthorization` signature with `to` = the wallet, which anyone may
+  submit. Anyone may fund. A plain USDC transfer funds the wallet too, without a `Funded` event.
+- **Bounties.** `postBounty(issueNumber, amount)` reserves `amount` of the unreserved balance for one issue, under a
+  new serial. `cancelBounty(issueNumber)` releases it. An issue has at most one open Bounty; a cancelled one can be
+  posted again under a new serial, and a paid one never again. Only the owner can post or cancel.
+- **Payouts.** A payout sends an open Bounty's whole amount to one payee, once. There are three ways:
+  - `keeperPay(issueNumber, payee)`: the Keeper only, while `keeperEnabled`, if `amount ≤ perPayoutLimit` and the
+    Keeper's payouts in the current period stay within `periodLimit`;
+  - `payWithSignature(issueNumber, payee, deadline, signature)`: anyone relays the owner's signature (below), at
+    any amount, whether or not the Keeper is enabled;
+  - `ownerPay(issueNumber, payee)`: the owner directly, such as from a multisig.
+
+  The payee can't be zero, the wallet or the Keeper. It can be the owner: that only returns funds the owner could
+  withdraw anyway.
+- **Owner controls.** `withdraw(to, amount)` takes unreserved USDC at any time (`to` can't be zero, the wallet or
+  the Keeper). `setLimits(perPayoutLimit, periodLimit, periodLength)` and `setKeeperEnabled(enabled)` take effect
+  at once.
+- **Views.** `bountyOf(issueNumber)` returns `(amount, serial, status, payee)` with status `None`, `Open`, `Paid` or
+  `Cancelled`. `reserved()` is the sum of open Bounties, `available()` the balance minus `reserved()`, and
+  `keeperAllowance()` what the Keeper could still pay in total if it paid now. `spentInPeriod()` and
+  `periodStart()` describe the current period.
+- **Events.** `Funded(from, amount)`, `BountyPosted(issueNumber, serial, amount)`,
+  `BountyCancelled(issueNumber, serial, amount)`, `Paid(issueNumber, serial, payee, amount, method)` with method
+  `Keeper`, `Signature` or `Owner`, `Withdrawn(to, amount)`, `LimitsSet(perPayoutLimit, periodLimit, periodLength)`
+  and `KeeperEnabled(enabled)`. The constructor emits `LimitsSet` and `KeeperEnabled(true)`, so the logs rebuild
+  every Bounty and setting. The balance comes from USDC's `Transfer` events, or `balanceOf`.
+
+### The budget and the limits
+
+- **The budget is what the owner has funded.** Every open Bounty is reserved against the balance, so a Bounty is
+  always payable, and the owner can withdraw only what no Bounty reserves.
+- **The Keeper can't choose an amount.** It can only pay an open Bounty, in full.
+- **`perPayoutLimit`** caps each Keeper payout. A Bounty above it needs the owner's signature.
+- **`periodLimit`** caps the Keeper's payouts per period. A period starts with the first Keeper payout after the
+  previous period ended, and lasts `periodLength` (1 hour to 365 days). Periods never overlap, so the Keeper pays at
+  most `periodLimit` in one period, and at most `2 × periodLimit` within any `periodLength` of time (the end of one
+  period and the start of the next). A rolling window would tighten that to `periodLimit`, at the cost of storing
+  every payout's time.
+- **Limit changes apply at once, raising as well as lowering.** The current period keeps what it has spent. A delay
+  on raising would protect nothing: the owner can already pay any amount by signature or withdraw everything.
+
+### Signatures
+
+A payout above the limits needs an EIP-712 signature by the owner over
+`Payout(uint256 issueNumber,uint256 serial,address payee,uint256 amount,uint256 deadline)` in the domain
+`{name: "BonaFide Bounty", version: "1", chainId, verifyingContract: the wallet}`:
+
+```json
+{
+  "domain": { "name": "BonaFide Bounty", "version": "1", "chainId": 5042002, "verifyingContract": "<wallet>" },
+  "primaryType": "Payout",
+  "types": {
+    "Payout": [
+      { "name": "issueNumber", "type": "uint256" },
+      { "name": "serial", "type": "uint256" },
+      { "name": "payee", "type": "address" },
+      { "name": "amount", "type": "uint256" },
+      { "name": "deadline", "type": "uint256" }
+    ]
+  },
+  "message": { "issueNumber": 42, "serial": 7, "payee": "<contributor>", "amount": 250000000, "deadline": 1790000000 }
+}
+```
+
+- `serial` and `amount` are the open Bounty's (`bountyOf`). The wallet checks the signature against them, so it
+  pays only the Bounty that was signed, its whole amount, to the signed payee.
+- **It can't be replayed.** A Bounty is paid once. The domain names the wallet, so a signature for one of the
+  owner's wallets doesn't work on another. A cancelled Bounty posted again gets a new serial, so cancelling revokes
+  every unused signature for it.
+- It works until `deadline`, inclusive. Anyone can relay it, including the Keeper.
+- The owner signs with an EOA, 65 bytes `r ‖ s ‖ v` with a low `s`, or with a deployed ERC-1271 wallet, as for the
+  escrow's Forfeit signature.
+
+### Guarantees
+
+The invariant suite checks each of these after every call.
+
+1. **USDC leaves a wallet only to an open Bounty's payee, once, or to the owner's `withdraw` target.** It never goes
+   to the Keeper or a relayer.
+2. **Keeper payouts stay within the limits.** Each is at most `perPayoutLimit`, and in each period they total at
+   most `periodLimit`.
+3. **Each Bounty is paid at most once,** for its posted amount, and a paid issue takes no new Bounty.
+4. **`reserved` is the sum of open Bounties, and never more than the wallet's balance.** A withdrawal can't touch
+   it.
+5. **A payout signature works only for the wallet, issue, serial, payee, amount and deadline it names,** and only
+   if the owner signed it.
+6. **A disabled Keeper can't pay.**
+7. **Only the owner can post, cancel, withdraw, set limits or switch the Keeper.**
+
+### Trust model
+
+| Who | Can | Cannot |
+|---|---|---|
+| Keeper (the GitHub App) | Pay an open Bounty, in full, to a payee it chooses, within `perPayoutLimit` and the period's `periodLimit`, while the owner allows it. Relay the owner's signed payouts. | Receive funds. Post, change or cancel a Bounty. Choose an amount. Raise a limit. Withdraw. Turn itself back on. Own a wallet. |
+| Owner (the Maintainer) | Fund, post and cancel Bounties, pay any open Bounty by signature or directly, withdraw unreserved USDC, set limits, turn Keeper payouts off and on. | Take back a reserved Bounty without cancelling it first. Pay a Bounty twice. |
+| Anyone | Fund a wallet. Relay the owner's signed payout. Create their own wallet for any repo. | Anything else. |
+
+A lost or compromised Keeper key can at worst pay **posted** Bounties to the wrong payee, each at most
+`perPayoutLimit` and at most `periodLimit` per period, until the owner calls `setKeeperEnabled(false)`. It can't
+touch unreserved funds, Bounties above `perPayoutLimit`, or a wallet whose owner turned it off. Watch `Paid` events
+with method `Keeper`.
+
+Whoever runs the App never holds funds: the wallet is the owner's, and the Keeper only moves its USDC to payees.
+The App's checks before a Keeper payout (merged, linked to the issue, checks green, a known payee wallet, a model
+that doesn't hold it back) are off-chain; the contract bounds what happens if they fail.
+
+### Assumptions
+
+- The token is standard USDC, as for the escrow. If Circle blocklists a payee, payouts to it revert and the Bounty
+  stays open.
+- The owner is immutable. A Maintainer who changes wallets withdraws, cancels and creates a wallet under the new
+  address, which is also where the App will look once the Binding names it.
+- Send USDC as an ERC-20 transfer. The wallet has no `receive` function, so a native USDC transfer on Arc reverts.
+- An owner smart wallet must be deployed before it signs. ERC-6492 counterfactual signatures aren't supported.
+
 ## Tests
 
 ```shell
-forge test                                   # all suites: 1–2 min on a laptop
+forge test                                   # all suites: 5–10 min on a laptop
 forge test --no-match-path 'test/invariant/*' # unit and fuzz only: seconds
 FOUNDRY_INVARIANT_RUNS=10000 forge test --match-path 'test/invariant/*'   # deeper invariant campaign
 ```
@@ -180,8 +308,14 @@ FOUNDRY_INVARIANT_RUNS=10000 forge test --match-path 'test/invariant/*'   # deep
   the whole balance, no allowance is left, and anyone can flush exactly when there is a balance. The router itself
   is a fuzz target, so every state-changing function in its ABI gets called; `fail_on_revert` is off for this suite
   because flushing an empty router reverts by design.
-- **Deploy script tests** (`test/Deploy.t.sol`) cover the deploy order, the forfeit sink, the mainnet guard and
-  `FORFEIT_RECIPIENT` parsing.
+- **Bounty wallet tests.** `test/BountyWallet.t.sol` and `test/BountyWalletFactory.t.sol` cover every revert
+  path and happy path, including an ERC-1271 owner, a high-`s` signature and a re-entrant token.
+  `test/BountyWallet.fuzz.t.sol` fuzzes both limits, signatures by any key over any fields, withdrawals against
+  reservations and CREATE2 addresses. The invariant suite (`test/invariant/BountyWallet.invariant.t.sol`) runs
+  7 invariants × 1,500 runs × 100 calls over three wallets: two of one EOA owner, for cross-wallet replays, and one of
+  an ERC-1271 owner.
+- **Deploy script tests** (`test/Deploy.t.sol`, `test/DeployBountyWalletFactory.t.sol`) cover the deploy order, the
+  forfeit sink, the mainnet guard, the environment and `FORFEIT_RECIPIENT` parsing.
 
 ## Deploy (dry run only)
 
@@ -210,3 +344,16 @@ forge script script/Deploy.s.sol --rpc-url https://rpc.testnet.arc.io
 
 It needs `--rpc-url`: the router's constructor asks the messenger whether it routes to `DEST_DOMAIN`, and a fresh
 local chain has no messenger.
+
+### Bounty wallet factory
+
+`script/DeployBountyWalletFactory.s.sol` deploys `BountyWalletFactory(USDC, KEEPER)`, with the same `USDC`, `KEEPER`
+and `CONFIRM_MAINNET` conventions. It needs no RPC to simulate:
+
+```shell
+USDC=0x3600000000000000000000000000000000000000 KEEPER=<keeper address> \
+forge script script/DeployBountyWalletFactory.s.sol --rpc-url https://rpc.testnet.arc.io
+```
+
+Each Maintainer then creates their own wallet: `cast send <factory> "create(bytes32,uint256,uint256,uint32)" <repoId>
+<perPayoutLimit> <periodLimit> <periodLength>` from the Binding's Maintainer address.

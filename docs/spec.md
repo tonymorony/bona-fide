@@ -130,11 +130,35 @@ invariant suites in `contracts/test`.
   start it vesting. Each call makes a new stream, so flushes are batched.
 - Nobody chooses a recipient per repo or per Deposit.
 
+## Bounties
+
+Maintainers fund Bounties on issues from their own Bounty wallet on Arc. The wallet enforces the
+budget, a per-payout limit and a per-period limit; the Keeper can pay only what the Maintainer
+posted, within them.
+
+**Contracts (built).** Solidity 0.8.30, like the escrow. Details, the signature format, guarantees
+and trust model are in [../contracts/README.md](../contracts/README.md#bounty-wallet).
+- `BountyWalletFactory(usdc, keeper)` is immutable. `create(repoId, perPayoutLimit, periodLimit,
+  periodLength)` deploys the caller's `BountyWallet` with CREATE2 at an address that depends only
+  on `(repoId, owner)`; `predict` and `walletOf` find it from the repo's Binding Maintainer.
+- The owner funds the wallet, posts a Bounty per issue (`postBounty`, reserving its amount) and can
+  cancel it, withdraw anything unreserved, set the limits, and turn Keeper payouts off.
+- A Payout sends a posted Bounty's whole amount to one payee, once: `keeperPay` within the limits,
+  `payWithSignature` with the owner's EIP-712 signature over
+  `Payout(uint256 issueNumber,uint256 serial,address payee,uint256 amount,uint256 deadline)` at any
+  amount, or `ownerPay`.
+
+**The App and the pages (next phases).** When a PR that closes an issue with a Bounty is merged,
+the agent checks the witnesses: merged, linked to the issue, required checks green, the payee's
+wallet known, and within limits. It also asks a model whether the PR resolves the issue. The model
+can hold or escalate a Payout, never trigger one on its own. Within the limits the Keeper pays;
+above them the Maintainer signs. Every Payout links its transaction.
+
 ## Scope
 
 | Included | Not included |
 |---|---|
-| Escrow and forfeit router on Arc | A card on-ramp, amounts adjusted by country |
+| Escrow, forfeit router and Bounty wallets on Arc | A card on-ramp, amounts adjusted by country |
 | GitHub App: checks, labels, config, Exemptions | GitLab, Codeberg |
 | Deposit page, the Maintainer's sign page, a public repo page | A deposit-gated security-report inbox |
 | Agent path: an endpoint and an MCP tool | Any paid tier or fee |
@@ -153,6 +177,11 @@ invariant suites in `contracts/test`.
   and the Keeper refunds them.
 - The (repo, number) key links a Depositor address to a GitHub account. Use a fresh address if
   that matters to you.
+- A lost or compromised Keeper key can pay posted Bounties to the wrong payee, within each wallet's
+  per-payout and per-period limits, until the Maintainer turns Keeper payouts off. It can't touch
+  anything else.
+- A Keeper period starts at the first Keeper Payout after the last one ended, so within any span
+  of one period length the Keeper can pay up to twice the period limit.
 - A Contributor's record links Deposits to GitHub logins, not addresses, so someone running several
   accounts could build a record by accepting their own work under another login. The witnesses, the
   reviewer, and the Maintainer's Waiver label and denouncements stand against that.
