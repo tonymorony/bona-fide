@@ -209,6 +209,33 @@ describe("the landing page", () => {
     }
   });
 
+  test("fills the space beside the headline with the config file, on wide screens only", async (t) => {
+    for (const [width, height] of [
+      [390, 844],
+      [1024, 768],
+      [1280, 720],
+      [1440, 900],
+      [1920, 1080],
+    ]) {
+      const { page } = await openPage(t, { viewport: { width, height, mobile: width < 768 } });
+      await page.waitFor(`document.fonts.status === "loaded"`, "the fonts");
+      const shown = await page.evaluate(isShown(".hero-config"));
+      assert.equal(shown, width >= 1280, `the config file ${shown ? "shows" : "hides"} at ${width} px`);
+      if (!shown) continue;
+      const { config, lede, title } = await page.evaluate(`({
+        config: document.querySelector(".hero-config").getBoundingClientRect().toJSON(),
+        lede: document.querySelector(".hero-copy .lede").getBoundingClientRect().toJSON(),
+        title: document.querySelector(".hero-head").getBoundingClientRect().toJSON(),
+      })`);
+      assert.ok(config.bottom <= lede.top, `the config file ends at ${config.bottom} px, over the lede at ${lede.top} px`);
+      assert.ok(
+        config.top >= title.top,
+        `the config file starts at ${config.top} px, higher than the headline at ${title.top} px`,
+      );
+      assert.ok(config.left >= title.right, `the config file overlaps the headline at ${width} px`);
+    }
+  });
+
   test("keeps the certificate's number and seal word inside its inner frame on a small phone", async (t) => {
     const { page } = await openPage(t, { viewport: { width: 360, height: 740, mobile: true } });
     await page.waitFor(`document.fonts.status === "loaded"`, "the fonts");
@@ -224,7 +251,7 @@ describe("the landing page", () => {
     assert.deepEqual(outside, []);
   });
 
-  test("shows both code blocks whole on a desktop, with no sideways scroll inside them", async (t) => {
+  test("shows every code block whole on a desktop, with no sideways scroll inside them", async (t) => {
     const { page } = await openPage(t);
     await page.waitFor(`document.fonts.status === "loaded"`, "the fonts");
 
@@ -233,6 +260,7 @@ describe("the landing page", () => {
         `[...document.querySelectorAll("pre.code")].map((pre) => [pre.getAttribute("aria-label"), pre.scrollWidth <= pre.clientWidth])`,
       ),
       [
+        [".github/bona-fide.yml", true],
         ["Adding the MCP server to Claude Code", true],
         [".github/bona-fide.yml", true],
       ],
@@ -315,9 +343,9 @@ describe("the landing page", () => {
     assert.deepEqual(await page.evaluate(tiltOf), { rx: "", ry: "" });
     assert.deepEqual(
       await page.evaluate(
-        `[".cert-float", ".cert-sheen", ".step-stamp"].map((s) => getComputedStyle(document.querySelector(s)).animationName)`,
+        `[".cert-float", ".cert-sheen", ".step-stamp", ".hero-config"].map((s) => getComputedStyle(document.querySelector(s)).animationName)`,
       ),
-      ["none", "none", "none"],
+      ["none", "none", "none", "none"],
     );
   });
 

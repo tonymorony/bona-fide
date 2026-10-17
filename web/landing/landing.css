@@ -529,6 +529,29 @@ code {
   line-height: 1.5;
 }
 
+/* The whole setup, one file, in the space beside the headline. Shown only where the hero has two
+   columns and room above the lede; it fades in once, unless asked for less motion. */
+
+.hero-config {
+  display: none;
+  margin-bottom: 6px;
+  font-size: 14px;
+  animation: config-in 0.6s ease-out both;
+}
+
+@keyframes config-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+}
+
+@media (min-width: 1280px) {
+  .hero-config {
+    display: block;
+  }
+}
+
 /* The certificate. Text and stamps in HTML over decorative backgrounds, so it can re-lay itself out:
    stacked on phones, two columns on tablets and banknote proportions from 960 px. */
 
@@ -1428,6 +1451,13 @@ code {
   gap: 14px;
 }
 
+.panel-note {
+  margin-top: auto;
+  color: var(--text-3);
+  font-size: 14px;
+  line-height: 1.55;
+}
+
 .stamp {
   padding: 12px 16px;
   border: 2.5px solid var(--ink);
@@ -1548,6 +1578,12 @@ code {
 
 .record-copy .more {
   align-self: flex-start;
+}
+
+.record-copy .agent-mcp {
+  margin-top: 12px;
+  padding-top: 20px;
+  border-top: 1px solid var(--rule);
 }
 
 /* Live on Arc */
@@ -2127,6 +2163,7 @@ code {
   .cert-holo::before,
   .cert-sheen,
   .step-stamp,
+  .hero-config,
   [data-state="loading"] .live-status::before {
     animation: none;
   }

@@ -84,6 +84,15 @@
               </h1>
             </div>
             <div class="hero-copy">
+              <pre
+                class="code yaml hero-config"
+                tabindex="0"
+                aria-label=".github/bona-fide.yml"
+              ><code><span class="comment"># .github/bona-fide.yml</span>
+maintainer: 0xYourWallet   <span class="comment"># signs verdicts; never paid</span>
+amount: 1                  <span class="comment"># USDC</span>
+forfeit: 50%               <span class="comment"># never more</span>
+timeout: 7 days</code></pre>
               <p class="lede">
                 Contributors and AI agents you don't know yet back their PR with a small refundable Deposit. Good work
                 gets it all back. Bona Fide takes nothing, and nobody profits from a rejection.
@@ -325,8 +334,8 @@
             </div>
             <p class="lede">
               Claude reads every PR and issue that holds a Deposit and makes real calls: what looks like good work, what
-              looks like bad faith, which Record Exemptions and Bounties to hold back. Money moves only on witnesses
-              outside the model.
+              looks like bad faith, which Record Exemptions to hold back, and whether a merged PR really resolves the
+              issue a Bounty was posted on. Money moves only on witnesses outside the model.
             </p>
           </div>
           <div class="calls">
@@ -337,7 +346,13 @@
                 <li class="stamp seal tilt-b">Verdict drafted<span>reasons for the Maintainer</span></li>
                 <li class="stamp seal tilt-c">Exemption held<span>record looks gamed</span></li>
                 <li class="stamp seal tilt-d">Bounty held<span>doesn't resolve the issue</span></li>
+                <li class="stamp seal tilt-e">Bounty cleared<span>the PR resolves its issue</span></li>
               </ul>
+              <p class="panel-note">
+                A Bounty is USDC a Maintainer posts on an issue, from the repo's Bounty wallet. Once the PR that closes it
+                is merged with checks green and Claude clears it, the Keeper pays within the wallet's limits. Above
+                them, the Maintainer signs.
+              </p>
             </div>
             <div class="panel">
               <h3 class="mono panel-title green">Witnesses · the only things that move money</h3>
@@ -393,6 +408,13 @@
               </p>
               <a class="more" href="https://bofi.live/repo.html?repo=tonymorony/lottie-squeeze"
                 >See a repo's decision log<svg class="arrow" aria-hidden="true"><use href="#i-arrow" /></svg
+              ></a>
+              <p class="agent-mcp">
+                Your own agent can be the Contributor: with the MCP server it reads a repo's terms and signs its own
+                Deposit, under a limit you set.
+              </p>
+              <a class="more" href="https://github.com/tonymorony/bona-fide#for-ai-agents"
+                >Add the MCP server<svg class="arrow" aria-hidden="true"><use href="#i-arrow" /></svg
               ></a>
             </div>
           </div>

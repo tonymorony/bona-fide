@@ -279,10 +279,47 @@ describe("the words", () => {
   });
 });
 
+describe("the hero's config file", () => {
+  test("is the same .github/bona-fide.yml as the install section's, in the hero's copy column", () => {
+    const files = [...html.matchAll(/<pre\s+class="code yaml[^"]*"[\s\S]*?<\/pre>/g)].map((m) => m[0]);
+    assert.equal(files.length, 2);
+    assert.match(files[0], /class="code yaml hero-config"/);
+    assert.match(html, /<div class="hero-copy">\s*<pre\s+class="code yaml hero-config"/);
+    const code = (f) => f.slice(f.indexOf("<code>"));
+    assert.equal(code(files[0]), code(files[1]));
+  });
+
+  test("shows only where the hero has two columns", () => {
+    assert.match(css, /\.hero-config \{\s*display: none;/);
+    assert.match(css, /@media \(min-width: 1280px\) \{\s*\.hero-config \{\s*display: block;/);
+  });
+});
+
+describe("the agent section", () => {
+  const agent = html.match(/<section class="section" id="agent"[\s\S]*?<\/section>/)?.[0] ?? "";
+
+  test("names the Bounty call both ways, and who pays above the wallet's limits", () => {
+    assert.match(agent, /Bounty held<span>doesn't resolve the issue<\/span>/);
+    assert.match(agent, /Bounty cleared<span>the PR resolves its issue<\/span>/);
+    assert.match(
+      agent.replace(/\s+/g, " "),
+      /the Keeper pays within the wallet's limits\. Above them, the Maintainer signs\./,
+    );
+  });
+
+  test("points AI agents to the MCP server, at a README heading that exists", () => {
+    assert.match(
+      agent,
+      /<a class="more" href="https:\/\/github\.com\/tonymorony\/bona-fide#for-ai-agents"\s*>Add the MCP server/,
+    );
+    assert.match(readFileSync(join(LANDING, "../../README.md"), "utf8"), /^## For AI agents$/m);
+  });
+});
+
 describe("motion", () => {
-  test("the card's float, holo and sheen and the stamp stop when the visitor asks for less motion", () => {
+  test("the card's float, holo and sheen, the stamp and the hero's config file stop when the visitor asks for less motion", () => {
     const reduced = css.slice(css.lastIndexOf("@media (prefers-reduced-motion: reduce)"));
-    for (const selector of [".cert-float", ".cert-holo::before", ".cert-sheen", ".step-stamp"]) {
+    for (const selector of [".cert-float", ".cert-holo::before", ".cert-sheen", ".step-stamp", ".hero-config"]) {
       assert.ok(reduced.includes(selector), selector);
     }
     assert.match(reduced, /animation: none;/);
