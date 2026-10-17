@@ -103,6 +103,6 @@ test("a payee the wallet would refuse is caught before anyone signs", () => {
 
 test("a network without a factory has no Bounties yet", () => {
   expect(hasBounties(testnet)).toBe(false);
-  expect(hasBounties(mainnet)).toBe(false);
+  expect(hasBounties(mainnet)).toBe(true);
   expect(hasBounties({ ...testnet, bountyFactory: PAYEE })).toBe(true);
 });

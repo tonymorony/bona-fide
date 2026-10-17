@@ -176,9 +176,10 @@ each linked to the block explorer.
 |---|---|
 | Escrow | [`0xe2fe798427CFb43134FC37F6EE054c2da818fAc9`](https://explorer.arc.io/address/0xe2fe798427CFb43134FC37F6EE054c2da818fAc9) |
 | Forfeit router | [`0xe36fe5152C6A54946b15df3fEBDc068AF48581dc`](https://explorer.arc.io/address/0xe36fe5152C6A54946b15df3fEBDc068AF48581dc) |
+| Bounty wallet factory | [`0xEda45D2931B1A36D5920edefA621Ff5533c98C42`](https://explorer.arc.io/address/0xEda45D2931B1A36D5920edefA621Ff5533c98C42) |
 
-Both are immutable: no owner, no upgrade and no pause. The escrow's Binding delay is 1 hour and its largest
-Deposit is 50 USDC. The router sends Forfeits through CCTP to Protocol Guild's vesting contract on Base,
+The escrow and the router are immutable: no owner, no upgrade and no pause. The escrow's Binding delay is 1 hour
+and its largest Deposit is 50 USDC. The router sends Forfeits through CCTP to Protocol Guild's vesting contract on Base,
 [`0xffaaCCFe120f3fC47f42102cF4F28e837cd49A20`](https://basescan.org/address/0xffaaCCFe120f3fC47f42102cF4F28e837cd49A20).
 
 The first Deposit on mainnet went through [tonymorony/lottie-squeeze#1](https://github.com/tonymorony/lottie-squeeze/pull/1):

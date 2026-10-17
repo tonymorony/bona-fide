@@ -256,10 +256,6 @@ describe("the words", () => {
     assert.doesNotMatch(visible, /[✓✍≥→↗]/u);
   });
 
-  test("never say Bounties are live on mainnet", () => {
-    assert.match(visible, /Bounties: coming to mainnet\./);
-  });
-
   test("say that Bona Fide keeps nothing: in the lede, the rule's clauses and the FAQ", () => {
     const text = visible.replace(/\s+/g, " ");
     assert.match(text, /Bona Fide takes nothing, and nobody profits from a rejection\./);
