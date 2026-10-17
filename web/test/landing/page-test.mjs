@@ -246,7 +246,7 @@ describe("the landing page", () => {
     await page.evaluate(`window.scrollTo({ top: 2000, behavior: "instant" })`);
     assert.equal(await page.evaluate(`document.querySelector("header.top").getBoundingClientRect().top`), 0);
 
-    for (const id of ["how", "live", "agents"]) {
+    for (const id of ["how", "agent", "live"]) {
       const { header, section, heading } = await page.evaluate(`(async () => {
         window.scrollTo({ top: 0, behavior: "instant" });
         const done = new Promise((resolve) => { addEventListener("scrollend", resolve, { once: true }); setTimeout(resolve, 3000); });

@@ -71,21 +71,33 @@ signed, and that is all.
 Both contracts are immutable: no owner, no upgrade, no pause and no rescue function. The guarantees and the
 trust model are in [contracts/README.md](contracts/README.md).
 
+## What the agent decides
+
+Bona Fide uses Claude where reading helps, and never lets it move money on its own word. The model's answer is a
+suggestion. Facts checked in code decide every payout, and a person signs anything that takes money away.
+
+1. **Triage.** A reviewer reads each PR or issue that holds a Deposit and leaves the Maintainer a note: accept it, or
+   a drafted bad-faith verdict to sign. It never forfeits.
+2. **Record Exemptions.** A Contributor with enough Refunds across repos, and no Forfeit anywhere, needs no Deposit.
+   The model can hold a waiver back but never grant one alone.
+3. **Bounties.** A Maintainer posts USDC on an issue from their own Bounty wallet. When a PR that closes it is merged
+   with green checks, the Keeper pays within the wallet's limits. The model can hold a payout but never trigger one.
+4. **The decision log.** Every decision is recorded with what was read, what was checked, what was done and its
+   transaction. Each repo's page shows it.
+
+The agent's part runs when the App has an Anthropic API key. [app/README.md](app/README.md#triage) documents it.
+
 ## For AI agents
 
 AI agents can be Contributors too. The [MCP server](agent/README.md) lets an agent read a repo's terms and make the
 Deposit from its own wallet, within a limit you set.
 
-The App also carries an optional module that helps a Maintainer review: an automated reviewer that leaves a note on
-each PR or issue that holds a Deposit, and never moves money on its own. It is off unless the App has an Anthropic
-API key, and it is documented in [app/README.md](app/README.md#triage).
-
 ## What's in the repo
 
 | Folder | What it is |
 |---|---|
-| [contracts/](contracts/README.md) | The escrow and the forfeit router, on Arc |
-| [app/](app/README.md) | The GitHub App: the check, the Keeper and the deposit relay |
+| [contracts/](contracts/README.md) | The escrow, the forfeit router and the Bounty wallet, on Arc |
+| [app/](app/README.md) | The GitHub App: the check, the Keeper, the deposit relay, triage and Bounty Payouts |
 | [agent/](agent/README.md) | The MCP server that lets an AI agent make a Deposit |
 | [web/](web/README.md) | The deposit, verdict, setup, repo and Bounty pages; `npm run build` writes them and the landing page into `web/dist/` |
 | [web/landing/](web/landing/) | The landing page at https://bofi.live |

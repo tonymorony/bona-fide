@@ -64,6 +64,7 @@
         <nav class="top-nav" aria-label="Sections">
           <a href="#problem">Why</a>
           <a href="#how">How it works</a>
+          <a href="#agent">The agent</a>
           <a href="#live">Live</a>
           <a href="#agents">For agents</a>
           <a href="#faq">FAQ</a>
@@ -149,6 +150,7 @@
                     <li class="ok">
                       <svg class="tick" aria-hidden="true"><use href="#i-check" /></svg>Deposit held
                     </li>
+                    <li>Claude: good faith</li>
                     <li class="ok">
                       <svg class="tick" aria-hidden="true"><use href="#i-check" /></svg>Checks green
                     </li>
@@ -252,8 +254,13 @@
               <h3>They sign once</h3>
               <p>No gas, no second step. The check turns green in seconds.</p>
             </li>
-            <li class="step-last">
+            <li>
               <span class="step-number" aria-hidden="true">03</span>
+              <h3>Claude reads it</h3>
+              <p>A short note for the Maintainer: looks like good work, or a drafted bad-faith verdict to review.</p>
+            </li>
+            <li class="step-last">
+              <span class="step-number" aria-hidden="true">04</span>
               <h3>The Maintainer decides</h3>
               <p>Merge it, and the Deposit goes straight back. The certificate is stamped.</p>
               <span class="mono step-stamp" aria-hidden="true"
@@ -303,6 +310,92 @@
                 <span class="clause-result green">0%</span>
               </li>
             </ol>
+          </div>
+        </div>
+      </section>
+
+      <section class="section" id="agent" aria-labelledby="agent-title">
+        <div class="wrap stack">
+          <div class="head-split">
+            <div class="head">
+              <p class="eyebrow green">The agent</p>
+              <h2 id="agent-title" class="display">
+                Claude can say no. <span class="green">It can never pay or punish.</span>
+              </h2>
+            </div>
+            <p class="lede">
+              Claude reads every PR and issue that holds a Deposit and makes real calls: what looks like good work, what
+              looks like bad faith, which Record Exemptions and Bounties to hold back. Money moves only on witnesses
+              outside the model.
+            </p>
+          </div>
+          <div class="calls">
+            <div class="panel">
+              <h3 class="mono panel-title">Claude's calls</h3>
+              <ul class="stamps">
+                <li class="stamp seal tilt-a">Triaged<span>looks like good work</span></li>
+                <li class="stamp seal tilt-b">Verdict drafted<span>reasons for the Maintainer</span></li>
+                <li class="stamp seal tilt-c">Exemption held<span>record looks gamed</span></li>
+                <li class="stamp seal tilt-d">Bounty held<span>doesn't resolve the issue</span></li>
+              </ul>
+            </div>
+            <div class="panel">
+              <h3 class="mono panel-title green">Witnesses · the only things that move money</h3>
+              <ul class="stamps">
+                <li class="stamp pill tilt-b">
+                  <svg class="tick" aria-hidden="true"><use href="#i-check" /></svg>Merged on GitHub
+                </li>
+                <li class="stamp pill tilt-e">
+                  <svg class="tick" aria-hidden="true"><use href="#i-check" /></svg>Checks green
+                </li>
+                <li class="stamp pill tilt-f">
+                  <svg class="tick" aria-hidden="true"><use href="#i-check" /></svg>7-day Timeout
+                </li>
+                <li class="stamp pill red tilt-d">
+                  <svg class="tick" aria-hidden="true"><use href="#i-pen" /></svg>Maintainer's signature
+                </li>
+                <li class="stamp pill tilt-b">
+                  <svg class="tick" aria-hidden="true"><use href="#i-check" /></svg>Within the Bounty wallet's limits
+                </li>
+              </ul>
+            </div>
+          </div>
+          <div class="record">
+            <div class="log">
+              <h3 class="mono log-title">What each decision log entry records</h3>
+              <dl class="log-lines mono">
+                <div>
+                  <dt>Item</dt>
+                  <dd>the PR or issue, and when</dd>
+                </div>
+                <div>
+                  <dt>Read</dt>
+                  <dd>what Claude was given to read</dd>
+                </div>
+                <div>
+                  <dt>Claude</dt>
+                  <dd>its suggestion, with its reasons</dd>
+                </div>
+                <div>
+                  <dt>Checked</dt>
+                  <dd>the witnesses: merged, checks green, the Timeout</dd>
+                </div>
+                <div>
+                  <dt>Done</dt>
+                  <dd>what Bona Fide did, and its transaction</dd>
+                </div>
+              </dl>
+            </div>
+            <div class="record-copy">
+              <h3 class="display-small">Every call, on the record.</h3>
+              <p>
+                Each repo's page shows what Claude read, what it decided, what was checked and the transaction.
+                Bounties: coming to mainnet.
+              </p>
+              <a class="more" href="https://bofi.live/repo.html?repo=tonymorony/lottie-squeeze"
+                >See a repo's decision log<svg class="arrow" aria-hidden="true"><use href="#i-arrow" /></svg
+              ></a>
+            </div>
           </div>
         </div>
       </section>
@@ -445,6 +538,13 @@
               </p>
             </details>
             <details>
+              <summary>Does an AI judge my PR?<span class="plus mono" aria-hidden="true">+</span></summary>
+              <p>
+                Claude writes a note for the Maintainer. It can hold things back; it can never forfeit, refund or pay on
+                its own. A person signs every Forfeit.
+              </p>
+            </details>
+            <details>
               <summary>How do I get USDC?<span class="plus mono" aria-hidden="true">+</span></summary>
               <p>
                 You need USDC on Arc and nothing else: on Arc, gas is paid in USDC too. Agents use a Circle agent wallet
@@ -504,6 +604,7 @@ timeout: 7 days</code></pre>
             <a href="https://github.com/tonymorony/bona-fide/blob/main/contracts/README.md">Contracts</a>
             <a data-escrow-link hidden>Escrow on the explorer</a>
             <a href="https://github.com/tonymorony/bona-fide/blob/main/agent/README.md">Agent guide</a>
+            <a href="https://bofi.live/repo.html?repo=tonymorony/lottie-squeeze">Decision logs</a>
             <a href="mailto:tlysakov@gmail.com">Contact: tlysakov@gmail.com</a>
           </nav>
         </div>

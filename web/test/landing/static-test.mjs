@@ -256,8 +256,8 @@ describe("the words", () => {
     assert.doesNotMatch(visible, /[✓✍≥→↗]/u);
   });
 
-  test("leave out what the page doesn't offer yet: Bounties, triage and the decision log", () => {
-    assert.doesNotMatch(visible, /\bBount(y|ies)\b|\btriage|decision log|Claude reads/);
+  test("never say Bounties are live on mainnet", () => {
+    assert.match(visible, /Bounties: coming to mainnet\./);
   });
 
   test("say that Bona Fide keeps nothing: in the lede, the rule's clauses and the FAQ", () => {

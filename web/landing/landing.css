@@ -290,6 +290,14 @@ code {
   line-height: 0.86;
 }
 
+.display-small {
+  font-family: var(--font-display);
+  font-size: clamp(32px, 3.4vw, 40px);
+  font-weight: 900;
+  line-height: 0.95;
+  text-transform: uppercase;
+}
+
 .display-line {
   font-family: var(--font-display);
   font-size: clamp(30px, 3.4vw, 48px);
@@ -1384,6 +1392,164 @@ code {
   white-space: nowrap;
 }
 
+/* The agent */
+
+.calls {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(560px, 100%), 1fr));
+  gap: 24px;
+}
+
+.panel {
+  display: flex;
+  flex-direction: column;
+  gap: 22px;
+  padding: 32px;
+  border-radius: 22px;
+  background: var(--surface);
+  box-shadow: 0 0 0 1px var(--rule);
+}
+
+.panel-title {
+  color: var(--ink);
+  font-size: 12px;
+  font-weight: 400;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.panel-title.green {
+  color: var(--green);
+}
+
+.stamps {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px;
+}
+
+.stamp {
+  padding: 12px 16px;
+  border: 2.5px solid var(--ink);
+  color: var(--ink);
+  font-family: var(--font-mono);
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1.4;
+  text-transform: uppercase;
+  transition: transform 0.2s ease;
+}
+
+.stamp.seal {
+  border-radius: 6px;
+  outline: 1px solid var(--ink);
+  outline-offset: 3px;
+}
+
+.stamp.seal span {
+  display: block;
+  font-weight: 400;
+  text-transform: none;
+}
+
+.stamp.pill {
+  border-color: var(--green);
+  border-radius: 999px;
+  color: var(--green);
+}
+
+.stamp.pill.red {
+  border-color: var(--red);
+  color: var(--red);
+}
+
+.tilt-a {
+  transform: rotate(-3deg);
+}
+.tilt-b {
+  transform: rotate(2deg);
+}
+.tilt-c {
+  transform: rotate(-1.5deg);
+}
+.tilt-d {
+  transform: rotate(-3deg);
+}
+.tilt-e {
+  transform: rotate(-2deg);
+}
+.tilt-f {
+  transform: rotate(1deg);
+}
+
+.stamp:hover {
+  transform: rotate(0deg) scale(1.04);
+}
+
+.record {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(460px, 100%), 1fr));
+  gap: 24px 40px;
+  align-items: stretch;
+}
+
+.log {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 32px;
+  border-radius: 22px;
+  background: var(--ink);
+  color: var(--on-ink);
+}
+
+.log-title {
+  color: var(--on-ink-3);
+  font-size: 12px;
+  font-weight: 400;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.log-lines {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.log-lines div {
+  display: grid;
+  grid-template-columns: 9ch minmax(0, 1fr);
+  gap: 12px;
+}
+
+.log-lines dt {
+  color: var(--mint);
+}
+
+.log-lines dd {
+  color: var(--on-ink-2);
+}
+
+.record-copy {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 16px;
+}
+
+.record-copy p {
+  color: var(--text-2);
+  font-size: 17px;
+  line-height: 1.55;
+}
+
+.record-copy .more {
+  align-self: flex-start;
+}
+
 /* Live on Arc */
 
 .ledger {
@@ -1424,6 +1590,7 @@ code {
 
 .ledger a:focus-visible,
 .ledger button:focus-visible,
+.log a:focus-visible,
 .step-last a:focus-visible {
   outline-color: var(--mint);
 }
@@ -1846,7 +2013,7 @@ code {
   }
 }
 
-/* Five section links need about 1000 px beside the logo and Install; below that, the page keeps those two. */
+/* Six section links need about 1000 px beside the logo and Install; below that, the page keeps those two. */
 @media (max-width: 999px) {
   .top-nav {
     display: none;
@@ -1883,6 +2050,11 @@ code {
   .clause-result {
     grid-column: 2;
     font-size: 32px;
+  }
+
+  .panel,
+  .log {
+    padding: 24px;
   }
 
   .exhibit {
@@ -1965,6 +2137,7 @@ code {
 
   .btn,
   .exhibit,
+  .stamp,
   .plus {
     transition: none;
   }
