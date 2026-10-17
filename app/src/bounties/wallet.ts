@@ -1,8 +1,20 @@
-import { parseAbi, zeroAddress, type Address, type Hex, type LocalAccount, type PublicClient } from "viem";
+import {
+  getAddress,
+  isAddressEqual,
+  parseAbi,
+  zeroAddress,
+  type Address,
+  type Hex,
+  type LocalAccount,
+  type PublicClient,
+} from "viem";
 import { inTurnFor, revertNameOf, sendAndWait } from "../keeper/escrow.ts";
 import { isValidSignatureNow } from "../keeper/signatures.ts";
 
-export const bountyFactoryAbi = parseAbi(["function walletOf(bytes32 repoId, address owner) view returns (address)"]);
+export const bountyFactoryAbi = parseAbi([
+  "function walletOf(bytes32 repoId, address owner) view returns (address)",
+  "event WalletCreated(bytes32 indexed repoId, address indexed owner, address wallet)",
+]);
 
 export const bountyWalletAbi = parseAbi([
   "function bountyOf(uint64 issueNumber) view returns ((uint256 amount, uint64 serial, uint8 status, address payee))",
@@ -13,6 +25,7 @@ export const bountyWalletAbi = parseAbi([
   "function keeperPay(uint64 issueNumber, address payee)",
   "function payWithSignature(uint64 issueNumber, address payee, uint256 deadline, bytes signature)",
   "event Paid(uint64 indexed issueNumber, uint64 serial, address indexed payee, uint256 amount, uint8 method)",
+  "event BountyPosted(uint64 indexed issueNumber, uint64 serial, uint256 amount)",
   "error NotKeeper()",
   "error KeeperDisabled()",
   "error BountyNotOpen()",
@@ -37,6 +50,8 @@ export class BountyRejection extends Error {
 }
 
 const PAID = bountyWalletAbi.find((item) => item.type === "event" && item.name === "Paid")!;
+const POSTED = bountyWalletAbi.find((item) => item.type === "event" && item.name === "BountyPosted")!;
+const CREATED = bountyFactoryAbi.find((item) => item.type === "event" && item.name === "WalletCreated")!;
 
 /** The wallet's Status enum in order. */
 const STATUSES = ["none", "open", "paid", "cancelled"] as const;
@@ -59,6 +74,11 @@ export interface WalletState {
   keeperAllowance: bigint;
   keeperEnabled: boolean;
 }
+
+/** What the logs say: the factory created `owner`'s wallet for a repo, or a wallet's owner posted a Bounty. */
+export type WalletEvent =
+  | { type: "created"; wallet: Address; repoId: Hex; owner: Address }
+  | { type: "posted"; wallet: Address; issueNumber: number; serial: bigint; amount: bigint };
 
 /**
  * The Bounty wallets as the Keeper uses them: reads, and transactions signed with the Keeper key.
@@ -91,6 +111,12 @@ export interface BountyWallets {
   ): Promise<Hex>;
   /** The transaction that paid the issue's Bounty with this serial, or null if no Paid event names it. */
   paidTransaction(wallet: Address, issueNumber: number, serial: bigint): Promise<Hex | null>;
+  latestBlock(): Promise<bigint>;
+  /**
+   * The wallets the factory created in the blocks, and the Bounties posted in them by the `known`
+   * wallets or by one created there, oldest first.
+   */
+  walletEvents(known: Address[], fromBlock: bigint, toBlock: bigint): Promise<WalletEvent[]>;
 }
 
 export interface BountyWalletsOptions {
@@ -202,7 +228,45 @@ export function createBountyWallets({ client, account, factory, fromBlock = 0n }
       });
       return logs.find((log) => log.args.serial === serial)?.transactionHash ?? null;
     },
+
+    latestBlock() {
+      return client.getBlockNumber({ cacheTime: 0 });
+    },
+
+    // One log query a range, for the factory and the wallets known so far. Only a range in which a
+    // wallet was created takes a second, for that wallet's Bounties.
+    async walletEvents(known, from, to) {
+      const range = { fromBlock: from, toBlock: to, strict: true } as const;
+      const logs = await client.getLogs({ address: [factory, ...known], events: [CREATED, POSTED], ...range });
+      const found: Found[] = [];
+      for (const log of logs) {
+        const at = { block: log.blockNumber, index: log.logIndex };
+        if (log.eventName === "BountyPosted") found.push({ ...postedEvent(log), ...at });
+        else if (isAddressEqual(log.address, factory)) found.push({ type: "created", ...log.args, ...at });
+      }
+      const created = found.flatMap((event) =>
+        event.type === "created" && !known.some((wallet) => isAddressEqual(wallet, event.wallet)) ? [event.wallet] : [],
+      );
+      if (created.length > 0) {
+        for (const log of await client.getLogs({ address: created, event: POSTED, ...range })) {
+          found.push({ ...postedEvent(log), block: log.blockNumber, index: log.logIndex });
+        }
+      }
+      found.sort((a, b) => (a.block === b.block ? a.index - b.index : a.block < b.block ? -1 : 1));
+      return found.map(({ block: _, index: __, ...event }) => event as WalletEvent);
+    },
   };
+}
+
+/** A WalletEvent and where it is in the chain. */
+type Found = WalletEvent & { block: bigint; index: number };
+
+function postedEvent(log: {
+  address: Address;
+  args: { issueNumber: bigint; serial: bigint; amount: bigint };
+}): WalletEvent {
+  const { issueNumber, serial, amount } = log.args;
+  return { type: "posted", wallet: getAddress(log.address), issueNumber: Number(issueNumber), serial, amount };
 }
 
 async function rejecting<T>(simulation: Promise<T>): Promise<T> {

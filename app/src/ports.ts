@@ -62,6 +62,8 @@ export interface GitHub {
   findRepo(repoId: Hex): Promise<Repo | null>;
   /** The open or closed PR or issue, or null if there is none of that kind. */
   getItem(repo: Repo, kind: Kind, number: number): Promise<Item | null>;
+  /** Whether it is an open issue: false for a closed one, a PR, or none. */
+  isOpenIssue(repo: Repo, number: number): Promise<boolean>;
   /** Posts the Keeper's note on a PR or issue, or edits the one it posted before. */
   postNote(repo: Repo, number: number, body: string): Promise<void>;
   /** Whether the App has a comment on the PR or issue that starts with `marker`. */

@@ -38,6 +38,8 @@ interface RepoState {
   commitChecks: Map<string, CommitCheck[]>;
   /** PRs an issue lists as closing it beyond those whose `closes` name it. */
   closingLinks: Map<number, ClosingPullRequest[]>;
+  /** Items closed since they were added. */
+  closed: Set<number>;
 }
 
 // An in-memory GitHub. It keeps what the App would leave visible on github.com: the latest
@@ -72,6 +74,7 @@ export class FakeGitHub implements GitHub {
       pullRequests: new Map(),
       commitChecks: new Map(),
       closingLinks: new Map(),
+      closed: new Set(),
     };
     this.repos.set(fullName.toLowerCase(), state);
     return state;
@@ -97,6 +100,11 @@ export class FakeGitHub implements GitHub {
     const state = this.state(fullNameOf(item.repo));
     state.items.set(`${item.kind}#${item.number}`, item);
     state.labels.set(item.number, new Set(item.labels));
+  }
+
+  /** Closes the PR or issue. Every item added is open until then. */
+  close(fullName: string, number: number): void {
+    this.state(fullName).closed.add(number);
   }
 
   /** Makes reading the item fail `times` times, as GitHub does for an archived repo. */
@@ -240,6 +248,11 @@ export class FakeGitHub implements GitHub {
     const state = this.state(fullNameOf(repo));
     const item = state.items.get(`${kind}#${number}`);
     return item ? { ...item, labels: [...(state.labels.get(number) ?? [])] } : null;
+  }
+
+  async isOpenIssue(repo: Repo, number: number): Promise<boolean> {
+    const issue = await this.getItem(repo, "issue", number);
+    return issue !== null && !this.state(fullNameOf(repo)).closed.has(number);
   }
 
   async postNote(repo: Repo, number: number, body: string): Promise<void> {

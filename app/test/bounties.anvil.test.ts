@@ -3,6 +3,7 @@ import { privateKeyToAccount } from "viem/accounts";
 import { afterAll, beforeAll, expect, test } from "vitest";
 import { createApp } from "../src/app.ts";
 import { bountyMarkers, createBounties } from "../src/bounties/bounties.ts";
+import { createBountyNotices } from "../src/bounties/posted.ts";
 import { bountyFactoryAbi, bountyWalletAbi, createBountyWallets } from "../src/bounties/wallet.ts";
 import { createDecisionLog } from "../src/decisions/log.ts";
 import { createEscrowChain } from "../src/escrow.ts";
@@ -17,7 +18,7 @@ import { FakeGitHub } from "./support/fake-github.ts";
 import { FakeResolver, resolution } from "./support/fake-resolver.ts";
 import { DEPOSIT_PAGE, SETUP_PAGE } from "./support/harness.ts";
 import { CLIENT_IP, startKeeperAnvil } from "./support/keeper.ts";
-import { REPO, SECRET, signed } from "./support/webhooks.ts";
+import { HELLO_WORLD, NEWCOMER, REPO, SECRET, signed } from "./support/webhooks.ts";
 
 // Bounties against the real BountyWalletFactory and BountyWallet on anvil, paid with the Keeper's
 // key; only GitHub and the model are faked. The Maintainer's wallet pays the Keeper up to 10 USDC
@@ -131,7 +132,7 @@ function harness() {
   const post = (body: unknown) =>
     routes(new Request("https://app.example/bounty/payout", { method: "POST", body: JSON.stringify(body) }), CLIENT_IP);
 
-  return { github, resolver, logged, merge, post, handle, bounties };
+  return { github, chain, wallets, resolver, logged, merge, post, handle, bounties };
 }
 
 /** The Maintainer's EIP-712 Payout, signed by one of anvil's unlocked accounts. */
@@ -261,4 +262,50 @@ test("a Payout for a Bounty already paid, or one never posted, is refused", asyn
   expect(await paid?.json()).toEqual({ error: "This Bounty was already paid." });
   expect(none?.status).toBe(404);
   expect(await none?.json()).toEqual({ error: "There's no Bounty on this issue." });
+}, 30_000);
+
+test("a Bounty posted on-chain gets one note on its issue, and one from a wallet another account made for the repo doesn't", async () => {
+  const { github, chain, wallets } = harness();
+  for (const number of [106, 107, 108]) {
+    github.addItem({ repo: HELLO_WORLD, kind: "issue", number, author: NEWCOMER, createdAt: new Date(0), labels: [] });
+  }
+  const notices = createBountyNotices({
+    github,
+    chain,
+    wallets,
+    withModel: true,
+    bountyPageUrl: BOUNTY_PAGE,
+    fromBlock: anvil.deployBlock,
+  });
+  const walletArtifact = artifact("BountyWallet");
+  await anvil.send(anvil.contributor, factory, artifact("BountyWalletFactory").abi, "create", [
+    repoIdOf(REPO),
+    PER_PAYOUT,
+    PER_PERIOD,
+    DAY,
+  ]);
+  const theirs = await anvil.client.readContract({
+    address: factory,
+    abi: bountyFactoryAbi,
+    functionName: "walletOf",
+    args: [repoIdOf(REPO), anvil.contributor],
+  });
+  await anvil.send(anvil.contributor, anvil.usdc, artifact("MockUSDC").abi, "approve", [theirs, maxUint256]);
+  await anvil.send(anvil.contributor, theirs, walletArtifact.abi, "fund", [1_000_000n]);
+  await anvil.send(anvil.contributor, theirs, walletArtifact.abi, "postBounty", [107n, 1_000_000n]);
+  const serial = await postBounty(106, 2_000_000n);
+
+  await notices.tick();
+  await notices.tick();
+
+  expect(github.markedNotesOn(REPO, 106)).toEqual([expect.stringContaining("**Bounty: 2 USDC**")]);
+  expect(github.markedNotesOn(REPO, 106)[0]?.startsWith(bountyMarkers(106, serial).posted)).toBe(true);
+  expect(github.markedNotesOn(REPO, 107)).toEqual([]);
+
+  // Later ticks read the wallets they know of.
+  await postBounty(108, 3_000_000n);
+  await notices.tick();
+
+  expect(github.markedNotesOn(REPO, 108)).toEqual([expect.stringContaining("**Bounty: 3 USDC**")]);
+  expect(github.markedNotesOn(REPO, 106)).toHaveLength(1);
 }, 30_000);

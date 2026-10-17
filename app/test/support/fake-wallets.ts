@@ -1,5 +1,11 @@
 import { getAddress, isAddressEqual, pad, toHex, zeroAddress, type Address, type Hex } from "viem";
-import { BountyRejection, type BountyWallets, type WalletBounty, type WalletState } from "../../src/bounties/wallet.ts";
+import {
+  BountyRejection,
+  type BountyWallets,
+  type WalletBounty,
+  type WalletEvent,
+  type WalletState,
+} from "../../src/bounties/wallet.ts";
 import { repoIdOf } from "../../src/keys.ts";
 
 export const KEEPER: Address = getAddress("0x000000000000000000000000000000000000cafe");
@@ -23,11 +29,15 @@ export interface Limits {
 }
 
 // In-memory Bounty wallets that refuse what the real one refuses. Transactions get made-up hashes.
+// Creating a wallet and posting a Bounty each take a block of their own, in the order the test makes them.
 export class FakeBountyWallets implements BountyWallets {
   readonly keeper = KEEPER;
   private readonly wallets = new Map<Address, FakeWallet>();
   private readonly byOwner = new Map<string, Address>();
+  private readonly log: { blockNumber: bigint; event: WalletEvent }[] = [];
   private transactions = 0;
+  /** The `known` wallets each walletEvents read was given. */
+  readonly reads: Address[][] = [];
   /** Every Payout sent, in order. */
   readonly sent: { method: "keeper" | "signature"; wallet: Address; issue: number; payee: Address; txHash: Hex }[] = [];
   /** Runs inside keeperPay before it reads the Bounty, such as to pay it some other way first. */
@@ -46,6 +56,7 @@ export class FakeBountyWallets implements BountyWallets {
       paid: new Map(),
     });
     this.byOwner.set(`${repoIdOf(repo)}:${owner.toLowerCase()}`, wallet);
+    this.emit({ type: "created", wallet, repoId: repoIdOf(repo), owner });
     return wallet;
   }
 
@@ -54,6 +65,7 @@ export class FakeBountyWallets implements BountyWallets {
     const w = this.wallet(wallet);
     const serial = ++w.lastSerial;
     w.bounties.set(issue, { status: "open", amount, serial, payee: zeroAddress });
+    this.emit({ type: "posted", wallet, issueNumber: issue, serial, amount });
     return serial;
   }
 
@@ -122,6 +134,24 @@ export class FakeBountyWallets implements BountyWallets {
 
   async paidTransaction(wallet: Address, issue: number, serial: bigint): Promise<Hex | null> {
     return this.wallet(wallet).paid.get(`${issue}:${serial}`) ?? null;
+  }
+
+  async latestBlock(): Promise<bigint> {
+    return BigInt(this.log.length);
+  }
+
+  /** As the real ones: every wallet created, and the Bounties of the known ones or of one created in the range. */
+  async walletEvents(known: Address[], fromBlock: bigint, toBlock: bigint): Promise<WalletEvent[]> {
+    this.reads.push([...known]);
+    const events = this.log
+      .filter(({ blockNumber }) => blockNumber >= fromBlock && blockNumber <= toBlock)
+      .map(({ event }) => event);
+    const created = events.flatMap((event) => (event.type === "created" ? [event.wallet] : []));
+    return events.filter((event) => event.type === "created" || [...known, ...created].includes(event.wallet));
+  }
+
+  private emit(event: WalletEvent): void {
+    this.log.push({ blockNumber: BigInt(this.log.length + 1), event });
   }
 
   private pay(wallet: Address, issue: number, payee: Address, method: "keeper" | "signature"): Hex {

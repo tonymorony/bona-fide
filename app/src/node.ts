@@ -7,8 +7,8 @@
 // whose Bona Fide record reaches a repo's threshold, for a Record Exemption; the records' links are
 // kept in the JSONL file at RECORDS_PATH.
 // With BOUNTY_FACTORY_ADDRESS set as well as the Keeper's key, the Keeper pays Bounties when a PR
-// that closes their issue is merged, and relays signed Payouts at POST /bounty/payout. Without
-// ANTHROPIC_API_KEY, every Bounty waits for the Maintainer.
+// that closes their issue is merged, and relays signed Payouts at POST /bounty/payout, and each Bounty
+// posted gets a note on its issue. Without ANTHROPIC_API_KEY, every Bounty waits for the Maintainer.
 // It keeps the decision log in the JSONL file at DECISIONS_PATH and serves it at GET /decisions.
 // Start it with `node src/node.ts`; Node 24 runs the TypeScript directly.
 
@@ -21,6 +21,7 @@ import { createPublicClient, createWalletClient, http, type Address } from "viem
 import { createApp } from "./app.ts";
 import { createBounties } from "./bounties/bounties.ts";
 import { createClaudeResolver } from "./bounties/claude.ts";
+import { BOUNTY_NOTE_MS, createBountyNotices } from "./bounties/posted.ts";
 import { createBountyWallets } from "./bounties/wallet.ts";
 import { clientIpOf } from "./client-ip.ts";
 import { MAX_JSON_BODY_BYTES, MAX_WEBHOOK_BODY_BYTES } from "./config.ts";
@@ -174,24 +175,28 @@ if (recordFile) {
 // Bounties need the Keeper, which pays them, and the factory, which finds each repo's Bounty wallet.
 // Only the model can confirm a PR resolves its issue, so without it every Bounty waits for the Maintainer.
 const bountyFactory = process.env.BOUNTY_FACTORY_ADDRESS;
-const bounties =
-  account && bountyFactory
-    ? createBounties({
-        github,
-        chain,
-        wallets: createBountyWallets({
-          client: createPublicClient({ transport: rpc }),
-          account,
-          factory: bountyFactory as Address,
-          fromBlock: BigInt(process.env.BOUNTY_FACTORY_FROM_BLOCK ?? "0"),
-        }),
-        resolver: anthropic ? createClaudeResolver({ client: anthropic, model: triageModel }) : undefined,
-        bountyPageUrl: env("BOUNTY_PAGE_URL"),
-        explorerUrl: process.env.EXPLORER_URL || undefined,
-        decisions,
-        record: (decision) => console.log(JSON.stringify({ event: decision.type, ...decision })),
-      })
-    : undefined;
+const bountyFromBlock = BigInt(process.env.BOUNTY_FACTORY_FROM_BLOCK ?? "0");
+const bountyWallets =
+  account &&
+  bountyFactory &&
+  createBountyWallets({
+    client: createPublicClient({ transport: rpc }),
+    account,
+    factory: bountyFactory as Address,
+    fromBlock: bountyFromBlock,
+  });
+const bounties = bountyWallets
+  ? createBounties({
+      github,
+      chain,
+      wallets: bountyWallets,
+      resolver: anthropic ? createClaudeResolver({ client: anthropic, model: triageModel }) : undefined,
+      bountyPageUrl: env("BOUNTY_PAGE_URL"),
+      explorerUrl: process.env.EXPLORER_URL || undefined,
+      decisions,
+      record: (decision) => console.log(JSON.stringify({ event: decision.type, ...decision })),
+    })
+  : undefined;
 if (bounties && anthropic)
   console.log(`Bounties: the Keeper pays them once ${triageModel} agrees a PR resolves its issue.`);
 else if (bounties) console.log("Bounties wait for the Maintainer: set ANTHROPIC_API_KEY to let the Keeper pay them.");
@@ -358,6 +363,23 @@ const stopRefunding = keeperEscrow
     )
   : () => {};
 
+const stopNoting = bountyWallets
+  ? pollDeposits(
+      inBackground(
+        createBountyNotices({
+          github,
+          chain,
+          wallets: bountyWallets,
+          withModel: anthropic !== null,
+          bountyPageUrl: env("BOUNTY_PAGE_URL"),
+          fromBlock: bountyFromBlock,
+        }),
+      ),
+      BOUNTY_NOTE_MS,
+      (error) => console.error("bounty notes failed:", error),
+    )
+  : () => {};
+
 const stopIndexing = recordIndex
   ? pollDeposits(inBackground(recordIndex), Number(process.env.POLL_MS ?? 1000), (error) =>
       console.error("contributor records failed:", error),
@@ -369,5 +391,6 @@ process.on("SIGTERM", () => {
   stopIndexing();
   stopActivating();
   stopRefunding();
+  stopNoting();
   server.close();
 });

@@ -541,6 +541,21 @@ test("a PR and an issue are read with their author, creation time, labels and he
   expect(await github.getItem(REPO, "pr", 1)).toBeNull();
 });
 
+test("only an open issue is an open issue: not a closed one, a PR, or a number with neither", async () => {
+  const pr = fixture("pull_request.opened").pull_request;
+  const issue = fixture("issues.opened").issue;
+  const { github } = fakeApi({
+    [`GET ${API}/issues/1`]: { status: 200, body: { ...issue, state: "open" } },
+    [`GET ${API}/issues/2`]: { status: 200, body: { ...issue, number: 2, pull_request: { url: pr.url } } },
+    [`GET ${API}/issues/3`]: { status: 200, body: { ...issue, number: 3, state: "closed" } },
+  });
+
+  expect(await github.isOpenIssue(REPO, 1)).toBe(true);
+  expect(await github.isOpenIssue(REPO, 2)).toBe(false);
+  expect(await github.isOpenIssue(REPO, 3)).toBe(false);
+  expect(await github.isOpenIssue(REPO, 4)).toBe(false);
+});
+
 test("an item's outcome is its author and whether it was merged, completed by someone else, or labelled ok", async () => {
   const pr = fixture("pull_request.opened").pull_request;
   const issue = fixture("issues.opened").issue;

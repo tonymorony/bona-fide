@@ -14,6 +14,13 @@ export function bountyLink(pageUrl: string, repo: Repo, issue: number, payee: Ad
   return url.toString();
 }
 
+/** The repo page, which lists the repo's Bounties: ?repo=owner/name. It sits beside the Bounty page. */
+export function repoPageLink(bountyPageUrl: string, repo: Repo): string {
+  const url = new URL("repo.html", bountyPageUrl);
+  url.searchParams.set("repo", fullName(repo));
+  return url.toString();
+}
+
 export function transactionLink(explorerUrl: string, txHash: Hex): string {
   return `${explorerUrl.replace(/\/+$/, "")}/tx/${txHash}`;
 }
@@ -47,6 +54,45 @@ export function bountyPaidNote({ on, issue, pr, amount, payee, by, txLink }: Pai
     `${what}, **${usdc(amount)}**, was paid in full${forPr} to ${payee}.${how ? ` ${how}` : ""}`,
     "",
     `[View the Payout on Arc](${txLink})`,
+  ].join("\n");
+}
+
+export interface PostedFacts {
+  issue: number;
+  amount: bigint;
+  /**
+   * Who pays it once a PR that closes the issue is merged: the Keeper, when the witnesses hold, or
+   * only the Maintainer, such as with the Keeper's payouts off or `bounties: off`.
+   */
+  payer: "keeper" | "maintainer";
+  /** The wallet's per-payout limit, when the Bounty is above it. */
+  aboveLimit: bigint | null;
+  repoLink: string;
+}
+
+/** The note on the issue when a Bounty is posted on it, so Contributors see it where they work. */
+export function bountyPostedNote({ issue, amount, payer, aboveLimit, repoLink }: PostedFacts): string {
+  const closes = `such as with \`Fixes #${issue}\` in its description`;
+  const how =
+    payer === "keeper"
+      ? `When the first merged PR that closes this issue, ${closes}, has green checks and an automated reviewer agrees it resolves the issue, the Keeper pays the Bounty in full to the PR's author, within the Maintainer's limits. Otherwise it waits for the Maintainer, who can sign the Payout.`
+      : `When a PR that closes this issue is merged, ${closes}, the Maintainer can pay the Bounty in full to the PR's author by signing the Payout.`;
+  const limit =
+    aboveLimit === null
+      ? ""
+      : ` It is above the wallet's per-payout limit of ${usdc(aboveLimit)}, so the Keeper won't pay it on its own.`;
+  return [
+    `**Bounty: ${usdc(amount)}**`,
+    "",
+    `This issue has a Bounty of **${usdc(amount)}**, reserved in the repo's Bounty wallet.${limit} ${how}`,
+    "",
+    "To receive it, the PR's author adds a line like this to the PR description or to a comment of their own:",
+    "",
+    "```",
+    "Bounty wallet: 0xYourWalletAddress",
+    "```",
+    "",
+    `[See the Bounty](${repoLink})`,
   ].join("\n");
 }
 

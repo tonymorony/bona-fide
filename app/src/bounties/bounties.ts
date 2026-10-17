@@ -80,6 +80,7 @@ export interface Bounties {
 export function bountyMarkers(issue: number, serial: bigint) {
   const id = `issue=${issue} serial=${serial}`;
   return {
+    posted: `<!-- bona-fide:bounty-posted ${id} -->`,
     paid: `<!-- bona-fide:bounty-paid ${id} -->`,
     held: `<!-- bona-fide:bounty-held ${id} -->`,
     payee: `<!-- bona-fide:bounty-payee ${id} -->`,

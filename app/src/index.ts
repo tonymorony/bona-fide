@@ -84,7 +84,8 @@ export {
   type BountyDeps,
   type SignedPayout,
 } from "./bounties/bounties.ts";
-export { bountyLink } from "./bounties/copy.ts";
+export { bountyLink, repoPageLink } from "./bounties/copy.ts";
+export { BOUNTY_NOTE_MS, createBountyNotices, type BountyNoticeDeps, type BountyNotices } from "./bounties/posted.ts";
 export { payeeOf, payeeProblem, type Payee, type PayeeSource } from "./bounties/payee.ts";
 export {
   bountyFactoryAbi,
@@ -96,6 +97,7 @@ export {
   type BountyWallets,
   type BountyWalletsOptions,
   type WalletBounty,
+  type WalletEvent,
   type WalletState,
 } from "./bounties/wallet.ts";
 export {

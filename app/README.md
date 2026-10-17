@@ -372,6 +372,23 @@ payouts off with `bounties: off` in `.github/bona-fide.yml`; a Maintainer's sign
 relayed. Without `ANTHROPIC_API_KEY` the App still checks every merge, but each Bounty waits for the
 Maintainer: only the model can confirm a PR resolves its issue.
 
+**The note on the issue.** When the Maintainer posts a Bounty, the App posts a note on its issue, so
+Contributors see it where they work: the amount, how it is paid, the `Bounty wallet:` line to add,
+and a link to the repo page (`repo.html?repo=owner/name`, beside `BOUNTY_PAGE_URL`). It says the
+Keeper pays the first merged PR that closes the issue, with green checks and a model that agrees it
+resolves it, within the Maintainer's limits. If the Keeper wouldn't pay it on its own (`bounties:
+off`, the Keeper's payouts off, no `ANTHROPIC_API_KEY`, or an amount above the per-payout limit,
+which the note names), it says the Maintainer can sign the Payout instead. Only a Bounty from the
+repo's Bounty wallet gets one, still open under the same Serial, on an open issue in a repo with a
+readable `.github/bona-fide.yml`: a Bounty cancelled or paid first, or on a closed issue or a PR,
+gets none. Every minute (`BOUNTY_NOTE_MS` in `src/bounties/posted.ts`), the App reads the factory's
+`WalletCreated` and the known wallets' `BountyPosted` events since its last look, one log query per
+10,000 blocks, plus one for a range in which a wallet was created. After a restart it reads them
+again from `BOUNTY_FACTORY_FROM_BLOCK`, and the note's hidden marker, `<!-- bona-fide:bounty-posted
+issue=N serial=S -->`, keeps it from posting twice; a Bounty posted again after a cancel has a new
+Serial and gets a new note. A note GitHub refuses is tried again on later looks, less and less
+often.
+
 **When it runs.** On these deliveries, after the webhook is answered, since the model can take
 longer than GitHub waits:
 
@@ -578,7 +595,7 @@ npm start
 [endpoints](#endpoints). With `RELAYER_PRIVATE_KEY` set, it also runs the
 [deposit relay](#post-relaydeposit), and with `ANTHROPIC_API_KEY` set as well as the Keeper's key,
 [triage](#triage). With `BOUNTY_FACTORY_ADDRESS` set as well as the Keeper's key, it pays
-[Bounties](#bounties). With `ANTHROPIC_API_KEY` set, it also follows Contributors' records for
+[Bounties](#bounties) and notes each one posted on its issue. With `ANTHROPIC_API_KEY` set, it also follows Contributors' records for
 [Record Exemptions](#record-exemption), on the watcher's timer. It and the files it opens,
 `src/decisions/file.ts` and `src/records/file.ts`, are the only files that use Node: everything
 `src/index.ts` exports also bundles for a Workers-style runtime. The Claude reviewer, advisor and
@@ -610,7 +627,7 @@ The host reads these environment variables:
 | `ANTHROPIC_API_KEY` | unset | Turns [triage](#triage) on, with the Keeper, and [Record Exemptions](#record-exemption), and lets the Keeper pay [Bounties](#bounties). Sends each PR's or issue's text and diff, and the numbers of some Contributors' records, to Anthropic's API |
 | `TRIAGE_MODEL` | `claude-opus-5` | The Claude model triage, Record Exemptions and Bounties ask |
 | `BOUNTY_FACTORY_ADDRESS` | unset | The `BountyWalletFactory`. With the Keeper's key, turns [Bounties](#bounties) on |
-| `BOUNTY_FACTORY_FROM_BLOCK` | `0` | The factory's deploy block. The App looks for a Bounty's `Paid` event from here on |
+| `BOUNTY_FACTORY_FROM_BLOCK` | `0` | The factory's deploy block. The App looks for a Bounty's `Paid` event, and for the Bounties posted, from here on |
 | `BOUNTY_PAGE_URL` | required with the factory | The [Bounty page](#the-bounty-page), linked with `?repo=owner/repo&issue=N&payee=0x…` |
 | `DECISIONS_PATH` | `data/decisions.jsonl` | The [decision log](#decision-log)'s JSONL file. Put it on storage that outlives the process |
 | `RECORDS_PATH` | `data/records.jsonl` | The JSONL file of the Deposits linked to Contributors for [Record Exemptions](#record-exemption). Put it beside `DECISIONS_PATH` |

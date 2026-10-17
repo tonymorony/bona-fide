@@ -435,6 +435,17 @@ export function createGitHub({ appId, app, installation }: GitHubOptions): GitHu
         throw error;
       }
     },
+
+    // GitHub lists a PR as an issue too.
+    async isOpenIssue(repo, number) {
+      try {
+        const { data } = await api(repo).rest.issues.get({ ...repoParams(repo), issue_number: number });
+        return !data.pull_request && data.state === "open";
+      } catch (error) {
+        if (isNotFound(error)) return false;
+        throw error;
+      }
+    },
   };
 }
 
