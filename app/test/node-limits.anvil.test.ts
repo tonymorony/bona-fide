@@ -38,6 +38,8 @@ async function startHost(env: Record<string, string>) {
       GITHUB_APP_ID: "1234",
       GITHUB_PRIVATE_KEY: "not used here",
       RPC_URL: anvil.url,
+      // The local chain refuses nothing, so the host needn't pace itself.
+      RPC_RPS: "1000",
       ESCROW_ADDRESS: anvil.escrow,
       ESCROW_FROM_BLOCK: String(anvil.deployBlock),
       DEPOSIT_PAGE_URL: DEPOSIT_PAGE,

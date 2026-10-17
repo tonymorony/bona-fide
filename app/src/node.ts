@@ -37,6 +37,7 @@ import { createRecordExemptions } from "./records/exemption.ts";
 import { DEFAULT_RECORDS_PATH, openRecordFile } from "./records/file.ts";
 import { createRecordIndex } from "./records/records.ts";
 import { createDepositRelay, RELAY_DEPOSIT_PATH, relayerAccount } from "./relay/deposit.ts";
+import { createRateLimiter, DEFAULT_RPC_RPS, rateLimited } from "./rpc.ts";
 import { createClaudeReviewer, DEFAULT_TRIAGE_MODEL } from "./triage/claude.ts";
 import { createTriage, decisionLine } from "./triage/triage.ts";
 import { createDepositWatcher, pollDeposits } from "./watcher.ts";
@@ -51,6 +52,13 @@ function env(name: string): string {
   if (!value) throw new Error(`Set ${name}.`);
   return value;
 }
+
+// One limiter for every RPC request the App makes: they all count against the same RPC limit.
+// A request the RPC still refuses is sent again for about 12 seconds, longer than a refusal lasts.
+const rpc = rateLimited(
+  http(env("RPC_URL"), { retryCount: 5, retryDelay: 400 }),
+  createRateLimiter({ perSecond: Number(process.env.RPC_RPS ?? DEFAULT_RPC_RPS) }),
+);
 
 const appId = Number(env("GITHUB_APP_ID"));
 const privateKey = env("GITHUB_PRIVATE_KEY").replaceAll("\\n", "\n");
@@ -71,7 +79,7 @@ const github = createGitHub({
 });
 
 const chain = createEscrowChain({
-  client: createPublicClient({ transport: http(env("RPC_URL")) }),
+  client: createPublicClient({ transport: rpc }),
   escrow: env("ESCROW_ADDRESS") as Address,
   fromBlock: BigInt(process.env.ESCROW_FROM_BLOCK ?? "0"),
 });
@@ -90,7 +98,7 @@ const account = process.env.KEEPER_PRIVATE_KEY ? keeperAccount(process.env.KEEPE
 const keeperEscrow =
   account &&
   createKeeperEscrow({
-    client: createPublicClient({ transport: http(env("RPC_URL")) }),
+    client: createPublicClient({ transport: rpc }),
     account,
     escrow: env("ESCROW_ADDRESS") as Address,
   });
@@ -163,7 +171,7 @@ const bounties =
         github,
         chain,
         wallets: createBountyWallets({
-          client: createPublicClient({ transport: http(env("RPC_URL")) }),
+          client: createPublicClient({ transport: rpc }),
           account,
           factory: bountyFactory as Address,
           fromBlock: BigInt(process.env.BOUNTY_FACTORY_FROM_BLOCK ?? "0"),
@@ -205,8 +213,8 @@ async function handle(request: Request, clientIp: string): Promise<Response> {
 const relayerKey = process.env.RELAYER_PRIVATE_KEY;
 const relay = relayerKey
   ? createDepositRelay({
-      client: createPublicClient({ transport: http(env("RPC_URL")) }),
-      wallet: createWalletClient({ account: relayerAccount(relayerKey), transport: http(env("RPC_URL")) }),
+      client: createPublicClient({ transport: rpc }),
+      wallet: createWalletClient({ account: relayerAccount(relayerKey), transport: rpc }),
       escrow: env("ESCROW_ADDRESS") as Address,
     })
   : undefined;
