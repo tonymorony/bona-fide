@@ -36,7 +36,8 @@ let file: FetchedFile | null = null;
 let fileTerms: FileTerms | null = null;
 let fileProblems: string[] = [];
 let chainTerms: RepoTerms | null = null;
-let delaySeconds = 86_400;
+// What the page says until the escrow answers: its minimum Binding delay, which both deployed escrows use.
+let delaySeconds = 3_600;
 let loadFailed = false;
 let phase: Phase = "idle";
 let problem: Problem | null = null;
