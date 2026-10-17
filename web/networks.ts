@@ -59,8 +59,7 @@ export const mainnet: Network = {
   escrowFromBlock: 24_583_718,
   router: "0xe36fe5152C6A54946b15df3fEBDc068AF48581dc",
   bountyFactory: "0xEda45D2931B1A36D5920edefA621Ff5533c98C42",
-  // A block shortly before the factory's deploy: searches for Bounty wallets start here.
-  bountyFactoryFromBlock: 25_840_731,
+  bountyFactoryFromBlock: 26_294_417,
   forfeits: {
     recipient: "Protocol Guild",
     purpose: "funds open-source maintainers through Protocol Guild",
