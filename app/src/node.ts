@@ -12,6 +12,7 @@
 // It keeps the decision log in the JSONL file at DECISIONS_PATH and serves it at GET /decisions.
 // Start it with `node src/node.ts`; Node 24 runs the TypeScript directly.
 
+import { AsyncLocalStorage } from "node:async_hooks";
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 import Anthropic from "@anthropic-ai/sdk";
 import { createAppAuth } from "@octokit/auth-app";
@@ -55,10 +56,18 @@ function env(name: string): string {
 
 // One limiter for every RPC request the App makes: they all count against the same RPC limit.
 // A request the RPC still refuses is sent again for about 12 seconds, longer than a refusal lasts.
+// The pollers' requests wait behind a webhook's or a page's, where a person waits for the answer.
+const polling = new AsyncLocalStorage<true>();
 const rpc = rateLimited(
   http(env("RPC_URL"), { retryCount: 5, retryDelay: 400 }),
   createRateLimiter({ perSecond: Number(process.env.RPC_RPS ?? DEFAULT_RPC_RPS) }),
+  { background: () => polling.getStore() === true },
 );
+
+/** The poller, with each tick's RPC requests marked as background ones. */
+function inBackground<T extends { tick(): Promise<void> }>(poller: T): T {
+  return Object.create(poller, { tick: { value: () => polling.run(true, () => poller.tick()) } }) as T;
+}
 
 const appId = Number(env("GITHUB_APP_ID"));
 const privateKey = env("GITHUB_PRIVATE_KEY").replaceAll("\\n", "\n");
@@ -324,14 +333,16 @@ async function watchFrom(): Promise<bigint | undefined> {
 }
 
 const stopWatching = pollDeposits(
-  createDepositWatcher({ chain, github, app, fromBlock: await watchFrom() }),
+  inBackground(createDepositWatcher({ chain, github, app, fromBlock: await watchFrom() })),
   Number(process.env.POLL_MS ?? 1000),
   (error) => console.error("deposit watcher failed:", error),
 );
 
 const stopActivating = keeperEscrow
   ? pollDeposits(
-      createBindingActivator({ escrow: keeperEscrow, fromBlock: BigInt(process.env.ESCROW_FROM_BLOCK ?? "0") }),
+      inBackground(
+        createBindingActivator({ escrow: keeperEscrow, fromBlock: BigInt(process.env.ESCROW_FROM_BLOCK ?? "0") }),
+      ),
       Number(process.env.ACTIVATE_MS ?? 30_000),
       (error) => console.error("binding activator failed:", error),
     )
@@ -339,14 +350,16 @@ const stopActivating = keeperEscrow
 
 const stopRefunding = keeperEscrow
   ? pollDeposits(
-      createTimeoutRefunder({ escrow: keeperEscrow, fromBlock: BigInt(process.env.ESCROW_FROM_BLOCK ?? "0") }),
+      inBackground(
+        createTimeoutRefunder({ escrow: keeperEscrow, fromBlock: BigInt(process.env.ESCROW_FROM_BLOCK ?? "0") }),
+      ),
       Number(process.env.REFUND_MS ?? 30_000),
       (error) => console.error("timeout refunder failed:", error),
     )
   : () => {};
 
 const stopIndexing = recordIndex
-  ? pollDeposits(recordIndex, Number(process.env.POLL_MS ?? 1000), (error) =>
+  ? pollDeposits(inBackground(recordIndex), Number(process.env.POLL_MS ?? 1000), (error) =>
       console.error("contributor records failed:", error),
     )
   : () => {};

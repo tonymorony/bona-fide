@@ -67,20 +67,40 @@ test("serves callers in the order they asked", async () => {
   expect(order).toEqual(["a", "b", "c", "d"]);
 });
 
+test("a background caller waits behind the others, however early it asked", async () => {
+  const clock = fakeClock();
+  const limiter = createRateLimiter({ perSecond: 1, ...clock });
+  await limiter.take();
+  await limiter.take();
+  const order: string[] = [];
+
+  await Promise.all([
+    limiter.take(1, true).then(() => order.push("poll 1")),
+    limiter.take(1, true).then(() => order.push("poll 2")),
+    limiter.take().then(() => order.push("webhook 1")),
+    limiter.take().then(() => order.push("webhook 2")),
+  ]);
+
+  expect(order).toEqual(["webhook 1", "webhook 2", "poll 1", "poll 2"]);
+});
+
 test("refuses a rate of zero", () => {
   expect(() => createRateLimiter({ perSecond: 0 })).toThrow("above 0");
 });
 
-test("a rate-limited transport sends every request, and counts a log query as three", async () => {
+test("a rate-limited transport sends every request, counts a log query as three, and marks a poller's as background", async () => {
   const clock = fakeClock();
   const costs: number[] = [];
+  const asked: boolean[] = [];
   const limiter = createRateLimiter({ perSecond: 4, ...clock });
   const counting = {
-    take: async (cost?: number) => {
+    take: async (cost?: number, background?: boolean) => {
       costs.push(cost ?? 1);
-      await limiter.take(cost);
+      asked.push(background ?? false);
+      await limiter.take(cost, background);
     },
   };
+  let polling = false;
   const methods: string[] = [];
   const transport = custom({
     request: async ({ method }: { method: string }) => {
@@ -88,11 +108,13 @@ test("a rate-limited transport sends every request, and counts a log query as th
       return method === "eth_blockNumber" ? "0x10" : [];
     },
   });
-  const client = createPublicClient({ transport: rateLimited(transport, counting) });
+  const client = createPublicClient({ transport: rateLimited(transport, counting, { background: () => polling }) });
 
   expect(await client.getBlockNumber()).toBe(16n);
+  polling = true;
   expect(await client.getLogs({ fromBlock: 1n, toBlock: 2n })).toEqual([]);
 
   expect(methods).toEqual(["eth_blockNumber", "eth_getLogs"]);
   expect(costs).toEqual([1, 3]);
+  expect(asked).toEqual([false, true]);
 });

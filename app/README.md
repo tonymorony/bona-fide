@@ -600,7 +600,7 @@ The host reads these environment variables:
 | `EXPLORER_URL` | `https://explorer.arc.io` | The block explorer a check links each Deposit's transaction to. On Arc testnet, `https://explorer.testnet.arc.io` |
 | `PORT` | `3000` | |
 | `POLL_MS` | `1000` | How often the watcher polls |
-| `RPC_RPS` | `3` | The RPC requests sent each second at most, with a log query counted as three. Requests beyond it wait their turn, so a burst, such as the Keeper's read of the escrow's history on start, never runs into the RPC's rate limit. The default suits Arc's public RPC |
+| `RPC_RPS` | `3` | The RPC requests sent each second at most, with a log query counted as three. Requests beyond it wait their turn, a poller's behind a webhook's, so a burst, such as the Keeper's read of the escrow's history on start, never runs into the RPC's rate limit. The default suits Arc's public RPC |
 | `WATCH_FROM_BLOCK` | 10,000 blocks before the latest | Where the watcher starts after a restart |
 | `KEEPER_PRIVATE_KEY` | unset | The key of the escrow's `keeper` address. Without it the App runs its checks only |
 | `SIGN_PAGE_URL` | required with the Keeper | The Maintainer's sign page, with the same query as the deposit page |
