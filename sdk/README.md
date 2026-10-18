@@ -33,6 +33,7 @@ import its TypeScript source directly.
 | `DEPOSIT_STATUSES`, `BOUNTY_STATUSES`, `PAYOUT_METHODS` | The contracts' enums, in order |
 | `relayDepositRoute`, `forfeitRoute`, `bindingProofRoute`, `bountyPayoutRoute`, `decisionsRoute`, `APP_PATHS` | The Bona Fide App's HTTP routes: each one's path, its request body encoded and decoded, and its answer |
 | `refusalIn`, `REFUSAL_CODES` | Why the App refused a request, read by its `code` rather than its text |
+| `depositRequestIn`, `depositRequestBlock`, `APP_SLUG` | The Deposit request for AI agents that the App hides in its check and comment, and the App whose check or comment it must come from |
 
 ## Read a PR's Deposit
 

@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { arcTestnet } from "@bona-fide/sdk";
 import { createApp } from "../../src/app.ts";
 import { createDecisionLog } from "../../src/decisions/log.ts";
 import type { Binding, Decision, DecisionLog, Model } from "../../src/ports.ts";
@@ -15,6 +16,8 @@ import { REPO, SECRET, signed } from "./webhooks.ts";
 export const DEPOSIT_PAGE = "https://bonafide.example/deposit";
 export const SETUP_PAGE = "https://bonafide.example/setup";
 export const SIGN_PAGE = "https://bonafide.example/sign";
+/** The escrow the App names in each Deposit request. */
+export const ESCROW = { address: arcTestnet.escrow, chainId: arcTestnet.chainId };
 
 /** A decision log file of its own for a Node host a test starts, so none writes into the checkout. */
 export function scratchDecisionsPath(): string {
@@ -70,6 +73,7 @@ export function harness(options: HarnessOptions = {}) {
     github,
     chain,
     depositPageUrl: DEPOSIT_PAGE,
+    escrow: { address: ESCROW.address, chainId: async () => ESCROW.chainId },
     setupPageUrl: SETUP_PAGE,
     explorerUrl,
     triage,

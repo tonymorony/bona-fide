@@ -1,4 +1,4 @@
-import type { Kind } from "@bona-fide/sdk";
+import { depositRequestBlock, type DepositRequest, type Kind } from "@bona-fide/sdk";
 import { formatUnits } from "viem";
 import type { Exemption, NewTerms } from "./app.ts";
 import { CONFIG_PATH, DAY_SECONDS, FORFEIT_REPOS, USDC_DECIMALS } from "./config.ts";
@@ -152,6 +152,30 @@ export function depositLink(pageUrl: string, item: Item): string {
   url.searchParams.set("kind", item.kind);
   url.searchParams.set("number", String(item.number));
   return url.toString();
+}
+
+/**
+ * The Deposit request for AI agents, a hidden line under the text that asks for the Deposit: the
+ * escrow, this PR or issue, the amount, `link` and llms.txt on the deposit page's site.
+ */
+export function depositRequestLine(
+  item: Item,
+  amount: bigint,
+  { escrow, chainId }: Pick<DepositRequest, "escrow" | "chainId">,
+  link: string,
+): string {
+  const { repo, kind, number } = item;
+  const llmsTxtUrl = new URL("/llms.txt", link).toString();
+  return depositRequestBlock({
+    chainId,
+    escrow,
+    repo: fullName(repo),
+    kind,
+    number,
+    amount,
+    depositUrl: link,
+    llmsTxtUrl,
+  });
 }
 
 export function setupLink(pageUrl: string, repo: Repo): string {

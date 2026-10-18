@@ -24,6 +24,7 @@ export {
   type Wire,
 } from "./app-routes.ts";
 export { arcMainnet, arcTestnet, chainOf, type Deployment } from "./deployments.ts";
+export { APP_SLUG, depositRequestBlock, depositRequestIn, type DepositRequest } from "./deposit-request.ts";
 export {
   BOUNTY_STATUSES,
   DEPOSIT_STATUSES,

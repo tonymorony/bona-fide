@@ -1,5 +1,5 @@
 import { keyOf, repoIdOf, type Kind } from "@bona-fide/sdk";
-import type { Hex } from "viem";
+import type { Address, Hex } from "viem";
 import { canPush, createAcceptance, type Accepted } from "./acceptance.ts";
 import {
   ARC_EXPLORER_URL,
@@ -16,6 +16,7 @@ import {
   depositedText,
   depositLink,
   depositNeededText,
+  depositRequestLine,
   exemptText,
   inactiveText,
   recordExemptText,
@@ -44,6 +45,11 @@ export interface AppDeps {
   github: GitHub;
   chain: Chain;
   depositPageUrl: string;
+  /**
+   * The escrow Deposits go to. While the check and comment ask for a Deposit, they carry it in a
+   * Deposit request for AI agents, hidden from people. Without it, they carry none.
+   */
+  escrow?: { address: Address; chainId(): Promise<number> };
   /** The Maintainer's setup page, where they prove control of their wallet so the repo can be bound. */
   setupPageUrl: string;
   /** The block explorer a check links each Deposit's transaction to. Arc mainnet's by default. */
@@ -95,6 +101,7 @@ export function createApp({
   github,
   chain,
   depositPageUrl,
+  escrow,
   setupPageUrl,
   explorerUrl = ARC_EXPLORER_URL,
   now = () => new Date(),
@@ -148,7 +155,7 @@ export function createApp({
     return { kind: "needed", binding: binding.active, newTerms: newTermsOf(config, binding.active, binding.pending) };
   }
 
-  function checkFor(item: Item, verdict: Verdict): CheckRun {
+  async function checkFor(item: Item, verdict: Verdict): Promise<CheckRun> {
     switch (verdict.kind) {
       case "accepted":
         return { conclusion: "success", ...acceptedText(item.kind, verdict.approver) };
@@ -163,9 +170,19 @@ export function createApp({
         return { conclusion: "success", ...depositedText(item.kind, verdict.deposit, explorerUrl) };
       case "needed": {
         const link = depositLink(depositPageUrl, item);
+        const { title, summary } = depositNeededText(item.kind, verdict.binding, verdict.newTerms, link);
+        const request =
+          escrow &&
+          depositRequestLine(
+            item,
+            verdict.binding.amount,
+            { escrow: escrow.address, chainId: await escrow.chainId() },
+            link,
+          );
         return {
           conclusion: "pending",
-          ...depositNeededText(item.kind, verdict.binding, verdict.newTerms, link),
+          title,
+          summary: request ? `${summary}\n\n${request}` : summary,
           detailsUrl: link,
         };
       }
@@ -179,7 +196,7 @@ export function createApp({
 
   /** Posts the verdict and returns the item with its labels as they now stand. */
   async function publish(item: Item, verdict: Verdict): Promise<Item> {
-    const check = checkFor(item, verdict);
+    const check = await checkFor(item, verdict);
     if (item.kind === "issue") return noteOnIssue(item, verdict, check);
     await postCheck(item, check);
     await comment(item, verdict, check);
