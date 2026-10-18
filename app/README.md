@@ -64,7 +64,7 @@ later one, they show its terms. It checks the 20 most recently updated (`RECHECK
 In order:
 
 1. **Denounced** in `VOUCHED.td` (a `-login` line): the check fails and no Deposit is offered. This
-   outranks every Exemption, and acceptance too.
+   outranks every Exemption, and Acceptance too.
 2. **Accepted:** the `bona-fide:ok` label means a Maintainer accepted the PR or issue. It counts
    only when the last to add it has write, maintain or admin access, since triage access is enough
    to add a label; the same goes for `bona-fide:waive`. The check
@@ -169,6 +169,10 @@ Deposit waits for a Forfeit or the Timeout, when the Keeper refunds it. While an
 as completed (GitHub's default), and not a re-check, even if its Contributor has since become exempt
 or denounced. The Maintainer's signature or the Timeout decides.
 
+The check, these Refunds and a Contributor's record (see [Record Exemption](#record-exemption)) ask
+one question, whether a Maintainer accepted the item, and `src/acceptance.ts` answers it for all
+three, with where they differ named there.
+
 A refunded Deposit no longer counts for the check.
 
 ### Forfeits
@@ -227,7 +231,7 @@ left out. GitHub makes no diff for a very large PR; the model is told so and rea
   reasons. It says that nothing has been forfeited and only the Maintainer's signature can forfeit
   the Deposit. If the Maintainer agrees, they add `bona-fide:bad-faith` and sign the Forfeit on the
   sign page, which the draft links; if not, they do nothing, and the Deposit is refunded on merge or
-  acceptance, or at the Timeout.
+  Acceptance, or at the Timeout.
 - **Unsure:** nothing.
 
 Each note says it is a suggestion from an automated reviewer and that the Maintainer decides.
@@ -527,7 +531,7 @@ moved or didn't. Each public repo's page shows the log and the counts, read from
 **What is recorded.**
 
 - **Triage,** each time the model was asked: what it suggested and why, and what the App did.
-- **Early Refunds on acceptance:** the Keeper refunds a Deposit because the PR was merged, the issue
+- **Early Refunds on Acceptance:** the Keeper refunds a Deposit because the PR was merged, the issue
   was closed as completed by someone other than its author, the `bona-fide:ok` label was added, or
   someone with write, maintain or admin access approved the PR.
 - **Record Exemptions,** each time the model was asked to weigh a Contributor's record: what it

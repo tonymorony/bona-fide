@@ -141,7 +141,7 @@ test("the record follows new Deposits as they are made and end, looking each up 
   const { github, chain, open, deposit } = indexed();
   github.addRepo("acme/widgets");
   const index = open();
-  const reads = vi.spyOn(github, "outcomeOf");
+  const reads = vi.spyOn(github, "itemFacts");
   await caughtUp(index);
   const { number, key } = deposit("acme/widgets", "active");
 
@@ -164,7 +164,7 @@ test("links are saved, and after a restart they are read back without asking Git
   const first = open();
   await caughtUp(first);
 
-  const reads = vi.spyOn(github, "outcomeOf");
+  const reads = vi.spyOn(github, "itemFacts");
   const restarted = open([...saved]);
   await caughtUp(restarted);
 
@@ -218,7 +218,7 @@ test("catching up looks up a few Deposits a tick, Forfeits first", async () => {
   github.addRepo("acme/widgets");
   for (let i = 0; i < 12; i++) deposit("acme/widgets", "accepted");
   deposit("acme/widgets", "forfeited");
-  const reads = vi.spyOn(github, "outcomeOf");
+  const reads = vi.spyOn(github, "itemFacts");
   const index = open();
 
   await index.tick();
@@ -329,7 +329,7 @@ test("a link saved before links named the account is looked up again", async () 
   github.addRepo("acme/widgets");
   deposit("acme/widgets", "accepted");
   await caughtUp(open());
-  const reads = vi.spyOn(github, "outcomeOf");
+  const reads = vi.spyOn(github, "itemFacts");
 
   const restarted = open(saved.map(({ authorId: _, ...link }) => link));
   await caughtUp(restarted);

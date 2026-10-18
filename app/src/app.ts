@@ -1,6 +1,6 @@
 import { keyOf, repoIdOf, type Kind } from "@bona-fide/sdk";
 import type { Hex } from "viem";
-import { canPush, maintainerAdded } from "./access.ts";
+import { canPush, createAcceptance, type Accepted } from "./acceptance.ts";
 import {
   ARC_EXPLORER_URL,
   CLOCK_SKEW_SECONDS,
@@ -21,7 +21,7 @@ import {
   recordExemptText,
   setupLink,
 } from "./copy.ts";
-import { ACCEPTED, BAD_FAITH, DEPOSIT_REQUIRED, WAIVER } from "./labels.ts";
+import { DEPOSIT_REQUIRED, WAIVER } from "./labels.ts";
 import {
   fullName,
   type Binding,
@@ -81,8 +81,8 @@ export interface NewTerms {
 }
 
 export type Verdict =
-  /** Accepted with the bona-fide:ok label, or by `approver`'s approval of the PR, with the access they have. */
-  | { kind: "accepted"; approver?: string; access?: "admin" | "write" }
+  /** Accepted with the bona-fide:ok label, or by `approver`'s approval of the PR, with the facts behind it. */
+  | ({ kind: "accepted" } & Accepted)
   | { kind: "exempt"; exemption: Exclude<Exemption, "record"> }
   /** A Record Exemption the App granted for the item, with the counts its check cites. */
   | { kind: "exempt"; exemption: "record"; grant: RecordGrant }
@@ -102,6 +102,8 @@ export function createApp({
   triage,
   recordExemptions,
 }: AppDeps): App {
+  const acceptance = createAcceptance(github);
+
   async function readVouched(item: Item): Promise<string> {
     for (const path of VOUCHED_PATHS) {
       const text = await github.readFile(item.repo, path);
@@ -113,18 +115,19 @@ export function createApp({
   async function judge(item: Item, config: Config, repoId: Hex, key: Hex, seen?: DepositedEvent): Promise<Verdict> {
     const vouch = vouchStatus(await readVouched(item), item.author);
     if (vouch === "denounced") return { kind: "denounced" };
-    // A Maintainer's acceptance: the Keeper refunds on it, so it stands in for the Deposit from then on.
+    // A Maintainer's Acceptance: the Keeper refunds on it, so it stands in for the Deposit from then on.
     // Either label counts only when someone who can push added it.
-    if (await labelledByMaintainer(item, ACCEPTED)) return { kind: "accepted" };
-    if (await labelledByMaintainer(item, WAIVER)) return { kind: "exempt", exemption: "waiver" };
+    const labelled = await acceptance.ofLabel(item);
+    if (labelled) return { kind: "accepted", ...labelled };
+    if (await acceptance.maintainerAdded(item, WAIVER)) return { kind: "exempt", exemption: "waiver" };
     if (vouch === "vouched") return { kind: "exempt", exemption: "vouched" };
     if (isAllowedBot(item.author, config)) return { kind: "exempt", exemption: "bot" };
     if (canPush(await github.permissionOf(item.repo, item.author)))
       return { kind: "exempt", exemption: "collaborator" };
     if (await github.hasMergedPullRequest(item.repo, item.author)) return { kind: "exempt", exemption: "merged" };
     // An approval accepts the PR like the label does, but only as late as this: it takes GitHub
-    // reads, and an exempt author needs no acceptance. A PR marked bad faith waits for the Maintainer.
-    const approval = item.kind === "pr" && !item.labels.includes(BAD_FAITH) ? await approvalOf(item) : null;
+    // reads, and an exempt author needs no Acceptance.
+    const approval = item.kind === "pr" ? await acceptance.ofApproval(item) : null;
     if (approval) return { kind: "accepted", ...approval };
     const [deposit, binding] = await Promise.all([
       chain.depositSince(key, countsFrom(item), seen),
@@ -143,21 +146,6 @@ export function createApp({
     if (!binding.active) return { kind: "inactive", pending: binding.pending };
     // The escrow charges the active Binding, which trails a change to the config by the binding delay.
     return { kind: "needed", binding: binding.active, newTerms: newTermsOf(config, binding.active, binding.pending) };
-  }
-
-  function labelledByMaintainer(item: Item, label: string): Promise<boolean> {
-    return item.labels.includes(label)
-      ? maintainerAdded(github, item.repo, item.number, label)
-      : Promise.resolve(false);
-  }
-
-  /** Someone with write, maintain or admin access whose latest review approves the PR, or null. */
-  async function approvalOf(pr: PullRequest): Promise<{ approver: string; access: "admin" | "write" } | null> {
-    for (const login of await github.approvers(pr.repo, pr.number)) {
-      const permission = await github.permissionOf(pr.repo, login);
-      if (canPush(permission)) return { approver: login, access: permission };
-    }
-    return null;
   }
 
   function checkFor(item: Item, verdict: Verdict): CheckRun {

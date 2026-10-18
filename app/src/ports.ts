@@ -82,8 +82,8 @@ export interface GitHub {
   suitePullRequests(repo: Repo, suiteId: number): Promise<number[]>;
   /** Up to `max` of the repo's open PRs and issues, the most recently updated first, and whether more are open. */
   openItems(repo: Repo, max: number): Promise<{ items: { kind: Kind; number: number }[]; more: boolean }>;
-  /** Who opened the PR or issue and whether it was accepted, for a Contributor's record, or null if there is none. */
-  outcomeOf(repo: Repo, kind: Kind, number: number): Promise<ItemOutcome | null>;
+  /** Who opened the PR or issue and how it was closed, for a Contributor's record, or null if there is none. */
+  itemFacts(repo: Repo, kind: Kind, number: number): Promise<ItemFacts | null>;
   /** What GitHub shows publicly about `login`, or null if there is no such account. `repo` is the repo being checked. */
   profileOf(repo: Repo, login: string): Promise<GitHubProfile | null>;
   /** What a Payout reads of a PR: whether it was merged, what it closes, and its author's words. Null if there is no such PR. */
@@ -145,19 +145,23 @@ export interface CommitCheck {
   state: "success" | "pending" | "failure";
 }
 
-/** Whose PR or issue a Deposit was for, and whether someone else accepted it, for the author's record. */
-export interface ItemOutcome {
+/** Whose PR or issue a Deposit was for, and how it was closed: what Acceptance reads for the author's record. */
+export interface ItemFacts {
   author: string;
   authorId: number;
-  /**
-   * A PR merged, an issue closed as completed by someone other than its author who can push, or either
-   * labelled bona-fide:ok by someone who can push. Not when its author merged it, or can push to the
-   * repo themselves.
-   */
-  accepted: boolean;
+  labels: string[];
+  /** How it was closed, or null while it's open. */
+  closing: Closing | null;
   /** When it was merged or closed, or null while it's open. */
   closedAt: Date | null;
 }
+
+/**
+ * How a PR or issue was closed: merged, or closed with GitHub's reason, such as "completed" or
+ * "not_planned". `by` is a login, or null when GitHub doesn't say who: it never says who closed a PR.
+ */
+export type Closing =
+  { type: "merged"; by: string | null } | { type: "closed"; reason: string | null; by: string | null };
 
 /** A Contributor's public GitHub profile, as a Record Exemption reads it. Numbers only. */
 export interface GitHubProfile {
@@ -366,7 +370,7 @@ export interface ResolutionRequest {
 export type DecisionType = "triage" | "early-refund" | "waive" | "pay" | "hold";
 
 /**
- * "decided": the App acted on its own, such as an early Refund or a note suggesting acceptance.
+ * "decided": the App acted on its own, such as an early Refund or a note suggesting Acceptance.
  * "escalated": the App left it to the Maintainer, such as a draft bad-faith verdict, an unsure
  * model, or a model that declined or failed.
  */

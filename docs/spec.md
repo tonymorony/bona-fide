@@ -58,11 +58,11 @@ nobody has vouched for yet: a small deposit that honest contributors always get 
    | Maintainer labels `bona-fide:bad-faith` and **signs with their wallet** | Anyone relays the signature | ≤ 50% to the forfeit router, the rest refunded |
 
 5. **Triage (optional).** An automated reviewer reads each item that holds a Deposit. For clearly
-   good work it suggests acceptance; for likely bad faith it drafts a verdict with reasons and asks
+   good work it suggests Acceptance; for likely bad faith it drafts a verdict with reasons and asks
    the Maintainer to review and sign. It never forfeits and never refunds on its own: only the
    Maintainer's signature can forfeit, as the escrow requires.
 6. **Decision log.** Every triage suggestion, every Record Exemption the reviewer was asked about,
-   and every early Refund on acceptance is recorded with
+   and every early Refund on Acceptance is recorded with
    what was read, what the model suggested, the facts checked, what was done, its transaction and
    its model cost. Each public repo's page shows the log and how many decisions the App made
    versus left to the Maintainer. Private repos' decisions are never published.

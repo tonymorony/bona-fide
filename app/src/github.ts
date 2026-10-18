@@ -1,16 +1,15 @@
 import { repoIdOf } from "@bona-fide/sdk";
 import type { Octokit } from "@octokit/rest";
 import type { Hex } from "viem";
-import { canPush, maintainerAdded } from "./access.ts";
-import { ACCEPTED } from "./labels.ts";
 import {
   fullName,
   type AuthoredText,
+  type Closing,
   type CommitCheck,
   type GitHub,
   type IssueClosing,
+  type ItemFacts,
   type ItemFields,
-  type ItemOutcome,
   type Permission,
   type Repo,
 } from "./ports.ts";
@@ -344,40 +343,27 @@ export function createGitHub({ appId, app, installation }: GitHubOptions): GitHu
       };
     },
 
-    // Only someone with write access can merge. Closing an issue as completed, or adding the label,
-    // counts only when someone else who can push did it: anyone can close their own issue, and triage
-    // access is enough for either. And a record counts only work someone else accepted: not a PR its
-    // author merged, nor work in a repo they can push to, such as an org of their own. Access is read
-    // now, not as it was then. A deleted account's item is nobody's.
-    async outcomeOf(repo, kind, number) {
-      const labelledOk = async (labels: (string | { name?: string })[]) =>
-        labelled(labels, ACCEPTED) && (await maintainerAdded({ labeledBy, permissionOf }, repo, number, ACCEPTED));
-      const outcome = async (
-        user: { login: string; id: number },
-        accepted: boolean,
-        closedAt: string | null,
-      ): Promise<ItemOutcome> => ({
-        author: user.login,
-        authorId: user.id,
-        accepted: accepted && !canPush(await permissionOf(repo, user.login)),
-        closedAt: closedAt ? new Date(closedAt) : null,
-      });
+    // One read, and no judgement: Acceptance weighs the facts. A deleted account's item is nobody's.
+    async itemFacts(repo, kind, number) {
       try {
         if (kind === "pr") {
           const { data } = await api(repo).rest.pulls.get({ ...repoParams(repo), pull_number: number });
           if (!data.user) return null;
-          const merged = data.merged === true && data.merged_by?.id !== data.user.id;
-          return outcome(data.user, merged || (await labelledOk(data.labels)), data.closed_at);
+          const closing: Closing | null =
+            data.merged === true
+              ? { type: "merged", by: data.merged_by?.login ?? null }
+              : data.state === "closed"
+                ? { type: "closed", reason: null, by: null }
+                : null;
+          return factsOf(data.user, data, closing);
         }
         const { data } = await api(repo).rest.issues.get({ ...repoParams(repo), issue_number: number });
         if (data.pull_request || !data.user) return null;
-        const closer = data.closed_by?.login;
-        const completed =
-          data.state_reason === "completed" &&
-          closer !== undefined &&
-          closer.toLowerCase() !== data.user.login.toLowerCase() &&
-          canPush(await permissionOf(repo, closer));
-        return outcome(data.user, completed || (await labelledOk(data.labels)), data.closed_at);
+        const closing: Closing | null =
+          data.state === "closed"
+            ? { type: "closed", reason: data.state_reason ?? null, by: data.closed_by?.login ?? null }
+            : null;
+        return factsOf(data.user, data, closing);
       } catch (error) {
         if (isNotFound(error)) return null;
         throw error;
@@ -629,12 +615,26 @@ function itemFields(repo: Repo, data: RestItem): ItemFields {
     author: data.user?.login ?? "ghost",
     ...(data.user ? { authorId: data.user.id } : {}),
     createdAt: new Date(data.created_at),
-    labels: data.labels.map((label) => (typeof label === "string" ? label : (label.name ?? ""))),
+    labels: labelNames(data.labels),
   };
 }
 
-function labelled(labels: (string | { name?: string })[], wanted: string): boolean {
-  return labels.some((label) => (typeof label === "string" ? label : label.name) === wanted);
+function factsOf(
+  user: { login: string; id: number },
+  data: Pick<RestItem, "labels"> & { closed_at: string | null },
+  closing: Closing | null,
+): ItemFacts {
+  return {
+    author: user.login,
+    authorId: user.id,
+    labels: labelNames(data.labels),
+    closing,
+    closedAt: data.closed_at ? new Date(data.closed_at) : null,
+  };
+}
+
+function labelNames(labels: RestItem["labels"]): string[] {
+  return labels.map((label) => (typeof label === "string" ? label : (label.name ?? "")));
 }
 
 function isNotFound(error: unknown): boolean {

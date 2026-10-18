@@ -1,5 +1,6 @@
 import type { Kind } from "@bona-fide/sdk";
 import type { Hex } from "viem";
+import { createAcceptance } from "../acceptance.ts";
 import { createBlockScanner } from "../blocks.ts";
 import { CLOCK_SKEW_SECONDS } from "../config.ts";
 import { fullName, type Chain, type ContributorRecord, type ContributorRecords, type GitHub } from "../ports.ts";
@@ -76,6 +77,7 @@ interface Lookup {
 // from its deploy block on each start, and looks each Deposit up on GitHub when it is made and
 // again when it ends: whether its item was accepted is read then.
 export function createRecordIndex({ chain, github, fromBlock, links = [], save }: RecordIndexDeps): RecordIndex {
+  const acceptance = createAcceptance(github);
   const blocks = createBlockScanner(fromBlock);
   const tracked = new Map<string, Tracked>();
   const linked = new Map<string, RecordLink>();
@@ -122,23 +124,24 @@ export function createRecordIndex({ chain, github, fromBlock, links = [], save }
 
   async function lookUp(id: string, deposit: Tracked): Promise<void> {
     const repo = await github.findRepo(deposit.repoId);
-    const outcome = repo && (await github.outcomeOf(repo, deposit.kind, deposit.number));
+    const facts = repo && (await github.itemFacts(repo, deposit.kind, deposit.number));
+    const accepted = repo !== null && facts !== null && (await acceptance.forRecord(repo, deposit.number, facts));
     lookups.delete(id);
     // Not a repo the App can see, or no such item, such as a Deposit made before its item opened.
-    if (!repo || !outcome) return void unlinkable.set(id, deposit.status);
+    if (!repo || !facts) return void unlinkable.set(id, deposit.status);
     unlinkable.delete(id);
     // Work accepted before the Deposit was made put nothing at risk.
     const atRisk =
-      outcome.closedAt === null || deposit.madeAt.getTime() <= outcome.closedAt.getTime() + CLOCK_SKEW_SECONDS * 1000;
-    const refunded = outcome.accepted && atRisk ? "accepted" : "refunded";
+      facts.closedAt === null || deposit.madeAt.getTime() <= facts.closedAt.getTime() + CLOCK_SKEW_SECONDS * 1000;
+    const refunded = accepted && atRisk ? "accepted" : "refunded";
     const ended = { active: "active", forfeited: "forfeited", refunded };
     const link: RecordLink = {
       key: deposit.key,
       serial: String(deposit.serial),
       repo: fullName(repo),
       private: repo.private !== false,
-      author: outcome.author,
-      authorId: outcome.authorId,
+      author: facts.author,
+      authorId: facts.authorId,
       outcome: ended[deposit.status] as RecordLink["outcome"],
     };
     keep(link);
