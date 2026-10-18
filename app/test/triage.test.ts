@@ -569,6 +569,24 @@ test("a label a Maintainer adds while the model reads is a witness, and the deci
   expect(logged[0]?.witnesses).toContainEqual({ name: "Labels after the model answered", value: "bona-fide:ok" });
 });
 
+// The label can come and go, and each look after it went would pay for another answer.
+test("once the model answered, a Maintainer's label that came meanwhile settles it, even after the label comes off", async () => {
+  const { github, reviewer, triage, deliver, settled } = deposited();
+  let answerNow = () => {};
+  reviewer.gate = new Promise((resolve) => (answerNow = resolve));
+  reviewer.answers = [answer("bad-faith"), answer("bad-faith")];
+
+  await deliver("pull_request", payload("pull_request", "opened", { author: NEWCOMER }));
+  await github.addLabel(HELLO_WORLD, PR, "bona-fide:bad-faith");
+  answerNow();
+  await triage!.idle();
+  await github.removeLabel(HELLO_WORLD, PR, "bona-fide:bad-faith");
+  await settled({ action: "synchronize", labels: [] });
+  await settled({ action: "synchronize", labels: [] });
+
+  expect(reviewer.requests).toHaveLength(1);
+});
+
 test("an item in a private repo is logged as private, so it is never published", async () => {
   const { reviewer, logged, log, settled } = deposited("issue", "", { private: true });
   reviewer.answers = [answer("accept")];

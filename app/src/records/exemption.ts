@@ -28,6 +28,8 @@ export const MERGED_CAP = 2;
 export const PROFILE_TTL_MS = 60 * 60 * 1000;
 /** Most profiles remembered. Past it, the memory is emptied. */
 const MAX_PROFILES = 10_000;
+/** How long after the model was asked about an item a reopen or a re-run asks it again. */
+export const ASK_AGAIN_MS = 10 * 60_000;
 /** Most reasons a flag note shows. */
 const MAX_REASONS = 3;
 const DAY_MS = 86_400_000;
@@ -97,8 +99,8 @@ export function createRecordExemptions({
   record,
 }: RecordExemptionDeps): RecordExemptions {
   const running = new Map<string, Promise<void>>();
-  /** Items the model was asked about in this process, with their author. After a restart, the log says. */
-  const asked = new Set<string>();
+  /** When the model was asked about each item and author in this process. After a restart, the log says. */
+  const asked = new Map<string, number>();
   const profiles = new Map<string, { profile: GitHubProfile | null; at: number }>();
 
   function granted(item: Item): Decision | null {
@@ -182,7 +184,8 @@ export function createRecordExemptions({
       },
       now(),
     );
-    asked.add(idOf(item));
+    if (asked.size >= MAX_PROFILES) asked.clear();
+    asked.set(idOf(item), now().getTime());
     safely(() => decisions.append(decision));
     safely(() => record?.(decision));
     if (action === "waived") return recheck();
@@ -210,7 +213,13 @@ export function createRecordExemptions({
       if (verdict.kind !== "needed" || !config.recordExemption) return;
       const id = idOf(item);
       if (running.has(id)) return;
-      if (!askAgain && (asked.has(id) || granted(item))) return;
+      const last = asked.get(id);
+      // Reopening or re-running asks again, but not within ASK_AGAIN_MS: each answer is paid for.
+      if (
+        askAgain ? last !== undefined && now().getTime() - last < ASK_AGAIN_MS : last !== undefined || granted(item)
+      ) {
+        return;
+      }
       const work = weigh(item, config, recheck)
         .catch((error: unknown) => {
           // GitHub failed: nothing was recorded, so the next check tries again.

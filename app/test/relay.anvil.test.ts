@@ -111,6 +111,34 @@ const WELL_FORMED = {
   signature: `0x${"cd".repeat(65)}`,
 };
 
+// One that expires on the way to a block reverts, and the relayer pays for it.
+test("an authorization that expires within two minutes is refused before anything is read or sent", async () => {
+  const { wallet, handle } = await relay({ now: () => 1_899_999_950_000 });
+
+  const res = await handle(post(WELL_FORMED), IP);
+
+  expect(res.status).toBe(422);
+  expect(((await res.json()) as { error: string }).error).toBe(
+    "This authorization expires too soon to be relayed. Sign a new one.",
+  );
+  expect(await kit.sent(wallet.account.address)).toBe(0);
+});
+
+// The relayer pays for each Deposit, and an exempt item's Deposit is refunded at once, so one
+// balance could go round and round.
+test("one wallet's Deposits are relayed only so many times a day, then it is told when to retry", async () => {
+  const signer = await kit.fundedSigner();
+  const { wallet, handle } = await relay({ perDepositor: { max: 1, windowMs: 24 * 3_600_000 } });
+
+  const first = await handle(post(await kit.signedDeposit(signer, { number: 40 })), IP);
+  const second = await handle(post(await kit.signedDeposit(signer, { number: 41 })), IP);
+
+  expect(first.status).toBe(200);
+  expect(second.status).toBe(429);
+  expect(((await second.json()) as { error: string }).error).toContain("deposit from your own wallet");
+  expect(await kit.sent(wallet.account.address)).toBe(1);
+});
+
 test("of two Deposits for one PR sent at once, only one is relayed", async () => {
   const [first, second] = [await kit.fundedSigner(), await kit.fundedSigner()];
   const { wallet, handle } = await relay();

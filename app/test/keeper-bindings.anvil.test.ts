@@ -158,6 +158,25 @@ test("the same proof sent twice proposes once, so the delay doesn't restart", as
   expect(await anvil.client.getTransactionCount({ address: anvil.keeper })).toBe(sent);
 }, 30_000);
 
+// The Keeper pays for each proposal, and each change to bona-fide.yml could ask for another.
+test("within the hour after a proposal, a changed bona-fide.yml isn't proposed, and the one proposed still answers", async () => {
+  const repo = "octo/bind-churn";
+  const { github, post } = installedWith(repo, `maintainer: "${anvil.maintainer}"\namount: 2\n`);
+  const sent = await post("/binding-proof", await proof(repo, anvil.maintainer));
+  expect(sent?.status).toBe(200);
+
+  github.setFile(repo, ".github/bona-fide.yml", `maintainer: "${anvil.maintainer}"\namount: 3\n`);
+  const changed = await post("/binding-proof", await proof(repo, anvil.maintainer));
+  github.setFile(repo, ".github/bona-fide.yml", `maintainer: "${anvil.maintainer}"\namount: 2\n`);
+  const same = await post("/binding-proof", await proof(repo, anvil.maintainer));
+
+  expect(changed?.status).toBe(429);
+  expect(Number(changed?.headers.get("retry-after"))).toBeGreaterThan(3500);
+  expect((await pendingConfig(repo)).amount).toBe(2_000_000n);
+  expect(same?.status).toBe(200);
+  expect(((await same?.json()) as { status: string }).status).toBe("pending");
+}, 30_000);
+
 test("a proof for the Binding that is already active changes nothing", async () => {
   const repo = "octo/bind-7";
   await anvil.bind(repo);

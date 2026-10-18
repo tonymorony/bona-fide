@@ -28,8 +28,8 @@ export interface HarnessOptions {
   binding?: Partial<Binding> | null;
   /** When the Binding took effect: by default long before any PR or issue was opened. */
   startedAt?: Date;
-  /** The App's clock. */
-  now?: Date;
+  /** The App's clock: the time, or a clock a test can move. */
+  now?: Date | (() => Date);
   /** The block explorer the App links Deposits to, if not Arc mainnet's. */
   explorerUrl?: string;
   /** The model triage asks; without it, triage is off. */
@@ -41,7 +41,8 @@ export interface HarnessOptions {
 }
 
 export function harness(options: HarnessOptions = {}) {
-  const { config, binding = {}, startedAt, now, explorerUrl, reviewer, advisor } = options;
+  const { config, binding = {}, startedAt, explorerUrl, reviewer, advisor } = options;
+  const now = typeof options.now === "function" ? options.now : options.now && (() => options.now as Date);
   const github = new FakeGitHub();
   const chain = new FakeChain();
   github.addRepo(REPO);
@@ -63,7 +64,7 @@ export function harness(options: HarnessOptions = {}) {
   // The record index reads the escrow from its first block, as the host reads it from ESCROW_FROM_BLOCK.
   const records = createRecordIndex({ chain, github, fromBlock: 0n });
   const recordExemptions =
-    advisor && createRecordExemptions({ github, records, advisor, decisions: log, ...(now ? { now: () => now } : {}) });
+    advisor && createRecordExemptions({ github, records, advisor, decisions: log, ...(now ? { now } : {}) });
   const app = createApp({
     github,
     chain,
@@ -72,7 +73,7 @@ export function harness(options: HarnessOptions = {}) {
     explorerUrl,
     triage,
     recordExemptions,
-    ...(now ? { now: () => now } : {}),
+    ...(now ? { now } : {}),
   });
   const handle = createWebhookHandler({ secret: SECRET, app });
   const deliver = (event: string, body: unknown) => handle(signed(event, body));

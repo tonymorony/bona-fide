@@ -338,7 +338,8 @@ asking for the Deposit, and the record is weighed in the background, since the m
 than GitHub waits for a webhook. The witnesses come first, from memory and one cached GitHub read:
 when one fails, the model isn't asked and nothing is recorded. The model is asked once per PR or
 issue and author: new commits, labels, approvals and Deposits don't ask again. Reopening the item,
-or pressing **Re-run** on its check, does, while the check still asks for a Deposit.
+or pressing **Re-run** on its check, does, while the check still asks for a Deposit, but not within
+10 minutes of the last answer (`ASK_AGAIN_MS`): each answer is paid for.
 
 **It stays.** A Record Exemption granted for an item stays its Exemption on every later check and
 across restarts: the App reads it back from the [decision log](#decision-log)'s latest `waive`
@@ -703,7 +704,9 @@ Relays a Forfeit the Maintainer signed.
 ### `POST /binding-proof`
 
 Proposes the Binding in the repo's `.github/bona-fide.yml`, once its Maintainer has proved control of
-the wallet.
+the wallet. The Keeper pays for each proposal, so within an hour of one (`PROPOSAL_COOLDOWN_MS`) it
+proposes no other for the repo: a changed file gets `429` with `Retry-After`, and the Binding already
+proposed or active still answers.
 
 ```json
 {
@@ -850,7 +853,9 @@ credentials, so it allows any origin and answers a CORS preflight; any method ot
 With `RELAYER_PRIVATE_KEY` set, the host relays a Contributor's one-signature Deposit (an EIP-3009
 authorization) and pays its gas. It checks that the repo is active and the value is the current
 amount, and simulates the Deposit before sending it. It takes 10 requests a minute per IP and 30
-per repo. It sends no CORS headers, so the deposit page must be served from the App's origin. The
+per repo, and refuses an authorization with under two minutes left. It pays for at most 10 Deposits
+a day from one wallet and 3 for one PR or issue: an exempt item's Deposit is refunded at once, so
+one balance could otherwise go round and round at the relayer's cost. It sends no CORS headers, so the deposit page must be served from the App's origin. The
 request and every answer are in [../agent/README.md](../agent/README.md#the-relay-api).
 
 ### Limits

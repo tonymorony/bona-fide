@@ -165,8 +165,9 @@ export function createTriage({
       return void safely(() => record(decision));
     }
     // Asked once per Deposit in this process; after a restart, the note's marker says so. A skip
-    // for a reason that can change leaves the next check to look again.
-    if (!CHANGEABLE_SKIPS.includes(decision.action)) {
+    // for a reason that can change leaves the next check to look again, unless the model was asked
+    // first: a label can come and go, and each look would pay for another answer.
+    if (decision.model !== null || !CHANGEABLE_SKIPS.includes(decision.action)) {
       if (triaged.size >= MAX_REMEMBERED) triaged.clear();
       triaged.add(id);
     }

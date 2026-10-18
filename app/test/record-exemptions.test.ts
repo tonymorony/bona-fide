@@ -3,7 +3,7 @@ import { expect, test } from "vitest";
 import { createApp } from "../src/app.ts";
 import { openDecisionFile } from "../src/decisions/file.ts";
 import type { DecisionLog, GitHubProfile } from "../src/ports.ts";
-import { createRecordExemptions, FLAG_MARKER } from "../src/records/exemption.ts";
+import { ASK_AGAIN_MS, createRecordExemptions, FLAG_MARKER } from "../src/records/exemption.ts";
 import { createRecordIndex } from "../src/records/records.ts";
 import { ReviewFailed } from "../src/triage/triage.ts";
 import { createWebhookHandler } from "../src/webhook.ts";
@@ -40,6 +40,7 @@ const PROFILE: GitHubProfile = {
 type End = "accepted" | "refunded" | "forfeited";
 
 interface Options {
+  now?: () => Date;
   /** The text of .github/bona-fide.yml. */
   config?: string;
   /** Deposits of the newcomer's in other repos, each ended as told. By default four accepted in three repos. */
@@ -60,9 +61,17 @@ const GOOD: [string, End][] = [
 ];
 
 /** A harness whose newcomer has a Bona Fide record elsewhere, with PR #2 and issue #1 of theirs here. */
-async function recorded({ config = "", history = GOOD, privateRepos = [], profile = {}, noModel, log }: Options = {}) {
+async function recorded({
+  config = "",
+  history = GOOD,
+  privateRepos = [],
+  profile = {},
+  noModel,
+  log,
+  now = () => NOW,
+}: Options = {}) {
   const advisor = new FakeAdvisor();
-  const setup = harness({ config, advisor: noModel ? undefined : advisor, now: NOW, log });
+  const setup = harness({ config, advisor: noModel ? undefined : advisor, now, log });
   const { github, chain, records } = setup;
   let number = 100;
   for (const [repo, end] of history) {
@@ -398,7 +407,8 @@ test("a waiver in a private repo is logged as private, so it is never published"
 });
 
 test("the model is asked once per item, whatever events follow; reopening it or re-running its check asks again", async () => {
-  const { github, advisor, open, deliver, recordExemptions } = await recorded();
+  let time = NOW.getTime();
+  const { github, advisor, open, deliver, recordExemptions } = await recorded({ now: () => new Date(time) });
   advisor.answers = [advice("require"), advice("require"), advice("waive")];
 
   await open();
@@ -407,13 +417,32 @@ test("the model is asked once per item, whatever events follow; reopening it or 
   await Promise.all([open("pr", "synchronize"), open("pr", "synchronize")]);
   expect(advisor.requests).toHaveLength(1);
 
+  time += ASK_AGAIN_MS;
   await open("pr", "reopened");
   expect(advisor.requests).toHaveLength(2);
 
+  time += ASK_AGAIN_MS;
   await deliver("check_run", rerun({ externalId: String(PR) }));
   await recordExemptions!.idle();
   expect(advisor.requests).toHaveLength(3);
   expect(github.checkOn(REPO, HEAD_SHA)?.conclusion).toBe("success");
+});
+
+// Each answer is paid for, and anyone who can reopen the item, or re-run its check, can ask again.
+test("reopening or re-running within ASK_AGAIN_MS of the last answer doesn't ask the model again", async () => {
+  let time = NOW.getTime();
+  const { advisor, open, deliver, recordExemptions } = await recorded({ now: () => new Date(time) });
+  advisor.answers = [advice("require"), advice("require")];
+  await open();
+
+  for (let i = 0; i < 5; i++) {
+    time += 60_000;
+    await open("pr", "reopened");
+    await deliver("check_run", rerun({ externalId: String(PR) }));
+    await recordExemptions!.idle();
+  }
+
+  expect(advisor.requests).toHaveLength(1);
 });
 
 test("two checks at once ask the model once", async () => {

@@ -271,7 +271,7 @@ function unixSeconds(date: Date): bigint {
   return BigInt(date.getTime() / 1000);
 }
 
-function sameBinding(a: Binding, b: Binding): boolean {
+export function sameBinding(a: Binding, b: Binding): boolean {
   return (
     isAddressEqual(a.maintainer, b.maintainer) &&
     a.forfeitBps === b.forfeitBps &&

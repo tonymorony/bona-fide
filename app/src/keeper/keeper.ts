@@ -21,11 +21,15 @@ import { itemFields } from "../webhook.ts";
 import { badFaithNote, NOUNS } from "./copy.ts";
 import {
   EscrowRejection,
+  sameBinding,
   TransactionReverted,
   type BindingStatus,
   type EscrowDeposit,
   type KeeperEscrow,
 } from "./escrow.ts";
+
+/** How long after the Keeper proposed a repo's Binding it proposes another, which the Keeper pays for. */
+export const PROPOSAL_COOLDOWN_MS = 60 * 60_000;
 
 export interface KeeperDeps {
   escrow: KeeperEscrow;
@@ -94,6 +98,7 @@ export function createKeeper({
 }: KeeperDeps): Keeper {
   const keyFor = (item: Item) => keyOf(repoIdOf(fullName(item.repo)), item.kind, item.number);
   const afterRevert = cooldown(REVERT_COOLDOWN_MS, Date.now);
+  const afterProposal = cooldown(PROPOSAL_COOLDOWN_MS, Date.now);
 
   // A Maintainer accepted the item. The Refund names the Deposit read, so the one logged is the
   // one refunded; a redelivery finds it refunded and logs nothing.
@@ -163,6 +168,13 @@ export function createKeeper({
     if (deposit.status !== "active" || (await escrow.now()) >= deposit.deadline) return;
     const signLink = depositLink(signPageUrl, item);
     await github.postNote(item.repo, item.number, badFaithNote({ kind: item.kind, signLink, ...deposit }));
+  }
+
+  /** Whether the repo's pending Binding, or its active one without a pending one, is `binding`. */
+  async function bound(repoId: Hex, binding: Binding): Promise<boolean> {
+    const { active, pending } = await chain.bindingOf(repoId);
+    const current = pending ?? active;
+    return current !== null && sameBinding(current, binding);
   }
 
   return {
@@ -266,7 +278,17 @@ export function createKeeper({
         timeoutSeconds: parsed.config.timeoutSeconds,
         amount: parsed.config.amount,
       };
-      return escrow.proposeRepo(repoId, binding);
+      // The Keeper pays for each proposal, and anyone with the repo's proof can ask for one after
+      // each change to its bona-fide.yml. A Binding already proposed or active costs nothing.
+      const wait = afterProposal.wait(repoId);
+      if (wait > 0 && !(await bound(repoId, binding))) {
+        throw new Refusal(429, "The Keeper proposed a Binding for this repo within the hour. Try again later.", {
+          retryAfter: wait,
+        });
+      }
+      const status = await escrow.proposeRepo(repoId, binding);
+      if (status.status === "proposed") afterProposal.hold(repoId);
+      return status;
     },
   };
 }

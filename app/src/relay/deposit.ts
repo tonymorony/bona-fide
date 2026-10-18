@@ -32,6 +32,10 @@ export interface DepositRelayOptions {
   perIp?: RateLimit;
   /** Requests naming one repo, from any IP. */
   perRepo?: RateLimit;
+  /** Deposits sent from one Contributor's wallet. */
+  perDepositor?: RateLimit;
+  /** Deposits sent for one PR or issue. */
+  perItem?: RateLimit;
   /** The clock for the rate limits and the cooldown after a reverted Deposit, in milliseconds. */
   now?: () => number;
   /** How long to wait for a sent Deposit to be mined before answering without it. */
@@ -40,6 +44,13 @@ export interface DepositRelayOptions {
 
 const PER_IP: RateLimit = { max: 10, windowMs: 60_000 };
 const PER_REPO: RateLimit = { max: 30, windowMs: 60_000 };
+const DAY_MS = 24 * 60 * 60_000;
+// The relayer pays for every Deposit it sends, and an exempt item's Deposit is refunded at once, so
+// one balance could go round and round. A Contributor makes a few Deposits a day at most.
+const PER_DEPOSITOR: RateLimit = { max: 10, windowMs: DAY_MS };
+const PER_ITEM: RateLimit = { max: 3, windowMs: DAY_MS };
+/** Least time an authorization must have left when it arrives, so it can't expire on the way to a block. */
+const VALID_MARGIN_MS = 2 * 60_000;
 const RECEIPT_TIMEOUT_MS = 30_000;
 const RECEIPT_POLL_MS = 500;
 
@@ -65,11 +76,15 @@ export function createDepositRelay({
   escrow,
   perIp = PER_IP,
   perRepo = PER_REPO,
+  perDepositor = PER_DEPOSITOR,
+  perItem = PER_ITEM,
   now = Date.now,
   receiptTimeoutMs = RECEIPT_TIMEOUT_MS,
 }: DepositRelayOptions): DepositRelay {
   const ipWait = fixedWindow(perIp, now);
   const repoWait = fixedWindow(perRepo, now);
+  const depositorWait = fixedWindow(perDepositor, now);
+  const itemWait = fixedWindow(perItem, now);
   const afterRevert = cooldown(REVERT_COOLDOWN_MS, now);
   const inFlight = new Set<Hex>();
   let sending: Promise<unknown> = Promise.resolve();
@@ -124,6 +139,9 @@ export function createDepositRelay({
         return reason;
       });
     if (typeof simulation === "string") return refuse(422, `The Deposit would fail on-chain: ${simulation}.`);
+    // Counted only when the relayer would pay: a Deposit refused above costs it nothing.
+    const sends = Math.max(depositorWait(deposit.from.toLowerCase()), itemWait(key));
+    if (sends > 0) return tooManyDeposits(sends);
     const txHash = await oneAtATime(() => wallet.writeContract(simulation.request));
     const receipt = await client
       .waitForTransactionReceipt({ hash: txHash, pollingInterval: RECEIPT_POLL_MS, timeout: receiptTimeoutMs })
@@ -158,6 +176,9 @@ export function createDepositRelay({
     const parsed = parseSignedDeposit(await request.text());
     if (!parsed.ok) return refuse(400, parsed.problem);
     const deposit = parsed.deposit;
+    if (deposit.validBefore * 1000n < BigInt(now() + VALID_MARGIN_MS)) {
+      return refuse(422, "This authorization expires too soon to be relayed. Sign a new one.");
+    }
     const repoWaits = repoWait(deposit.repo.toLowerCase());
     if (repoWaits > 0) return tooMany(repoWaits);
     const repoId = repoIdOf(deposit.repo);
@@ -193,6 +214,15 @@ function itemName({ kind, number, repo }: SignedDeposit): string {
 
 function refuse(status: number, error: string, details: Record<string, string> = {}): Response {
   return Response.json({ error, ...details }, { status });
+}
+
+function tooManyDeposits(seconds: number): Response {
+  return Response.json(
+    {
+      error: `The relay has sent as many Deposits from this wallet, or for this item, as it does in a day. Try again in ${seconds} s, or deposit from your own wallet.`,
+    },
+    { status: 429, headers: { "retry-after": String(seconds) } },
+  );
 }
 
 function tooMany(seconds: number): Response {
