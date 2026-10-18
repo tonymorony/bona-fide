@@ -307,7 +307,7 @@ test("the model's reasons can't ping anyone, link anywhere or carry HTML, and at
   reviewer.answers = [
     answer("bad-faith", [
       "Ask @alice or @org/team\nabout it.",
-      "See [the proof](https://evil.example/x) and www.evil.example",
+      "See [the proof](https://evil.example/x), www.evil.example, v2_https://evil.example/a and 3www.evil.example/b",
       "An ![image](https://evil.example/i.png) and [a bracket] (kept).",
       '<img src=x onerror="alert(1)"> & more',
       "x".repeat(1_000),
@@ -322,7 +322,7 @@ test("the model's reasons can't ping anyone, link anywhere or carry HTML, and at
   const reasons = note!.split("\n").filter((line) => line.startsWith("- ") && !line.startsWith("- **"));
   expect(reasons).toEqual([
     "- Ask @\u200balice or @\u200borg/team about it.",
-    "- See the proof and (link removed)",
+    "- See the proof, (link removed) v2_(link removed) and 3(link removed)",
     "- An image and \\[a bracket\\] (kept).",
     '- &lt;img src=x onerror="alert(1)"&gt; &amp; more',
   ]);

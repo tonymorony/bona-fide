@@ -511,6 +511,41 @@ test("a repoId is traced to an installed repo, with whether it is private", asyn
   expect(await github.findRepo(repoIdOf("someone/else"))).toBeNull();
 });
 
+// Decisions about a public repo are published, so one that turns private must be seen to.
+test("a repo found before is listed again after five minutes, to see whether it turned private", async () => {
+  vi.useFakeTimers({ now: 0, toFake: ["Date"] });
+  try {
+    let visibility = false;
+    const { github } = fakeApi({
+      "GET /app/installations": { status: 200, body: [{ id: 1 }] },
+      "GET /installation/repositories": () => ({
+        status: 200,
+        body: {
+          total_count: 1,
+          repositories: [
+            {
+              name: "Hello-World",
+              full_name: "Codertocat/Hello-World",
+              owner: { login: "Codertocat" },
+              private: visibility,
+            },
+          ],
+        },
+      }),
+    });
+    const repoId = repoIdOf("codertocat/hello-world");
+
+    expect((await github.findRepo(repoId))?.private).toBe(false);
+    visibility = true;
+    vi.setSystemTime(4 * 60_000);
+    expect((await github.findRepo(repoId))?.private).toBe(false);
+    vi.setSystemTime(6 * 60_000);
+    expect((await github.findRepo(repoId))?.private).toBe(true);
+  } finally {
+    vi.useRealTimers();
+  }
+});
+
 test("a PR and an issue are read with their author, creation time, labels and head", async () => {
   const pr = fixture("pull_request.opened").pull_request;
   const issue = fixture("issues.opened").issue;

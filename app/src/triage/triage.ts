@@ -308,7 +308,8 @@ function plainReason(reason: string): string {
   const line = reason
     .replace(/\s+/g, " ")
     .replace(/!?\[([^\]]*)\]\([^)]*\)/g, "$1")
-    .replace(/\b(?:[a-z][a-z0-9+.-]*:\/\/|www\.)[^\s)\]>]*/gi, "(link removed)")
+    // GitHub links a URL after an underscore or a digit too, where \b doesn't match.
+    .replace(/(?:[a-z][a-z0-9+.-]*:\/\/|www\.)[^\s)\]>]*/gi, "(link removed)")
     .trim();
   return line.length > MAX_REASON_CHARS ? `${line.slice(0, MAX_REASON_CHARS - 1).trimEnd()}…` : line;
 }

@@ -24,6 +24,11 @@ const RELIST_AFTER_MS = 60_000;
 const MAX_CLOSING_PAGES = 5;
 /** The review states that stand until the reviewer's next one. A comment leaves the last one standing. */
 const STANDING_REVIEWS = ["APPROVED", "CHANGES_REQUESTED", "DISMISSED"];
+/**
+ * How long a listed repo is trusted before it is listed again. A repo that turns private must stop
+ * having its decisions published, and the listing says whether it is.
+ */
+const REFRESH_AFTER_MS = 5 * 60_000;
 
 /**
  * The `log` to give the App's Octokits. Octokit reports every failed request as an error, but
@@ -267,7 +272,8 @@ export function createGitHub({ appId, app, installation }: GitHubOptions): GitHu
     },
 
     async findRepo(repoId) {
-      if (!installed.has(repoId) && Date.now() - listedAt > RELIST_AFTER_MS) {
+      const age = Date.now() - listedAt;
+      if (age > REFRESH_AFTER_MS || (!installed.has(repoId) && age > RELIST_AFTER_MS)) {
         installed = await listInstalledRepos();
         listedAt = Date.now();
       }

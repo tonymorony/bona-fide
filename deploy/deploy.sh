@@ -92,16 +92,22 @@ case "$(tar --version 2>/dev/null)" in
 *) tar -czf "$tarball" -C "$release" . ;;
 esac
 
-remote_tarball="/tmp/bona-fide-$short.tgz"
+# The release goes to a directory only the deploy user can write, made fresh for it, and is checked
+# against its digest before anything in it runs: anyone on the server can write to /tmp.
+if command -v sha256sum >/dev/null 2>&1; then digest=$(sha256sum "$tarball" | cut -d' ' -f1)
+else digest=$(shasum -a 256 "$tarball" | cut -d' ' -f1); fi
+remote_tmp='$remote_tmp'
+remote_tarball="$remote_tmp/bona-fide-$short.tgz"
 caddy_env=""
 if [ -n "${CADDY_CONTAINER:-}" ]; then caddy_env="$caddy_env CADDY_CONTAINER=$(printf %q "$CADDY_CONTAINER")"; fi
 if [ -n "${CADDYFILE:-}" ]; then caddy_env="$caddy_env CADDYFILE=$(printf %q "$CADDYFILE")"; fi
 remote_script="set -e
+echo \"$digest  $remote_tarball\" | sha256sum -c --quiet -
 mkdir -p $remote_dir
 rm -rf $remote_dir/.incoming
 mkdir $remote_dir/.incoming
 tar -xzf $remote_tarball -C $remote_dir/.incoming --no-same-owner
-rm -f $remote_tarball
+rm -rf $remote_tmp
 ${caddy_env# }${caddy_env:+ }bash $remote_dir/.incoming/install.sh </dev/null"
 
 if [ "$dry_run" = 1 ]; then
@@ -115,7 +121,8 @@ if [ "$dry_run" = 1 ]; then
 	say "  site/Caddyfile.bonafide"
 	say "  $pages_note"
 	say
-	say "1. Copy the release to $host:"
+	say "1. Copy the release to $host, into a new private directory (sha256 $digest):"
+	say "   remote_tmp=\$(ssh $host 'mktemp -d')"
 	say "   scp -q -o ServerAliveInterval=5 -o ServerAliveCountMax=6 $tarball $host:$remote_tarball"
 	say
 	say "2. Install it on $host:"
@@ -137,6 +144,11 @@ if [ "$dry_run" = 1 ]; then
 fi
 
 say "Deploying $short to $host ($pages_note)."
+made=$(ssh -o ServerAliveInterval=5 -o ServerAliveCountMax=6 "$host" 'mktemp -d') ||
+	die "Nothing was sent: couldn't make a private directory on $host."
+case "$made" in /*) ;; *) die "Nothing was sent: $host answered mktemp with '$made'." ;; esac
+remote_tarball=${remote_tarball//\$remote_tmp/$made}
+remote_script=${remote_script//\$remote_tmp/$made}
 scp -q -o ServerAliveInterval=5 -o ServerAliveCountMax=6 "$tarball" "$host:$remote_tarball"
 ssh -o ServerAliveInterval=5 -o ServerAliveCountMax=6 "$host" "$remote_script"
 
