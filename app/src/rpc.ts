@@ -17,10 +17,15 @@ const LOG_QUERY_COST = 3;
 /** At most this long of unused allowance is kept for a burst, in milliseconds. */
 const BURST_MS = 1000;
 
+/** Most requests served ahead of a waiting background caller, so the pollers keep a share under any load. */
+const FOREGROUND_RUN = 3;
+
 export interface RateLimiter {
   /**
    * Resolves when a request of that cost may be sent. Callers are served in the order they asked,
-   * except that a background caller waits behind every other: nobody is waiting for its answer.
+   * except that a background caller waits behind the others: nobody is waiting for its answer. But
+   * it waits behind no more than FOREGROUND_RUN in a row, since the pollers it stands for, such as
+   * the Timeout refunds, must keep up however many requests arrive.
    */
   take(cost?: number, background?: boolean): Promise<void>;
 }
@@ -42,6 +47,8 @@ export function createRateLimiter({
   // When the next request may go. Earlier than now after a quiet spell: that is the burst allowance.
   let next = -Infinity;
   let asleep = false;
+  /** Callers served ahead of a waiting background one since a background one was last served. */
+  let run = 0;
 
   function serve(): void {
     while (waiting.length > 0 && !asleep) {
@@ -55,8 +62,10 @@ export function createRateLimiter({
         });
         return;
       }
-      const first = waiting.findIndex((caller) => !caller.background);
-      const [caller] = waiting.splice(first === -1 ? 0 : first, 1);
+      const turn =
+        run < FOREGROUND_RUN ? waiting.findIndex((c) => !c.background) : waiting.findIndex((c) => c.background);
+      const [caller] = waiting.splice(turn === -1 ? 0 : turn, 1);
+      run = caller!.background ? 0 : waiting.some((other) => other.background) ? run + 1 : 0;
       next = start + (caller!.cost * 1000) / perSecond;
       caller!.go();
     }

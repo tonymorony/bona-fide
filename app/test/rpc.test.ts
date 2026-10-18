@@ -84,6 +84,32 @@ test("a background caller waits behind the others, however early it asked", asyn
   expect(order).toEqual(["webhook 1", "webhook 2", "poll 1", "poll 2"]);
 });
 
+test("a background caller waits behind no more than three others in a row, however many keep coming", async () => {
+  const clock = fakeClock();
+  const limiter = createRateLimiter({ perSecond: 1, ...clock });
+  await limiter.take();
+  await limiter.take();
+  const order: string[] = [];
+
+  await Promise.all([
+    limiter.take(1, true).then(() => order.push("poll 1")),
+    limiter.take(1, true).then(() => order.push("poll 2")),
+    ...[1, 2, 3, 4, 5, 6, 7].map((n) => limiter.take().then(() => order.push(`relay ${n}`))),
+  ]);
+
+  expect(order).toEqual([
+    "relay 1",
+    "relay 2",
+    "relay 3",
+    "poll 1",
+    "relay 4",
+    "relay 5",
+    "relay 6",
+    "poll 2",
+    "relay 7",
+  ]);
+});
+
 test("refuses a rate of zero", () => {
   expect(() => createRateLimiter({ perSecond: 0 })).toThrow("above 0");
 });

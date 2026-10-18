@@ -400,7 +400,8 @@ repo's Bounty wallet gets one, still open under the same Serial, on an open issu
 readable `.github/bona-fide.yml`: a Bounty cancelled or paid first, or on a closed issue or a PR,
 gets none. Every minute (`BOUNTY_NOTE_MS` in `src/bounties/posted.ts`), the App reads the factory's
 `WalletCreated` and the known wallets' `BountyPosted` events since its last look, one log query per
-10,000 blocks, plus one for a range in which a wallet was created. After a restart it reads them
+10,000 blocks and 100 wallets, plus one for a range in which a wallet was created. A range the RPC
+won't answer is read again in halves, down to one block, by every poller. After a restart it reads them
 again from `BOUNTY_FACTORY_FROM_BLOCK`, and the note's hidden marker, `<!-- bona-fide:bounty-posted
 issue=N serial=S -->`, keeps it from posting twice; a Bounty posted again after a cancel has a new
 Serial and gets a new note. A note GitHub refuses is tried again on later looks, less and less
@@ -643,7 +644,7 @@ The host reads these environment variables:
 | `EXPLORER_URL` | `https://explorer.arc.io` | The block explorer a check links each Deposit's transaction to. On Arc testnet, `https://explorer.testnet.arc.io` |
 | `PORT` | `3000` | |
 | `POLL_MS` | `1000` | How often the watcher polls |
-| `RPC_RPS` | `3` | The RPC requests sent each second at most, with a log query counted as three. Requests beyond it wait their turn, a poller's behind a webhook's, so a burst, such as the Keeper's read of the escrow's history on start, never runs into the RPC's rate limit. The default suits Arc's public RPC |
+| `RPC_RPS` | `3` | The RPC requests sent each second at most, with a log query counted as three. Requests beyond it wait their turn, a poller's behind a webhook's but never behind more than three in a row, so the Timeout refunds and the watcher keep up under any load, and a burst, such as the Keeper's read of the escrow's history on start, never runs into the RPC's rate limit. The default suits Arc's public RPC |
 | `WATCH_FROM_BLOCK` | 10,000 blocks before the latest | Where the watcher starts after a restart |
 | `KEEPER_PRIVATE_KEY` | unset | The key of the escrow's `keeper` address. Without it the App runs its checks only |
 | `SIGN_PAGE_URL` | required with the Keeper | The Maintainer's sign page, with the same query as the deposit page |

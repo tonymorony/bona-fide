@@ -39,6 +39,8 @@ export interface EscrowChainOptions {
 // so the node must serve historical state (Arc's public RPC does).
 export function createEscrowChain({ client, escrow, fromBlock = 0n }: EscrowChainOptions): Chain {
   const timestamps = new Map<bigint, bigint>();
+  /** The last block before each time looked up, once a later block exists, so the answer can't change. */
+  const lastBefore = new Map<bigint, bigint | null>();
   const starts = new Map<Hex, Date>();
   /** Each Deposit's transaction, by `key:serial`. */
   const transactions = new Map<string, Hex>();
@@ -69,12 +71,21 @@ export function createEscrowChain({ client, escrow, fromBlock = 0n }: EscrowChai
 
   // The last block stamped before `time` (seconds), or null if no block from `fromBlock` on is.
   // Arc makes blocks at a steady rate, so interpolating finds it in a few reads; every other
-  // step bisects, which keeps the worst case logarithmic.
+  // step bisects, which keeps the worst case logarithmic. Every check of an item asks for the same
+  // time, its creation's, so a settled answer is remembered.
   async function lastBlockBefore(time: bigint): Promise<bigint | null> {
+    if (lastBefore.has(time)) return lastBefore.get(time)!;
+    const found = await searchBefore(time);
+    if (found.settled) remember(lastBefore, time, found.block);
+    return found.block;
+  }
+
+  async function searchBefore(time: bigint): Promise<{ block: bigint | null; settled: boolean }> {
     let lo = fromBlock;
     let hi = await latestBlock();
-    if ((await timestampOf(lo)) >= time) return null;
-    if ((await timestampOf(hi)) < time) return hi;
+    if ((await timestampOf(lo)) >= time) return { block: null, settled: true };
+    // The latest block is before `time`: a later one may be too.
+    if ((await timestampOf(hi)) < time) return { block: hi, settled: false };
     for (let step = 0; hi - lo > 1n; step++) {
       const loTime = await timestampOf(lo);
       const hiTime = await timestampOf(hi);
@@ -84,7 +95,7 @@ export function createEscrowChain({ client, escrow, fromBlock = 0n }: EscrowChai
       if ((await timestampOf(mid)) < time) lo = mid;
       else hi = mid;
     }
-    return lo;
+    return { block: lo, settled: true };
   }
 
   // The first block after `after`, up to `latest`, where `holds` does, for a state that keeps

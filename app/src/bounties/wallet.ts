@@ -30,6 +30,9 @@ export class BountyRejection extends Error {
   }
 }
 
+/** Most addresses in one log query's filter. */
+export const WALLETS_PER_QUERY = 100;
+
 const PAID = getAbiItem({ abi: bountyWalletAbi, name: "Paid" });
 const POSTED = getAbiItem({ abi: bountyWalletAbi, name: "BountyPosted" });
 const CREATED = getAbiItem({ abi: bountyFactoryAbi, name: "WalletCreated" });
@@ -210,11 +213,16 @@ export function createBountyWallets({ client, account, factory, fromBlock = 0n }
       return client.getBlockNumber({ cacheTime: 0 });
     },
 
-    // One log query a range, for the factory and the wallets known so far. Only a range in which a
-    // wallet was created takes a second, for that wallet's Bounties.
+    // One log query a range for the factory and the wallets known so far, and one more for each
+    // WALLETS_PER_QUERY wallets past the first: anyone can create wallets, and an RPC refuses a filter
+    // with too many addresses. Only a range in which a wallet was created takes another, for that
+    // wallet's Bounties.
     async walletEvents(known, from, to) {
       const range = { fromBlock: from, toBlock: to, strict: true } as const;
-      const logs = await client.getLogs({ address: [factory, ...known], events: [CREATED, POSTED], ...range });
+      const logs = [];
+      for (const addresses of chunks([factory, ...known], WALLETS_PER_QUERY)) {
+        logs.push(...(await client.getLogs({ address: addresses, events: [CREATED, POSTED], ...range })));
+      }
       const found: Found[] = [];
       for (const log of logs) {
         const at = { block: log.blockNumber, index: log.logIndex };
@@ -224,8 +232,8 @@ export function createBountyWallets({ client, account, factory, fromBlock = 0n }
       const created = found.flatMap((event) =>
         event.type === "created" && !known.some((wallet) => isAddressEqual(wallet, event.wallet)) ? [event.wallet] : [],
       );
-      if (created.length > 0) {
-        for (const log of await client.getLogs({ address: created, event: POSTED, ...range })) {
+      for (const addresses of chunks(created, WALLETS_PER_QUERY)) {
+        for (const log of await client.getLogs({ address: addresses, event: POSTED, ...range })) {
           found.push({ ...postedEvent(log), block: log.blockNumber, index: log.logIndex });
         }
       }
@@ -237,6 +245,12 @@ export function createBountyWallets({ client, account, factory, fromBlock = 0n }
 
 /** A WalletEvent and where it is in the chain. */
 type Found = WalletEvent & { block: bigint; index: number };
+
+function chunks<T>(items: T[], size: number): T[][] {
+  const out: T[][] = [];
+  for (let i = 0; i < items.length; i += size) out.push(items.slice(i, i + size));
+  return out;
+}
 
 function postedEvent(log: {
   address: Address;
