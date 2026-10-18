@@ -100,7 +100,7 @@ test("each question gets a new token in its tags", async () => {
   await model.ask(QUESTION, REQUEST);
   await model.ask(QUESTION, REQUEST);
 
-  const tags = sent.map((params) => String(params.messages[0]?.content).match(/<claim-([0-9a-f]{16})>/)?.[1]);
+  const tags = sent.map((params) => /<claim-([0-9a-f]{16})>/.exec(String(params.messages[0]?.content))?.[1]);
   expect(tags[0]).toBeDefined();
   expect(tags[0]).not.toBe(tags[1]);
 });
@@ -168,7 +168,7 @@ test.each([
   ["answers out of shape", { text: '{"verdict":"maybe","reasons":["Hm."]}' }, "unreadable answer"],
   ["answers with no text", {}, "unreadable answer"],
 ] as const)("a model that %s is silent, and its tokens are still counted", async (_, fields, why) => {
-  const { client } = fakeClient(message(fields as Partial<Message> & { text?: string }));
+  const { client } = fakeClient(message(fields));
 
   expect(await createClaudeModel({ client }).ask(QUESTION, REQUEST)).toEqual({
     status: "silent",

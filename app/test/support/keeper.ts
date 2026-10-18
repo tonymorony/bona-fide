@@ -8,7 +8,7 @@ import { createKeeper } from "../../src/keeper/keeper.ts";
 import { createKeeperRoutes } from "../../src/keeper/routes.ts";
 import type { Decision } from "../../src/ports.ts";
 import { createWebhookHandler } from "../../src/webhook.ts";
-import { startAnvil, type Anvil } from "./anvil.ts";
+import { POLLING_INTERVAL, startAnvil, type Anvil } from "./anvil.ts";
 import { FakeGitHub } from "./fake-github.ts";
 import { DEPOSIT_PAGE, SETUP_PAGE, SIGN_PAGE } from "./harness.ts";
 import { REPO, SECRET, signed } from "./webhooks.ts";
@@ -39,7 +39,7 @@ export function keeperHarness(anvil: Anvil, keeperKey: `0x${string}`, options: H
   github.addRepo(REPO);
   github.setFile(REPO, ".github/bona-fide.yml", config);
   // No chain object, as on the Node host: the chain id comes from the RPC.
-  const client = createPublicClient({ transport: http(anvil.url) });
+  const client = createPublicClient({ transport: http(anvil.url), pollingInterval: POLLING_INTERVAL });
   const chain = createEscrowChain({ client, escrow: anvil.escrow, fromBlock: anvil.deployBlock });
   const escrow = wrap(createKeeperEscrow({ client, account: privateKeyToAccount(keeperKey), escrow: anvil.escrow }));
   /** Every decision appended to the log, private repos' included. */
@@ -51,7 +51,7 @@ export function keeperHarness(anvil: Anvil, keeperKey: `0x${string}`, options: H
     chain,
     depositPageUrl: DEPOSIT_PAGE,
     setupPageUrl: SETUP_PAGE,
-    afterVerdict: keeper.afterVerdict,
+    afterVerdict: (item, verdict) => keeper.afterVerdict(item, verdict),
   });
   const handle = createWebhookHandler({ secret: SECRET, app, keeper });
   const deliver = (event: string, body: unknown) => handle(signed(event, body));
@@ -68,7 +68,7 @@ export async function signForfeit(
   signer: Address,
   message: { key: Hex; serial: bigint; sigDeadline: bigint },
 ): Promise<Hex> {
-  return createWalletClient({ transport: http(anvil.url) }).signTypedData({
+  return createWalletClient({ transport: http(anvil.url), pollingInterval: POLLING_INTERVAL }).signTypedData({
     account: signer,
     domain: {
       name: "BonaFide",
@@ -102,7 +102,7 @@ export async function signBinding(
   message: BindingMessage,
   domain: { chainId?: number; verifyingContract?: Address } = {},
 ): Promise<Hex> {
-  return createWalletClient({ transport: http(anvil.url) }).signTypedData({
+  return createWalletClient({ transport: http(anvil.url), pollingInterval: POLLING_INTERVAL }).signTypedData({
     account: signer,
     domain: {
       name: "BonaFide",

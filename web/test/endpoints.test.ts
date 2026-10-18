@@ -24,7 +24,7 @@ const WALLET = "0x5aAeb6053F3E94C9b9A09f33669435E7Ef1BeAed";
 function answering(status: number, body: RefusalBody | object | string, headers: Record<string, string> = {}) {
   const sent: { url: string; init: RequestInit }[] = [];
   const fetch: Fetch = async (url, init) => {
-    sent.push({ url: String(url), init: init ?? {} });
+    sent.push({ url, init: init ?? {} });
     const text = typeof body === "string" ? body : JSON.stringify(body);
     const type = typeof body === "string" ? "text/plain" : "application/json";
     return new Response(text, { status, headers: { "content-type": type, ...headers } });

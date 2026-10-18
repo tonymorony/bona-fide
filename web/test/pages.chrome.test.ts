@@ -253,7 +253,7 @@ async function walletPage(account: Parameters<typeof createTestWallet>[0]["accou
   const wallet = createTestWallet({ account, chain: stack.chain, rpcUrl: stack.url, startChainId });
   const page = await chrome.newPage({
     binding: BINDING,
-    onBinding: wallet.onBinding,
+    onBinding: (payload, reply) => wallet.onBinding(payload, reply),
     injected: INJECTED,
     intercept: github,
   });

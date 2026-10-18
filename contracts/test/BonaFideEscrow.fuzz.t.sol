@@ -111,7 +111,7 @@ contract BonaFideEscrowFuzzTest is EscrowFixture {
         vm.prank(contributor);
         escrow.deposit(REPO, PR, 7);
         bytes32 key = escrow.keyOf(REPO, PR, 7);
-        uint256 sigDeadline = block.timestamp + sigWindow;
+        uint256 sigDeadline = vm.getBlockTimestamp() + sigWindow;
         bytes memory sig = _signForfeit(maintainerPk, key, 1, sigDeadline);
         vm.warp(block.timestamp + elapsed);
 

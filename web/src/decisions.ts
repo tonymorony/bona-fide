@@ -116,7 +116,7 @@ export function decisionWords(d: Decision): DecisionWords {
 
 // Triage reads sizes only: the item's text never enters the log.
 function readWords(inputs: NonNullable<Decision["inputs"]>): string | null {
-  const n = (key: string) => (typeof inputs[key] === "number" ? (inputs[key] as number) : null);
+  const n = (key: string) => (typeof inputs[key] === "number" ? inputs[key] : null);
   const sized = (what: string, chars: number | null, leftOut: number | null) =>
     chars === null
       ? null
@@ -134,15 +134,15 @@ function readWords(inputs: NonNullable<Decision["inputs"]>): string | null {
 
 // A Record Exemption reads numbers only: the Contributor's record in public repos and their GitHub profile.
 function recordWords(inputs: NonNullable<Decision["inputs"]>): string | null {
-  const n = (key: string) => (typeof inputs[key] === "number" ? (inputs[key] as number) : null);
+  const n = (key: string) => (typeof inputs[key] === "number" ? inputs[key] : null);
   const refunds = n("refunds");
   if (refunds === null) return null;
   const login = typeof inputs.login === "string" ? `@${inputs.login}'s` : "The Contributor's";
   const record = [
     `${count(refunds, "Refund")} on accepted work in ${count(n("repos") ?? 0, "repo")}`,
-    `${count(n("otherRefunds") ?? 0, "other Refund")}`,
-    `${count(n("forfeits") ?? 0, "Forfeit")}`,
-    `${count(n("active") ?? 0, "open Deposit")}`,
+    count(n("otherRefunds") ?? 0, "other Refund"),
+    count(n("forfeits") ?? 0, "Forfeit"),
+    count(n("active") ?? 0, "open Deposit"),
   ];
   const profile = [
     n("accountAgeDays") === null ? null : `account ${count(n("accountAgeDays")!, "day")} old`,

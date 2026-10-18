@@ -1,5 +1,5 @@
 import { bountyFundAuthorization, bountyWalletAbi, payoutSignature, repoIdOf } from "@bona-fide/sdk";
-import { parseEventLogs, toHex, type Address, type Hex } from "viem";
+import { parseEventLogs, toHex, type Hex } from "viem";
 import { afterAll, beforeAll, expect, test } from "vitest";
 import { bountyCalls, createBountyReader, DEFAULT_LIMITS } from "../src/bounty.ts";
 import { createChainReader, publicClientFor } from "../src/chain.ts";
@@ -81,7 +81,7 @@ test("only the Binding Maintainer's wallet is the repo's: a wallet anyone else c
 test("funding with one signature: the page's EIP-3009 authorization is redeemed by the wallet", async () => {
   const { maintainer, wallet } = await boundRepoWithWallet("Acme/Signed-Funds");
   const authorization = {
-    from: maintainer.address as Address,
+    from: maintainer.address,
     value: 30_000_000n,
     nonce: randomBytes32(),
     validBefore: (await stack.now()) + BigInt(WINDOWS.bountyFund),
@@ -133,7 +133,7 @@ test("fund, post, cancel, withdraw, set limits and switch the Keeper, each throu
 test("a Payout signed from the page's typed data passes payWithSignature, from any relayer, and only once", async () => {
   const { maintainer, wallet } = await boundRepoWithWallet("Acme/Signed-Payout");
   await stack.fundAndPost(maintainer, wallet, 300_000_000n, [[42, 250_000_000n]]);
-  const payee = (await stack.account(0n)).address as Address;
+  const payee = (await stack.account(0n)).address;
   const relayer = await stack.account(0n);
   const { serial, amount } = await reader().bountyOf(wallet, 42);
   const deadline = (await stack.now()) + BigInt(WINDOWS.payout);
@@ -155,7 +155,7 @@ test("a signature for another payee, another serial or another wallet doesn't pa
   const { maintainer, wallet } = await boundRepoWithWallet("Acme/Signed-Wrong");
   await stack.fundAndPost(maintainer, wallet, 100_000_000n, [[5, 80_000_000n]]);
   const other = await stack.createBountyWallet(maintainer, "Acme/Signed-Other");
-  const payee = (await stack.account(0n)).address as Address;
+  const payee = (await stack.account(0n)).address;
   const { serial, amount } = await reader().bountyOf(wallet, 5);
   const deadline = (await stack.now()) + 600n;
   const sign = (terms: Partial<Parameters<typeof payoutSignature>[0]>) =>
@@ -177,7 +177,7 @@ test("a signature for another payee, another serial or another wallet doesn't pa
 
 test("the owner pays directly, and the page rebuilds every Bounty and how it was paid from the logs", async () => {
   const { maintainer, wallet } = await boundRepoWithWallet("Acme/History");
-  const payee = (await stack.account(0n)).address as Address;
+  const payee = (await stack.account(0n)).address;
   await stack.fundAndPost(maintainer, wallet, 200_000_000n, [
     [1, 10_000_000n],
     [2, 120_000_000n],

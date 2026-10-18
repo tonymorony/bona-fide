@@ -6,7 +6,7 @@ import { shortAddress, usdc } from "../format.ts";
 import type { LiveNetwork } from "../network.ts";
 import { chainName, createSession, type WalletSession } from "../ui/session.ts";
 import type { View } from "../ui/dom.ts";
-import { isUserRejection } from "../wallet.ts";
+import { isUserRejection, messageOf } from "../wallet.ts";
 
 declare const __NETWORK__: LiveNetwork;
 
@@ -46,7 +46,7 @@ export function revertReason(error: unknown): string | null {
 /** What to say when the wallet didn't send a transaction. */
 export function walletFailure(error: unknown, what: string): string {
   if (isUserRejection(error)) return `You cancelled the ${what} in your wallet. Nothing was sent.`;
-  if (/insufficient funds|exceeds balance/i.test(String((error as Error)?.message ?? ""))) {
+  if (/insufficient funds|exceeds balance/i.test(messageOf(error))) {
     return `Your wallet needs a little more USDC to pay the network fee for the ${what}.`;
   }
   return `Your wallet couldn't send the ${what}. Try again.`;

@@ -33,16 +33,17 @@
     "build": "node scripts/build.ts",
     "test": "vitest run",
     "typecheck": "tsc --noEmit",
-    "format": "prettier --write scripts src test vitest.config.ts"
+    "format": "prettier --write scripts src test vitest.config.ts",
+    "format:check": "prettier --check scripts src test vitest.config.ts"
   },
   "peerDependencies": {
     "viem": "^2.56.9"
   },
   "devDependencies": {
-    "@types/node": "^24.19.0",
-    "prettier": "^3.9.9",
-    "typescript": "^7.0.2",
-    "viem": "^2.56.9",
-    "vitest": "^5.0.2"
+    "@types/node": "24.19.0",
+    "prettier": "3.9.9",
+    "typescript": "7.0.2",
+    "viem": "2.56.9",
+    "vitest": "5.0.2"
   }
 }

@@ -420,7 +420,7 @@ contract BonaFideEscrowTest is EscrowFixture {
         escrow.proposeRepo(REPO, maintainer, 5000, 14 days, 2e6);
         escrow.proposeRepo(attackerRepo, makeAddr("attacker"), 5000, 14 days, 2e6);
         vm.stopPrank();
-        vm.warp(block.timestamp + BINDING_DELAY);
+        vm.warp(vm.getBlockTimestamp() + BINDING_DELAY);
         escrow.activateRepo(REPO);
         escrow.activateRepo(attackerRepo);
         (address agent, uint256 agentPk) = _signer("agent");
@@ -448,7 +448,7 @@ contract BonaFideEscrowTest is EscrowFixture {
     function test_depositWithAuthorization_revertsFromValidBefore() public {
         _activate(maintainer, 5000, 14 days, 2e6);
         (address agent, uint256 agentPk) = _signer("agent");
-        uint256 validBefore = block.timestamp + 1 hours;
+        uint256 validBefore = vm.getBlockTimestamp() + 1 hours;
         bytes memory sig = _signReceive(
             agentPk, agent, 2e6, 0, validBefore, _nonce(escrow.keyOf(REPO, BonaFideEscrow.Kind.PullRequest, 7), SALT)
         );
@@ -461,7 +461,7 @@ contract BonaFideEscrowTest is EscrowFixture {
     function test_depositWithAuthorization_revertsUntilAfterValidAfter() public {
         _activate(maintainer, 5000, 14 days, 2e6);
         (address agent, uint256 agentPk) = _signer("agent");
-        uint256 validAfter = block.timestamp + 1 hours;
+        uint256 validAfter = vm.getBlockTimestamp() + 1 hours;
         uint256 validBefore = validAfter + 1 hours;
         bytes memory sig = _signReceive(
             agentPk,
@@ -773,7 +773,7 @@ contract BonaFideEscrowTest is EscrowFixture {
 
     function test_forfeit_worksAtSigDeadline() public {
         bytes32 key = _depositPR7();
-        uint256 sigDeadline = block.timestamp + 1 hours;
+        uint256 sigDeadline = vm.getBlockTimestamp() + 1 hours;
         bytes memory sig = _signForfeit(maintainerPk, key, 1, sigDeadline);
         vm.warp(sigDeadline);
 
@@ -784,7 +784,7 @@ contract BonaFideEscrowTest is EscrowFixture {
 
     function test_forfeit_revertsAfterSigDeadline() public {
         bytes32 key = _depositPR7();
-        uint256 sigDeadline = block.timestamp + 1 hours;
+        uint256 sigDeadline = vm.getBlockTimestamp() + 1 hours;
         bytes memory sig = _signForfeit(maintainerPk, key, 1, sigDeadline);
         vm.warp(sigDeadline + 1);
 
@@ -908,7 +908,7 @@ contract BonaFideEscrowTest is EscrowFixture {
         e = new BonaFideEscrow(token, keeper, FORFEIT_SINK, BINDING_DELAY, MAX_AMOUNT);
         vm.prank(keeper);
         e.proposeRepo(REPO, maintainer, 5000, 14 days, 2e6);
-        vm.warp(block.timestamp + BINDING_DELAY);
+        vm.warp(vm.getBlockTimestamp() + BINDING_DELAY);
         e.activateRepo(REPO);
         address other = makeAddr("other");
         token.mint(contributor, 100e6);

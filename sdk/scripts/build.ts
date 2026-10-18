@@ -15,8 +15,17 @@ await rm(DIST, { recursive: true, force: true });
 execFileSync("npx", ["tsc", "-p", "tsconfig.build.json"], { cwd: SDK, stdio: "inherit" });
 
 // The workspace's manifest, minus what only the workspace uses, pointing at the compiled files.
-const published = JSON.parse(await readFile(`${SDK}package.json`, "utf8"));
-for (const key of ["private", "scripts", "devDependencies"]) delete published[key];
+interface Manifest {
+  name: string;
+  version: string;
+  [field: string]: unknown;
+}
+const {
+  private: _private,
+  scripts: _scripts,
+  devDependencies: _devDependencies,
+  ...published
+} = JSON.parse(await readFile(`${SDK}package.json`, "utf8")) as Manifest;
 published.exports = {
   ".": { types: "./index.d.ts", default: "./index.js" },
   "./package.json": "./package.json",

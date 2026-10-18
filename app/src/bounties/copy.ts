@@ -115,7 +115,7 @@ export function payeeNeededNote({ issue, amount, author, problem }: PayeeFacts):
     "Bounty wallet: 0xYourWalletAddress",
     "```",
     "",
-    ...(problem ? [`${problem}`, ""] : []),
+    ...(problem ? [problem, ""] : []),
     `Only @${author}'s own words count, and the latest line wins. The Bounty is checked again as soon as they add it.`,
   ].join("\n");
 }

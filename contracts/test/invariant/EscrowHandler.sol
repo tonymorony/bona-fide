@@ -393,9 +393,9 @@ contract EscrowHandler is Test {
         if (keys.length == 0) return;
         bytes32 key = _pick(keySeed);
         Model storage m = model[key];
-        if (m.status != BonaFideEscrow.Status.Active || m.deadline > block.timestamp + 3 days) return;
+        if (m.status != BonaFideEscrow.Status.Active || m.deadline > vm.getBlockTimestamp() + 3 days) return;
         uint256 target = uint256(m.deadline) + (extra % 3 == 0 ? 0 : _bound(extra, 1, 1 days));
-        if (block.timestamp < target) vm.warp(target);
+        if (vm.getBlockTimestamp() < target) vm.warp(target);
         uint256 sigDeadline = block.timestamp + 1 days;
         bytes memory sig = _sign(signingKey[m.maintainer], key, m.serial, sigDeadline);
         vm.prank(_relayerOrKeeper(callerSeed));

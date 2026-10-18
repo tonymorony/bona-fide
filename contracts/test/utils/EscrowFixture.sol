@@ -46,7 +46,7 @@ abstract contract EscrowFixture is Test {
     function _activate(address maintainer_, uint16 forfeitBps, uint32 timeout, uint256 amount) internal {
         vm.prank(keeper);
         escrow.proposeRepo(REPO, maintainer_, forfeitBps, timeout, amount);
-        vm.warp(block.timestamp + BINDING_DELAY);
+        vm.warp(vm.getBlockTimestamp() + BINDING_DELAY);
         escrow.activateRepo(REPO);
     }
 
@@ -99,8 +99,9 @@ abstract contract EscrowFixture is Test {
         uint256 validBefore,
         bytes32 nonce
     ) internal view returns (bytes memory) {
-        (uint8 v, bytes32 r, bytes32 s) =
-            vm.sign(pk, _receiveDigest(from, address(escrow), value, validAfter, validBefore, nonce));
+        (uint8 v, bytes32 r, bytes32 s) = vm.sign(
+            pk, _receiveDigest(from, address(escrow), value, validAfter, validBefore, nonce)
+        );
         return abi.encodePacked(r, s, v);
     }
 

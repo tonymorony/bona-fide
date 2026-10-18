@@ -11,7 +11,8 @@
     "build": "node build.ts",
     "test": "vitest run",
     "typecheck": "tsc --noEmit && tsc --noEmit -p test",
-    "format": "prettier --write build.ts networks.ts src test styles vitest.config.ts"
+    "format": "prettier --write build.ts networks.ts src test styles vitest.config.ts",
+    "format:check": "prettier --check build.ts networks.ts src test styles vitest.config.ts"
   },
   "dependencies": {
     "@bona-fide/sdk": "0.1.0",

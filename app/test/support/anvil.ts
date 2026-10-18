@@ -36,6 +36,11 @@ export function buildContracts(): void {
   execFileSync("forge", ["build"], { cwd: CONTRACTS, stdio: "ignore" });
 }
 
+// anvil can answer eth_sendTransaction just before the receipt is ready (1.8 does after
+// evm_increaseTime). viem then looks again one polling interval later, 4 s by default: every client
+// a test makes polls fast.
+export const POLLING_INTERVAL = 50;
+
 // A local anvil chain with MockUSDC and the real BonaFideEscrow, deployed from the Foundry artifacts.
 // Transactions come from anvil's unlocked dev accounts through eth_sendTransaction: no keys here.
 // `keeper` replaces the Keeper, such as with a key a test generated; it is impersonated so these
@@ -49,9 +54,14 @@ export async function startAnvil({
   // memory: states it moves to disk are sometimes unreadable for a moment under load.
   const anvil = spawn("anvil", ["--port", String(port), "--prune-history", "1000000"], { stdio: "ignore" });
   const url = `http://127.0.0.1:${port}`;
-  const client = createPublicClient({ chain: foundry, transport: http(url) });
-  const test = createTestClient({ chain: foundry, mode: "anvil", transport: http(url) });
-  const wallet = createWalletClient({ chain: foundry, transport: http(url) });
+  const client = createPublicClient({ chain: foundry, transport: http(url), pollingInterval: POLLING_INTERVAL });
+  const test = createTestClient({
+    chain: foundry,
+    mode: "anvil",
+    transport: http(url),
+    pollingInterval: POLLING_INTERVAL,
+  });
+  const wallet = createWalletClient({ chain: foundry, transport: http(url), pollingInterval: POLLING_INTERVAL });
   await until(async () => (await client.getChainId()) === foundry.id);
 
   const [deployer, devKeeper, contributor, maintainer] = await wallet.getAddresses();
@@ -94,7 +104,7 @@ export async function startAnvil({
       timeoutSeconds = 7 * 86_400,
       maintainer: bound = maintainer!,
     } = terms;
-    const receipt = await send(keeper!, escrow, escrowArtifact.abi, "proposeRepo", [
+    const receipt = await send(keeper, escrow, escrowArtifact.abi, "proposeRepo", [
       repoIdOf(repo),
       bound,
       forfeitBps,
@@ -129,7 +139,7 @@ export async function startAnvil({
       await propose(repo, terms);
       await test.increaseTime({ seconds: Number(BINDING_DELAY) });
       await test.mine({ blocks: 1 });
-      const receipt = await send(keeper!, escrow, escrowArtifact.abi, "activateRepo", [repoIdOf(repo)]);
+      const receipt = await send(keeper, escrow, escrowArtifact.abi, "activateRepo", [repoIdOf(repo)]);
       const block = await client.getBlock({ blockNumber: receipt.blockNumber });
       await test.mine({ blocks: 1, interval: 600 });
       return new Date(Number(block.timestamp) * 1000);

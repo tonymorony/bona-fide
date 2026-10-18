@@ -104,8 +104,10 @@ esac
 
 # The release goes to a directory only the deploy user can write, made fresh for it, and is checked
 # against its digest before anything in it runs: anyone on the server can write to /tmp.
-if command -v sha256sum >/dev/null 2>&1; then digest=$(sha256sum "$tarball" | cut -d' ' -f1)
+if command -v sha256sum >/dev/null 2>&1; then
+	digest=$(sha256sum "$tarball" | cut -d' ' -f1)
 else digest=$(shasum -a 256 "$tarball" | cut -d' ' -f1); fi
+# shellcheck disable=SC2016 # the server's shell expands it, not this one; review-by: 2027-04-18
 remote_tmp='$remote_tmp'
 remote_tarball="$remote_tmp/bona-fide-$short.tgz"
 caddy_env=""

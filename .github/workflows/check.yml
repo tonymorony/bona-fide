@@ -1,0 +1,175 @@
+# Every check a change must pass. The jobs fan out; the last one, `check`, passes only when all of
+# them did, so branch protection requires that one stable name. `npm run check` runs the same
+# steps on a laptop.
+name: Check
+
+on:
+  pull_request:
+  push:
+    branches: [main, develop]
+
+permissions: {}
+
+# A new push to a PR cancels the run it replaces; runs on main and develop always finish.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  # The Foundry the contracts and the anvil suites are checked with, pinned: forge fmt's output differs
+  # between releases, and forge lint --deny needs 1.4 or later. The security check fetches the same forge
+  # from .github/pinned-tools.txt, and its workflows step fails if the two differ. Locally:
+  # foundryup -i v1.8.5; npm run check warns when forge is another version.
+  FOUNDRY: v1.8.5
+  NODE: 24
+  SHFMT: v3.14.1
+  # sha256 of shfmt_${SHFMT}_linux_amd64, from the release's published digest.
+  SHFMT_SHA256: 76e77641faa025814b77f153b29796b8e6fa2fca03e0c76a691608b86c7ea7bf
+
+jobs:
+  lint:
+    name: lint
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: ${{ env.NODE }}
+          cache: npm
+      - run: npm ci
+      - name: Prettier
+        run: npm run format:check
+      - name: ESLint
+        run: npm run lint
+      - name: Types
+        run: npm run typecheck
+      # shellcheck comes with the runner; shfmt is fetched and checked against its digest.
+      - name: Install shfmt
+        run: |
+          curl -fsSL -o "$RUNNER_TEMP/shfmt" "https://github.com/mvdan/sh/releases/download/$SHFMT/shfmt_${SHFMT}_linux_amd64"
+          echo "$SHFMT_SHA256  $RUNNER_TEMP/shfmt" | sha256sum -c -
+          chmod +x "$RUNNER_TEMP/shfmt"
+      - name: Shell scripts
+        run: scripts/lint-shell.sh
+        env:
+          SHFMT: ${{ runner.temp }}/shfmt
+      # merge-guard.sh and protect-branches.sh against a stub gh and a throwaway git repo; jq comes with the runner.
+      - name: Guard scripts
+        run: scripts/test-guards.sh
+
+  contracts:
+    name: contracts
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    defaults:
+      run:
+        working-directory: contracts
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          submodules: recursive
+      - uses: foundry-rs/foundry-toolchain@908c540300062bd5a7e473851cdb4282204cee09 # v1.9.1
+        with:
+          version: ${{ env.FOUNDRY }}
+          cache: false
+      - name: forge fmt
+        run: forge fmt --check
+      - name: forge lint
+        run: forge lint --deny warnings
+      - name: forge test
+        run: forge test
+
+  test:
+    name: test (${{ matrix.package }})
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        package: [sdk, app, agent, web]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          submodules: recursive
+      # Every suite runs forge build first, and the anvil suites deploy the real contracts.
+      - uses: foundry-rs/foundry-toolchain@908c540300062bd5a7e473851cdb4282204cee09 # v1.9.1
+        with:
+          version: ${{ env.FOUNDRY }}
+          cache: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: ${{ env.NODE }}
+          cache: npm
+      - run: npm ci
+      # Ubuntu's AppArmor keeps Chrome from making its sandbox; the web suite drives Chrome.
+      - if: matrix.package == 'web'
+        run: sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
+      - run: npm test
+        working-directory: ${{ matrix.package }}
+        env:
+          CHROME: /usr/bin/google-chrome
+
+  commits:
+    name: commits
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      pull-requests: read # gh pr view reads the pull request's current title
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      # Read the title now rather than from the event, so re-running the job sees a corrected one.
+      - name: PR title
+        run: scripts/check-commits.sh --title "$(gh pr view "$PR" --repo "$REPO" --json title --jq .title)"
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR: ${{ github.event.pull_request.number }}
+          REPO: ${{ github.repository }}
+      - name: Commit subjects
+        run: scripts/check-commits.sh "$BASE" "$HEAD"
+        env:
+          BASE: ${{ github.event.pull_request.base.sha }}
+          HEAD: ${{ github.event.pull_request.head.sha }}
+
+  # The one required check. It runs even when a job it needs failed, and fails then.
+  check:
+    name: check
+    if: always()
+    needs: [lint, contracts, test, commits]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions: {}
+    steps:
+      - name: Every job passed
+        run: |
+          echo "lint: $LINT, contracts: $CONTRACTS, test: $TEST, commits: $COMMITS"
+          for result in "$LINT" "$CONTRACTS" "$TEST"; do
+            [ "$result" = success ] || { echo "A required job ended $result."; exit 1; }
+          done
+          # Commits are checked on pull requests only; on a push the job is skipped.
+          case "$COMMITS" in
+            success) ;;
+            skipped) [ "$EVENT" != pull_request ] || { echo "The commit check was skipped on a pull request."; exit 1; } ;;
+            *) echo "The commit check ended $COMMITS."; exit 1 ;;
+          esac
+        env:
+          LINT: ${{ needs.lint.result }}
+          CONTRACTS: ${{ needs.contracts.result }}
+          TEST: ${{ needs.test.result }}
+          COMMITS: ${{ needs.commits.result }}
+          EVENT: ${{ github.event_name }}

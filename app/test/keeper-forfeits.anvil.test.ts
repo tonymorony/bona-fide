@@ -3,7 +3,7 @@ import { concat, createTestClient, http, numberToHex, size, slice, hexToBigInt, 
 import { privateKeyToAccount } from "viem/accounts";
 import { afterAll, beforeAll, expect, test } from "vitest";
 import { createKeeperRoutes } from "../src/keeper/routes.ts";
-import type { Anvil } from "./support/anvil.ts";
+import { POLLING_INTERVAL, type Anvil } from "./support/anvil.ts";
 import { keeperHarness, signForfeit, startKeeperAnvil } from "./support/keeper.ts";
 import { NEWCOMER, payload, REPO } from "./support/webhooks.ts";
 
@@ -215,7 +215,7 @@ test("a Forfeit whose signature has expired is refused", async () => {
 
 test("a Forfeit after the Timeout is refused", async () => {
   const { post } = keeperHarness(anvil, keeperKey);
-  const chain = createTestClient({ mode: "anvil", transport: http(anvil.url) });
+  const chain = createTestClient({ mode: "anvil", transport: http(anvil.url), pollingInterval: POLLING_INTERVAL });
   await anvil.deposit(REPO, "pr", 210);
   const { deadline } = await depositOf("pr", 210);
   const request = await signedRequest(210, { sigDeadline: deadline + HOUR });
@@ -361,7 +361,7 @@ test.each([
   "the bona-fide:bad-faith label on the %s points the Maintainer to the sign page, and moves no funds",
   async (noun, kind, number) => {
     const { deliver, github } = keeperHarness(anvil, keeperKey);
-    const chain = createTestClient({ mode: "anvil", transport: http(anvil.url) });
+    const chain = createTestClient({ mode: "anvil", transport: http(anvil.url), pollingInterval: POLLING_INTERVAL });
     const snapshot = await chain.snapshot();
     try {
       await chain.setNextBlockTimestamp({ timestamp: 1_924_992_000n }); // 2031-01-01 00:00 UTC
@@ -449,7 +449,7 @@ test("an IP that sends too many requests to the Keeper's endpoints is told when 
 
 test("a Forfeit that reverts on-chain after passing simulation stops the Keeper relaying for that Deposit and that Maintainer's wallet", async () => {
   const { post } = keeperHarness(anvil, keeperKey);
-  const chain = createTestClient({ mode: "anvil", transport: http(anvil.url) });
+  const chain = createTestClient({ mode: "anvil", transport: http(anvil.url), pollingInterval: POLLING_INTERVAL });
   await anvil.deposit(REPO, "pr", 215);
   await anvil.deposit(REPO, "pr", 216);
   const request = await signedRequest(215, { sigDeadline: await secondsFromNow(60n) });

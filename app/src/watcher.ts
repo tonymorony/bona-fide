@@ -157,7 +157,7 @@ export function pollDeposits(
     } catch (error) {
       onError(error);
     }
-    if (!stopped) timer = setTimeout(loop, intervalMs);
+    if (!stopped) timer = setTimeout(() => void loop(), intervalMs);
   };
   void loop();
   return () => {

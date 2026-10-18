@@ -437,7 +437,7 @@ function decisionIn(value: unknown): PublishedDecision | null {
     at: d.at,
     repo: d.repo,
     item: { kind: itemKind, number: item.number },
-    serial: d.serial as string | null,
+    serial: d.serial,
     type: d.type,
     inputs: inputs as PublishedDecision["inputs"],
     suggestion: suggestion && { verdict: suggestion.verdict as string, reasons: suggestion.reasons as string[] },

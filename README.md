@@ -76,21 +76,34 @@ trust model are in [contracts/README.md](contracts/README.md).
 Bona Fide uses Claude where reading helps, and never lets it move money on its own word. The model's answer is a
 suggestion. Facts checked in code decide every payout, and a person signs anything that takes money away.
 
-1. **Triage.** A reviewer reads each PR or issue that holds a Deposit and leaves the Maintainer a note: accept it, or
-   a drafted bad-faith verdict to sign. It never forfeits.
-2. **Record Exemptions.** A Contributor with enough Refunds on work others accepted across repos, and Forfeits in fewer than two repos, needs no Deposit.
-   The model can hold a waiver back but never grant one alone.
-3. **Bounties.** A Maintainer posts USDC on an issue from their own Bounty wallet. When a PR that closes it is merged
-   with green checks, the Keeper pays within the wallet's limits. The model can hold a payout but never trigger one.
-4. **The decision log.** Every decision is recorded with what was read, what was checked, what was done and its
-   transaction. Each repo's page shows it.
+| Part | Claude reads | The Maintainer sees | It can never | Off with |
+|---|---|---|---|---|
+| [Triage](app/README.md#triage) | Each PR or issue that holds a Deposit: its title, body and diff | A note, "Suggestion: this looks like good-faith work", or "Draft verdict: this may be bad faith" with a link to sign the Forfeit. Nothing when it's unsure | Forfeit, refund or add a label | `triage: off` |
+| [Record Exemption](app/README.md#record-exemption) | A Contributor's Bona Fide record, in numbers, and their public GitHub profile | The check passes: "No Deposit needed: 4 Refunds across 3 repos"; otherwise the Deposit stands, and when something in the record deserves a look, a note: "Flagged for the Maintainer" | Grant one alone: the record must reach `record_threshold`, with Forfeits in fewer than two repos and no denouncement | `record_exemption: off` |
+| [Bounties](app/README.md#bounties) | The issue and the merged PR that closes it | "Bounty paid", with the Payout's transaction. Or "Bounty waiting for the Maintainer", with why and a link to sign the Payout | Trigger a Payout: the PR must be merged, close the issue and have green checks, and the Bounty must fit the wallet's limits | `bounties: off` |
 
-The agent's part runs when the App has an Anthropic API key. [app/README.md](app/README.md#triage) documents it.
+Each note with the model's reasons says it is only a suggestion and the Maintainer decides. Every decision goes in
+[the decision log](app/README.md#decision-log), with what was read, what was checked, what was done and its
+transaction. Each public repo's page shows it.
+
+The agent's part runs when the App has an Anthropic API key. Without one there is no triage and no Record Exemption,
+and every Bounty waits for the Maintainer.
 
 ## For AI agents
 
-AI agents can be Contributors too. The [MCP server](agent/README.md) lets an agent read a repo's terms and make the
-Deposit from its own wallet, within a limit you set.
+AI agents can be Contributors too.
+
+- **The [MCP server](agent/README.md)** reads a repo's terms from the escrow and makes the Deposit from the agent's
+  own wallet, within a limit you set. It follows the Deposit until it ends, prepares the Refund anyone can send after
+  the Timeout, and reads an issue's Bounty. It never holds keys: the agent's wallet signs and sends.
+- **The [Agent Skill](agent/skills/bona-fide/SKILL.md)** tells an agent when to use those tools, when to stop and ask
+  the person it works for, and how to name its Payee for a Bounty. [Add it](agent/README.md#add-the-skill) to Claude
+  Code or any agent that reads skills.
+- **The Deposit request.** The App's check and comment end with a hidden `bona-fide:deposit-request` block that names
+  the escrow, the PR or issue and the amount. Anyone can post a copy, so an agent takes it only from the
+  `bona-fide-deposits` App, and reads the terms from the escrow before it pays. The
+  [format](app/README.md#the-deposit-request-for-ai-agents) is in the App's README.
+- **[llms.txt](https://bofi.live/llms.txt)** is the short version, for a model to read first.
 
 ## What's in the repo
 
@@ -133,6 +146,12 @@ how to import them from Solidity, and the [MCP server](agent/README.md) shows an
    amount: 1                  # USDC
    forfeit: 50%               # the share a Forfeit takes: at most 50%
    timeout: 7 days
+   # Optional, shown with their defaults:
+   # exempt_bots: []          # bots that need no Deposit, besides dependabot, renovate and github-actions
+   # triage: on               # Claude reads each PR or issue that holds a Deposit and leaves a note
+   # record_exemption: on     # a good Bona Fide record can stand in for a Deposit
+   # record_threshold: 3      # the score a record needs for that: 1 to 100
+   # bounties: on             # the Keeper pays the repo's Bounties within its wallet's limits
    ```
 
 3. Sign once at `https://bofi.live/setup.html?repo=owner/name` to prove the wallet is yours. The
@@ -141,7 +160,39 @@ how to import them from Solidity, and the [MCP server](agent/README.md) shows an
 **As a Contributor:** open your PR or issue as usual, and follow the link in the Bona Fide check. You need
 USDC on Arc and nothing else: on Arc, gas is paid in USDC too.
 
-**As an AI agent:** add the MCP server from [agent/README.md](agent/README.md).
+**As an AI agent:** add the MCP server and the Agent Skill from [agent/README.md](agent/README.md).
+
+### Post a Bounty
+
+**As a Maintainer,** once the repo is set up, on `https://bofi.live/bounties.html?repo=owner/name`, with the wallet
+you signed setup with:
+
+1. **Create the repo's Bounty wallet.** One transaction. It sets how much the Keeper may pay on its own: per Bounty,
+   and per period. The page suggests 50 USDC a Bounty and 200 USDC every 7 days.
+2. **Fund it** with USDC: one signature, or two transactions.
+3. **Post a Bounty:** an issue number and an amount. The amount stays reserved until it is paid or you cancel it. The
+   App posts a note on the issue, so Contributors see it.
+4. **The Keeper pays** the first merged PR that closes the issue, in full, when its checks are green, its author named
+   a wallet, the amount fits your limits and Claude agrees the PR resolves the issue. Otherwise the App leaves a note
+   on the PR saying why, and you pay from the same page: directly, or by a signature the Keeper relays.
+5. **To stop the Keeper,** press "Turn off Keeper payouts" on the same page, or set `bounties: off` in
+   `.github/bona-fide.yml`. You can still pay any Bounty yourself, cancel one, or withdraw what isn't reserved.
+
+**As a Contributor,** find a repo's open Bounties on `https://bofi.live/repo.html?repo=owner/name`, or in the App's
+note on an issue:
+
+1. Open a PR that closes the issue, with `Fixes #42` in its description.
+2. Put a line of your own in the PR's description, or in a comment of your own on it:
+
+   ```text
+   Bounty wallet: 0xYourWallet
+   ```
+
+   Only your own words count. If someone else edits that description or comment, its line no longer counts. The latest
+   line wins: a comment over the description, and a later comment over an earlier one. To change the wallet, comment
+   again.
+3. When the PR is merged and closes the issue, the Bounty is paid in full to that wallet, once: by the Keeper within
+   the Maintainer's limits, or by the Maintainer. A note on the PR and the issue links the transaction.
 
 ## Run the tests
 

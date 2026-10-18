@@ -1,0 +1,5 @@
+{
+  "filter_paths": "lib/|test/|script/",
+  "fail_on": "pedantic",
+  "triage_database": "contracts/slither.db.json"
+}

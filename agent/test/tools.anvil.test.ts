@@ -93,7 +93,7 @@ test("prepare_signed_deposit returns typed data that, signed by `from`, makes th
   const result = await mcp.call("prepare_signed_deposit", { repo: REPO, kind: "pr", number: 3, from: account.address });
 
   expect(result.isError).toBeFalsy();
-  const { typedData, submit } = result.structuredContent as unknown as SignedPlan;
+  const { typedData, submit } = result.structuredContent as SignedPlan;
   const receipt = await chain.depositWithAuthorization({ ...submit, signature: castSign(key, typedData) });
   expect(await chain.depositedIn(receipt.transactionHash)).toMatchObject({
     depositor: account.address,
@@ -109,7 +109,7 @@ test("the typed data is USDC's authorization to pay the escrow exactly the Depos
 
   const result = await mcp.call("prepare_signed_deposit", { repo: REPO, kind: "pr", number: 4, from: account.address });
 
-  const { typedData, submit } = result.structuredContent as unknown as SignedPlan;
+  const { typedData, submit } = result.structuredContent as SignedPlan;
   expect(typedData.domain).toEqual({ name: "USDC", version: "2", chainId: 5042002, verifyingContract: chain.usdc });
   expect(typedData.message).toMatchObject({
     from: account.address,
@@ -128,7 +128,7 @@ test("prepare_signed_deposit gives a Circle agent wallet the command that signs 
 
   const result = await mcp.call("prepare_signed_deposit", { repo: REPO, kind: "pr", number: 5, from: account.address });
 
-  const { typedData, circleCommand } = result.structuredContent as unknown as SignedPlan;
+  const { typedData, circleCommand } = result.structuredContent as SignedPlan;
   const [, json, flags] = /^circle wallet sign typed-data '([^']+)' (.*)$/.exec(circleCommand ?? "") ?? [];
   expect(JSON.parse(json!)).toEqual(typedData);
   expect(flags).toBe(`--address ${account.address} --chain ARC-TESTNET --quiet`);
@@ -197,7 +197,7 @@ test("prepare_two_step_deposit's two transactions, sent from `from`, make the De
   });
 
   expect(result.isError).toBeFalsy();
-  const { steps } = result.structuredContent as unknown as TwoStepPlan;
+  const { steps } = result.structuredContent as TwoStepPlan;
   expect(steps).toHaveLength(2);
   await chain.sendFrom(account, steps[0]!.to, steps[0]!.data);
   const receipt = await chain.sendFrom(account, steps[1]!.to, steps[1]!.data);
@@ -216,7 +216,7 @@ test("prepare_two_step_deposit gives a Circle agent wallet an exact approve, the
     from: account.address,
   });
 
-  const { steps } = result.structuredContent as unknown as TwoStepPlan;
+  const { steps } = result.structuredContent as TwoStepPlan;
   const wallet = `--address ${account.address} --chain ARC-TESTNET --output json`;
   expect(steps.map((step) => step.circleCommand)).toEqual([
     `circle wallet execute "approve(address,uint256)" ${chain.escrow} 1000000 --contract ${chain.usdc} ${wallet}`,
@@ -252,7 +252,7 @@ function relayingApp() {
     const receipt = await chain.depositWithAuthorization(body);
     return Response.json({ txHash: receipt.transactionHash });
   };
-  return { fetch: fetch as typeof globalThis.fetch, requests };
+  return { fetch: fetch, requests };
 }
 
 function answeringApp(status: number, body: RefusalBody | { txHash: Hex } | object) {
@@ -261,7 +261,7 @@ function answeringApp(status: number, body: RefusalBody | { txHash: Hex } | obje
     requests.push(String(input));
     return Response.json(body, { status });
   };
-  return { fetch: fetch as typeof globalThis.fetch, requests };
+  return { fetch: fetch, requests };
 }
 
 async function signedFields(number: number, repo = REPO) {
@@ -269,7 +269,7 @@ async function signedFields(number: number, repo = REPO) {
   const mcp = await server();
   const prepared = await mcp.call("prepare_signed_deposit", { repo, kind: "pr", number, from: account.address });
   await mcp.close();
-  const { typedData, submit } = prepared.structuredContent as unknown as SignedPlan;
+  const { typedData, submit } = prepared.structuredContent as SignedPlan;
   return { account, fields: { ...submit, signature: castSign(key, typedData) } };
 }
 

@@ -44,14 +44,14 @@ contract BountyWalletFuzzTest is BountyFixture {
         uint256 periodStart;
         uint256 paidInPeriod;
         for (uint64 i; i < 8; ++i) {
-            vm.warp(block.timestamp + bound(gaps[i], 0, 3 days));
+            vm.warp(vm.getBlockTimestamp() + bound(gaps[i], 0, 3 days));
             uint256 amount = bound(amounts[i], 1, PER_PAYOUT);
             if (amount > wallet.available()) return;
             _post(i, amount);
-            bool newPeriod = block.timestamp >= periodStart + PERIOD;
+            bool newPeriod = vm.getBlockTimestamp() >= periodStart + PERIOD;
             vm.prank(keeper);
             try wallet.keeperPay(i, contributor) {
-                if (newPeriod) (periodStart, paidInPeriod) = (block.timestamp, 0);
+                if (newPeriod) (periodStart, paidInPeriod) = (vm.getBlockTimestamp(), 0);
                 paidInPeriod += amount;
             } catch {}
             assertLe(paidInPeriod, PERIOD_LIMIT);

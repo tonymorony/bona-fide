@@ -27,6 +27,8 @@ test.each([
   const app = parseConfig(text);
   const page = readBonaFideYml(text);
 
+  // The App's parser, not the page's, picks the branch, so neither can be skipped by the code under test.
+  /* eslint-disable vitest/no-conditional-expect -- each case expects what the App's parser decided; review-by: 2027-04-18 */
   if (app.ok) {
     expect(page).toMatchObject({
       ok: true,
@@ -39,6 +41,7 @@ test.each([
   } else {
     expect(page).toEqual({ ok: false, problems: app.problems });
   }
+  /* eslint-enable vitest/no-conditional-expect */
 });
 
 test("the Maintainer's wallet is read as the Keeper reads it, and is null when missing or malformed", () => {
