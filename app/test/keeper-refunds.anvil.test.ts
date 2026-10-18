@@ -47,8 +47,8 @@ function closedPr(number: number, { merged, by }: { merged: boolean; by: string 
 
 // GitHub's examples have no issues.closed payload: this is the recorded reopened one with the
 // fields a close sets.
-function closedIssue(number: number, { reason, by }: { reason: string; by: string }) {
-  const body = payload("issues", "reopened", { author: NEWCOMER, labels: [] });
+function closedIssue(number: number, { reason, by, labels = [] }: { reason: string; by: string; labels?: string[] }) {
+  const body = payload("issues", "reopened", { author: NEWCOMER, labels });
   body.action = "closed";
   body.issue.number = number;
   body.issue.state = "closed";
@@ -65,13 +65,19 @@ function opened(kind: Kind, number: number, at: Date) {
   return body;
 }
 
-function labeled(kind: Kind, number: number, label: string) {
+function labeled(
+  kind: Kind,
+  number: number,
+  label: string,
+  { by, labels = [] }: { by?: string; labels?: string[] } = {},
+) {
   const body = payload(kind === "pr" ? "pull_request" : "issues", "labeled", {
     author: NEWCOMER,
     label,
-    labels: [label],
+    labels: [...labels, label],
   });
   (kind === "pr" ? body.pull_request : body.issue).number = number;
+  if (by) body.sender.login = by;
   return body;
 }
 
@@ -87,7 +93,8 @@ test("merging a PR refunds its Deposit in full", async () => {
 }, 30_000);
 
 test("closing an issue as completed refunds its Deposit in full", async () => {
-  const { deliver } = keeperHarness(anvil, keeperKey);
+  const { github, deliver } = keeperHarness(anvil, keeperKey);
+  github.setPermission(REPO, "maintainer", "write");
   await anvil.deposit(REPO, "issue", 111);
   const before = await anvil.usdcBalance(anvil.contributor);
 
@@ -95,6 +102,29 @@ test("closing an issue as completed refunds its Deposit in full", async () => {
 
   expect(await anvil.usdcBalance(anvil.contributor)).toBe(before + ONE_USDC);
   expect(await statusOf("issue", 111)).toBe(REFUNDED);
+}, 30_000);
+
+test("closing an issue as completed refunds nothing when the closer can't push", async () => {
+  const { github, deliver } = keeperHarness(anvil, keeperKey);
+  // GitHub reports triage access as read, and triage is enough to close an issue.
+  github.setPermission(REPO, "triager", "read");
+  await anvil.deposit(REPO, "issue", 116);
+
+  await deliver("issues", closedIssue(116, { reason: "completed", by: "triager" }));
+
+  expect(await statusOf("issue", 116)).toBe(ACTIVE);
+}, 30_000);
+
+// Closing as completed is GitHub's default, so a Maintainer who marked the issue bad faith and
+// closed it would otherwise refund the Deposit they meant to sign a Forfeit for.
+test("closing an issue marked bad faith as completed leaves its Deposit for the Forfeit", async () => {
+  const { github, deliver } = keeperHarness(anvil, keeperKey);
+  github.setPermission(REPO, "maintainer", "write");
+  await anvil.deposit(REPO, "issue", 117);
+
+  await deliver("issues", closedIssue(117, { reason: "completed", by: "maintainer", labels: ["bona-fide:bad-faith"] }));
+
+  expect(await statusOf("issue", 117)).toBe(ACTIVE);
 }, 30_000);
 
 test("an author closing their own issue as completed gets no refund", async () => {
@@ -146,6 +176,36 @@ test.each([
   },
   30_000,
 );
+
+test.each([
+  ["pr", 137],
+  ["issue", 138],
+] as const)(
+  "the bona-fide:ok label on a %s refunds nothing when whoever added it can't push",
+  async (kind, number) => {
+    const { github, deliver } = keeperHarness(anvil, keeperKey);
+    github.setPermission(REPO, "triager", "read");
+    github.setLabeler(REPO, number, "bona-fide:ok", "triager");
+    await anvil.deposit(REPO, kind, number);
+    const body = labeled(kind, number, "bona-fide:ok", { by: "triager" });
+    // Opened after the Binding, so that no Exemption refunds it either.
+    (kind === "pr" ? body.pull_request : body.issue).created_at = (await anvil.now()).toISOString();
+
+    await deliver(kind === "pr" ? "pull_request" : "issues", body);
+
+    expect(await statusOf(kind, number)).toBe(ACTIVE);
+  },
+  30_000,
+);
+
+test("the bona-fide:ok label refunds nothing on an item marked bad faith", async () => {
+  const { deliver } = keeperHarness(anvil, keeperKey);
+  await anvil.deposit(REPO, "issue", 139);
+
+  await deliver("issues", labeled("issue", 139, "bona-fide:ok", { labels: ["bona-fide:bad-faith"] }));
+
+  expect(await statusOf("issue", 139)).toBe(ACTIVE);
+}, 30_000);
 
 /** `by` approves the PR `opened` made. */
 function approved(

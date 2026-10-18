@@ -40,6 +40,8 @@ interface RepoState {
   closingLinks: Map<number, ClosingPullRequest[]>;
   /** Items closed since they were added. */
   closed: Set<number>;
+  /** Who added a label to an item, by "number:label", when not the repo's owner. */
+  labelers: Map<string, string>;
 }
 
 // An in-memory GitHub. It keeps what the App would leave visible on github.com: the latest
@@ -75,6 +77,7 @@ export class FakeGitHub implements GitHub {
       commitChecks: new Map(),
       closingLinks: new Map(),
       closed: new Set(),
+      labelers: new Map(),
     };
     this.repos.set(fullName.toLowerCase(), state);
     return state;
@@ -90,6 +93,11 @@ export class FakeGitHub implements GitHub {
 
   setPermission(fullName: string, login: string, permission: Permission): void {
     this.state(fullName).permissions.set(login.toLowerCase(), permission);
+  }
+
+  /** Says `login`, not the repo's owner, added `label` to the item. */
+  setLabeler(fullName: string, number: number, label: string, login: string): void {
+    this.state(fullName).labelers.set(`${number}:${label}`, login);
   }
 
   addMergedPullRequest(fullName: string, author: string): void {
@@ -181,9 +189,11 @@ export class FakeGitHub implements GitHub {
     return this.state(fullNameOf(repo)).files.get(path) ?? null;
   }
 
+  // As on GitHub, the owner of a user's repo is its admin.
   async permissionOf(repo: Repo, login: string): Promise<Permission> {
     await this.roundTrip();
-    return this.state(fullNameOf(repo)).permissions.get(login.toLowerCase()) ?? "none";
+    const set = this.state(fullNameOf(repo)).permissions.get(login.toLowerCase());
+    return set ?? (login.toLowerCase() === repo.owner.toLowerCase() ? "admin" : "none");
   }
 
   async hasMergedPullRequest(repo: Repo, login: string): Promise<boolean> {
@@ -223,6 +233,11 @@ export class FakeGitHub implements GitHub {
     await this.roundTrip();
     const labels = this.state(fullNameOf(repo)).labels;
     labels.set(number, new Set([...(labels.get(number) ?? []), label]));
+  }
+
+  async labeledBy(repo: Repo, number: number, label: string): Promise<string | null> {
+    await this.roundTrip();
+    return this.state(fullNameOf(repo)).labelers.get(`${number}:${label}`) ?? repo.owner;
   }
 
   async removeLabel(repo: Repo, number: number, label: string): Promise<void> {

@@ -1,6 +1,7 @@
 import { bindingProof, forfeitVerdict, keyOf, repoIdOf, type Kind } from "@bona-fide/sdk";
 import { getAddress, hashTypedData, isAddress, isAddressEqual, type Address, type Hex } from "viem";
 import { parse } from "yaml";
+import { canPush } from "../access.ts";
 import type { Verdict } from "../app.ts";
 import { CLOCK_SKEW_SECONDS, CONFIG_PATH, parseConfig } from "../config.ts";
 import { depositLink, usdc } from "../copy.ts";
@@ -140,6 +141,22 @@ export function createKeeper({
     }
   }
 
+  // Only someone with write access can merge. Closing an issue as completed counts only when someone
+  // else did it: anyone can close their own issue.
+  async function accepted(item: Item, closed: any): Promise<boolean> {
+    if (closed.pull_request) return closed.pull_request.merged === true;
+    const byAuthor = closed.sender?.login?.toLowerCase() === closed.issue.user.login.toLowerCase();
+    return closed.issue.state_reason === "completed" && !byAuthor && byMaintainer(item, closed.sender);
+  }
+
+  // Triage access is enough to close an issue or add a label, so either counts only when someone who
+  // can push did it. And neither refunds a Deposit marked bad faith: closing as completed is GitHub's
+  // default, and that Deposit waits for the Maintainer's signature or the Timeout.
+  async function byMaintainer(item: Item, sender: { login?: string } | undefined): Promise<boolean> {
+    if (!sender?.login || item.labels.includes(BAD_FAITH)) return false;
+    return canPush(await github.permissionOf(item.repo, sender.login));
+  }
+
   // The label is only a request: the Deposit moves when the Maintainer signs.
   async function askForSignature(item: Item): Promise<void> {
     const deposit = await escrow.depositOf(keyFor(item));
@@ -153,8 +170,14 @@ export function createKeeper({
       const item = itemOf(event, payload);
       if (!item) return;
       const source = `webhook ${event} ${payload.action}`;
-      if (payload.action === "closed" && accepted(payload)) await refundAccepted(item, source, closeWitnesses(payload));
-      if (payload.action === "labeled" && payload.label?.name === ACCEPTED) {
+      if (payload.action === "closed" && (await accepted(item, payload))) {
+        await refundAccepted(item, source, closeWitnesses(payload));
+      }
+      if (
+        payload.action === "labeled" &&
+        payload.label?.name === ACCEPTED &&
+        (await byMaintainer(item, payload.sender))
+      ) {
         await refundAccepted(item, source, [
           { name: "Label", value: ACCEPTED },
           { name: "Labelled by", value: `@${payload.sender?.login}` },
@@ -310,12 +333,4 @@ function closeWitnesses(closed: any): Witness[] {
     { name: "Closed as", value: "completed" },
     { name: "Closed by", value: `@${closed.sender.login}, not the author` },
   ];
-}
-
-// Only someone with write access can merge. Anyone can close their own issue as completed, so that
-// counts only when someone else closed it.
-function accepted(closed: any): boolean {
-  if (closed.pull_request) return closed.pull_request.merged === true;
-  const byAuthor = closed.sender?.login?.toLowerCase() === closed.issue.user.login.toLowerCase();
-  return closed.issue.state_reason === "completed" && !byAuthor;
 }

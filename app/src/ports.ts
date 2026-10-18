@@ -58,6 +58,8 @@ export interface GitHub {
   updateComment(repo: Repo, commentId: number, body: string): Promise<void>;
   addLabel(repo: Repo, number: number, label: string): Promise<void>;
   removeLabel(repo: Repo, number: number, label: string): Promise<void>;
+  /** Who last added `label` to the PR or issue, or null if nobody has or their account is gone. */
+  labeledBy(repo: Repo, number: number, label: string): Promise<string | null>;
   /** The installed repo whose repoId this is, or null. */
   findRepo(repoId: Hex): Promise<Repo | null>;
   /** The open or closed PR or issue, or null if there is none of that kind. */
@@ -131,7 +133,8 @@ export interface CommitCheck {
 
 /**
  * Whose PR or issue a Deposit was for, and whether it was accepted: a PR merged, an issue closed as
- * completed by someone other than its author, or either labelled bona-fide:ok.
+ * completed by someone other than its author who can push, or either labelled bona-fide:ok by
+ * someone who can push.
  */
 export interface ItemOutcome {
   author: string;

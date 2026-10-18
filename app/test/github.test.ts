@@ -556,12 +556,50 @@ test("only an open issue is an open issue: not a closed one, a PR, or a number w
   expect(await github.isOpenIssue(REPO, 4)).toBe(false);
 });
 
-test("an item's outcome is its author and whether it was merged, completed by someone else, or labelled ok", async () => {
+test("a label was added by whoever added it last", async () => {
+  const labeled = (name: string, login: string | null) => ({
+    event: "labeled",
+    label: { name, color: "ededed" },
+    actor: login === null ? null : { login },
+  });
+  const { github } = fakeApi({
+    [`GET ${API}/issues/1/events`]: {
+      status: 200,
+      body: [
+        labeled("bona-fide:ok", "first"),
+        { event: "unlabeled", label: { name: "bona-fide:ok", color: "ededed" }, actor: { login: "first" } },
+        labeled("bona-fide:ok", "mo"),
+        labeled("bug", "triager"),
+      ],
+    },
+    [`GET ${API}/issues/2/events`]: { status: 200, body: [labeled("bona-fide:ok", null)] },
+  });
+
+  expect(await github.labeledBy(REPO, 1, "bona-fide:ok")).toBe("mo");
+  expect(await github.labeledBy(REPO, 1, "bona-fide:waive")).toBeNull();
+  expect(await github.labeledBy(REPO, 2, "bona-fide:ok")).toBeNull();
+  expect(await github.labeledBy(REPO, 404, "bona-fide:ok")).toBeNull();
+});
+
+test("an item's outcome is its author and whether it was merged, or completed or labelled ok by someone else who can push", async () => {
   const pr = fixture("pull_request.opened").pull_request;
   const issue = fixture("issues.opened").issue;
   const closedBy = (login: string) => ({ state: "closed", state_reason: "completed", closed_by: { login } });
   const ok = [{ name: "bona-fide:ok" }];
+  const labeledBy = (login: string) => ({
+    status: 200,
+    body: [{ event: "labeled", label: { name: "bona-fide:ok", color: "ededed" }, actor: { login } }],
+  });
   const { github } = fakeApi({
+    [`GET ${API}/collaborators/mo/permission`]: { status: 200, body: { permission: "write" } },
+    [`GET ${API}/collaborators/triager/permission`]: { status: 200, body: { permission: "read", role_name: "triage" } },
+    [`GET ${API}/issues/4/events`]: labeledBy("mo"),
+    [`GET ${API}/issues/8/events`]: labeledBy("mo"),
+    [`GET ${API}/pulls/10`]: { status: 200, body: { ...pr, number: 10, merged: false, labels: ok } },
+    [`GET ${API}/issues/10/events`]: labeledBy("triager"),
+    [`GET ${API}/issues/11`]: { status: 200, body: { ...issue, number: 11, ...closedBy("triager") } },
+    [`GET ${API}/issues/12`]: { status: 200, body: { ...issue, number: 12, labels: ok } },
+    [`GET ${API}/issues/12/events`]: labeledBy("triager"),
     [`GET ${API}/pulls/2`]: { status: 200, body: { ...pr, merged: true } },
     [`GET ${API}/pulls/3`]: { status: 200, body: { ...pr, number: 3, merged: false } },
     [`GET ${API}/pulls/4`]: { status: 200, body: { ...pr, number: 4, merged: false, labels: ok } },
@@ -584,10 +622,27 @@ test("an item's outcome is its author and whether it was merged, completed by so
     github.outcomeOf(REPO, "issue", 8),
     github.outcomeOf(REPO, "issue", 9),
     github.outcomeOf(REPO, "issue", 404),
+    github.outcomeOf(REPO, "pr", 10),
+    github.outcomeOf(REPO, "issue", 11),
+    github.outcomeOf(REPO, "issue", 12),
   ]);
 
   const by = (accepted: boolean) => ({ author: "Codertocat", accepted });
-  expect(outcomes).toEqual([by(true), by(false), by(true), null, by(true), by(false), by(false), by(true), null, null]);
+  expect(outcomes).toEqual([
+    by(true),
+    by(false),
+    by(true),
+    null,
+    by(true),
+    by(false),
+    by(false),
+    by(true),
+    null,
+    null,
+    by(false),
+    by(false),
+    by(false),
+  ]);
 });
 
 test("a profile is the account's public numbers and a search count of merged PRs in other people's repos", async () => {

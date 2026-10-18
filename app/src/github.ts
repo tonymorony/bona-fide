@@ -1,6 +1,7 @@
 import { repoIdOf } from "@bona-fide/sdk";
 import type { Octokit } from "@octokit/rest";
 import type { Hex } from "viem";
+import { canPush, maintainerAdded } from "./access.ts";
 import { ACCEPTED } from "./labels.ts";
 import {
   fullName,
@@ -99,6 +100,37 @@ export function createGitHub({ appId, app, installation }: GitHubOptions): GitHu
     return found;
   }
 
+  async function permissionOf(repo: Repo, login: string): Promise<Permission> {
+    try {
+      const { data } = await api(repo).rest.repos.getCollaboratorPermissionLevel({
+        ...repoParams(repo),
+        username: login,
+      });
+      return PERMISSIONS.find((p) => p === data.permission) ?? "none";
+    } catch (error) {
+      if (isNotFound(error)) return "none";
+      throw error;
+    }
+  }
+
+  // GitHub lists an item's events oldest first.
+  async function labeledBy(repo: Repo, number: number, label: string): Promise<string | null> {
+    const octokit = api(repo);
+    let events;
+    try {
+      events = await octokit.paginate(octokit.rest.issues.listEvents, {
+        ...repoParams(repo),
+        issue_number: number,
+        per_page: 100,
+      });
+    } catch (error) {
+      if (isNotFound(error)) return null;
+      throw error;
+    }
+    const added = events.filter((e) => e.event === "labeled" && "label" in e && e.label?.name === label).at(-1);
+    return added?.actor?.login ?? null;
+  }
+
   return {
     async readFile(repo, path) {
       try {
@@ -114,18 +146,7 @@ export function createGitHub({ appId, app, installation }: GitHubOptions): GitHu
       }
     },
 
-    async permissionOf(repo, login) {
-      try {
-        const { data } = await api(repo).rest.repos.getCollaboratorPermissionLevel({
-          ...repoParams(repo),
-          username: login,
-        });
-        return PERMISSIONS.find((p) => p === data.permission) ?? "none";
-      } catch (error) {
-        if (isNotFound(error)) return "none";
-        throw error;
-      }
-    },
+    permissionOf,
 
     async hasMergedPullRequest(repo, login) {
       try {
@@ -231,6 +252,8 @@ export function createGitHub({ appId, app, installation }: GitHubOptions): GitHu
       await api(repo).rest.issues.addLabels({ ...repoParams(repo), issue_number: number, labels: [label] });
     },
 
+    labeledBy,
+
     async removeLabel(repo, number, label) {
       try {
         await api(repo).rest.issues.removeLabel({ ...repoParams(repo), issue_number: number, name: label });
@@ -311,21 +334,28 @@ export function createGitHub({ appId, app, installation }: GitHubOptions): GitHu
       };
     },
 
-    // Only someone with write access can merge. Anyone can close their own issue as completed, so that
-    // counts only when someone else closed it. A deleted account's item is nobody's.
+    // Only someone with write access can merge. Closing an issue as completed, or adding the label,
+    // counts only when someone else who can push did it: anyone can close their own issue, and triage
+    // access is enough for either. Access is read now, not as it was then. A deleted account's item is nobody's.
     async outcomeOf(repo, kind, number) {
+      const labelledOk = async (labels: (string | { name?: string })[]) =>
+        labelled(labels, ACCEPTED) && (await maintainerAdded({ labeledBy, permissionOf }, repo, number, ACCEPTED));
       try {
         if (kind === "pr") {
           const { data } = await api(repo).rest.pulls.get({ ...repoParams(repo), pull_number: number });
           if (!data.user) return null;
-          return { author: data.user.login, accepted: data.merged === true || labelled(data.labels, ACCEPTED) };
+          return { author: data.user.login, accepted: data.merged === true || (await labelledOk(data.labels)) };
         }
         const { data } = await api(repo).rest.issues.get({ ...repoParams(repo), issue_number: number });
         if (data.pull_request || !data.user) return null;
         const author = data.user.login;
-        const closer = data.closed_by?.login?.toLowerCase();
-        const completed = data.state_reason === "completed" && closer !== undefined && closer !== author.toLowerCase();
-        return { author, accepted: completed || labelled(data.labels, ACCEPTED) };
+        const closer = data.closed_by?.login;
+        const completed =
+          data.state_reason === "completed" &&
+          closer !== undefined &&
+          closer.toLowerCase() !== author.toLowerCase() &&
+          canPush(await permissionOf(repo, closer));
+        return { author, accepted: completed || (await labelledOk(data.labels)) };
       } catch (error) {
         if (isNotFound(error)) return null;
         throw error;

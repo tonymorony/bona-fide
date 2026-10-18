@@ -101,6 +101,7 @@ test("merging a PR logs the Refund as decided, with who merged it and its transa
 
 test("closing an issue as completed logs the Refund, with who closed it", async () => {
   const harness = keeperHarness(anvil, keeperKey);
+  harness.github.setPermission(REPO, "mo", "write");
   await anvil.deposit(REPO, "issue", 202);
 
   await harness.deliver("issues", closedIssue(202));

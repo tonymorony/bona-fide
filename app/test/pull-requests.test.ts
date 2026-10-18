@@ -155,6 +155,20 @@ test("adding the Waiver label turns the check green, and removing it asks again"
   expect(github.checkOn(REPO, HEAD_SHA)?.conclusion).toBe("pending");
 });
 
+test.each(["bona-fide:ok", "bona-fide:waive"])(
+  "%s added by someone who can't push leaves the Deposit needed",
+  async (label) => {
+    const { github, deliver } = harness({ config: "" });
+    // GitHub reports triage access as read, and triage is enough to add a label.
+    github.setPermission(REPO, "triager", "read");
+    github.setLabeler(REPO, 2, label, "triager");
+
+    await deliver("pull_request", payload("pull_request", "labeled", { author: NEWCOMER, label, labels: [label] }));
+
+    expect(github.checkOn(REPO, HEAD_SHA)?.conclusion).toBe("pending");
+  },
+);
+
 test("the bona-fide:ok label passes the check as accepted, a push keeps it, and removing the label asks again", async () => {
   const { github, deliver } = harness({ config: "" });
   await deliver("pull_request", payload("pull_request", "opened", { author: NEWCOMER }));

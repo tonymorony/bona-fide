@@ -53,7 +53,7 @@ nobody has vouched for yet: a small deposit that honest contributors always get 
 
    | Outcome | Who triggers | Money |
    |---|---|---|
-   | Merged, approved by a Maintainer, closed as completed, or labelled `bona-fide:ok` | Keeper | **100% refunded** |
+   | Merged, or approved, closed as completed or labelled `bona-fide:ok` by a Maintainer | Keeper | **100% refunded** |
    | No decision before the Timeout | The Keeper, or **anyone** | **100% refunded** |
    | Maintainer labels `bona-fide:bad-faith` and **signs with their wallet** | Anyone relays the signature | ≤ 50% to the forfeit router, the rest refunded |
 

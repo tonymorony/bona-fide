@@ -65,7 +65,9 @@ In order:
 
 1. **Denounced** in `VOUCHED.td` (a `-login` line): the check fails and no Deposit is offered. This
    outranks every Exemption, and acceptance too.
-2. **Accepted:** the `bona-fide:ok` label means a Maintainer accepted the PR or issue. The check
+2. **Accepted:** the `bona-fide:ok` label means a Maintainer accepted the PR or issue. It counts
+   only when the last to add it has write, maintain or admin access, since triage access is enough
+   to add a label; the same goes for `bona-fide:waive`. The check
    passes with a reason that names the label, and the Keeper refunds the Deposit (see
    [Refunds](#refunds)), so a later push doesn't ask for a new one. An approving review of a PR
    from someone with write, maintain or admin access accepts it too, and the check names who
@@ -132,8 +134,10 @@ pay a posted Bounty in full to one payee and never to the Keeper. See
 The Keeper refunds a Deposit in full to its Depositor when:
 
 - the PR is merged;
-- the issue is closed as completed by someone other than its author;
-- the `bona-fide:ok` label is added, or the check runs again while the label is on;
+- the issue is closed as completed by someone other than its author with write, maintain or admin
+  access. Not while the issue carries `bona-fide:bad-faith`;
+- someone with write, maintain or admin access adds the `bona-fide:ok` label, or the check runs again
+  while their label is on. Not while the item carries `bona-fide:bad-faith`;
 - someone with write, maintain or admin access approves the PR, or the check runs again while their
   approval stands. Not while the PR carries `bona-fide:bad-faith`;
 - the check doesn't count the Deposit: its block is more than `CLOCK_SKEW_SECONDS` older than the
@@ -161,8 +165,9 @@ Deposits; past that, the one waiting longest is dropped and waits for its item's
 It never refunds because the author closed their own PR or issue, or because an item was closed
 without being accepted (a PR closed unmerged, an issue closed as not planned or a duplicate). Such a
 Deposit waits for a Forfeit or the Timeout, when the Keeper refunds it. While an item carries
-`bona-fide:bad-faith`, a re-check never refunds its Deposit either, even if its Contributor has
-since become exempt or denounced: the Maintainer's signature or the Timeout decides.
+`bona-fide:bad-faith`, nothing but a merge refunds its Deposit early: not the label, not closing it
+as completed (GitHub's default), and not a re-check, even if its Contributor has since become exempt
+or denounced. The Maintainer's signature or the Timeout decides.
 
 A refunded Deposit no longer counts for the check.
 
