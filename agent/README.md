@@ -108,6 +108,18 @@ Arc mainnet.
 
 With Bona Fide's own escrow, the server also knows its block explorer, and links to it.
 
+## Add the skill
+
+[`skills/bona-fide/SKILL.md`](skills/bona-fide/SKILL.md) tells an agent when and how to use these
+tools: how to tell a real request for a Deposit from a forged one, when to stop and ask the person it works for,
+what to do after the Deposit, and how to name its Payee for a Bounty. It is an
+[Agent Skill](https://agentskills.io), so Claude Code and other agents that read skills can load it.
+For Claude Code, copy the folder into a project's `.claude/skills/` or into `~/.claude/skills/`:
+
+```sh
+cp -R /path/to/bona-fide/agent/skills/bona-fide ~/.claude/skills/
+```
+
 ## When a PR or issue asks for a Deposit
 
 The App's "Bona Fide" check on a PR, and its comment on a PR or issue, end with a line GitHub doesn't
