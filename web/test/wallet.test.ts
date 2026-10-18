@@ -31,7 +31,7 @@ function fakeProvider(handlers: Record<string, (params: unknown) => unknown>) {
     },
     on() {},
     removeListener() {},
-  } as Provider;
+  };
   return { provider, requests };
 }
 

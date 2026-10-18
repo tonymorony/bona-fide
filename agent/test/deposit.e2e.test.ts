@@ -54,7 +54,7 @@ async function call(name: string, args: Record<string, unknown>) {
 async function prepareAndSign(key: Hex, from: Address, repo: string, number: number) {
   const prepared = await call("prepare_signed_deposit", { repo, kind: "pr", number, from });
   expect(prepared.isError).toBeFalsy();
-  const { typedData, submit } = prepared.structuredContent as unknown as Prepared;
+  const { typedData, submit } = prepared.structuredContent as Prepared;
   return { ...submit, signature: castSign(key, typedData) };
 }
 

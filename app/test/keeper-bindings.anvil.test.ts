@@ -272,6 +272,7 @@ test("the same proof sent twice at once proposes once", async () => {
 
   const answers = await Promise.all([post("/binding-proof", signed), post("/binding-proof", signed)]);
 
+  // eslint-disable-next-line @typescript-eslint/await-thenable -- an unrouted answer is null, and Promise.all passes its undefined through; review-by: 2027-04-18
   const bodies = (await Promise.all(answers.map((answer) => answer?.json()))) as {
     status: string;
     effectiveAt: number;

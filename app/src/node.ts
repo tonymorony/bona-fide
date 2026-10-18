@@ -220,7 +220,7 @@ const app = createApp({
   explorerUrl: process.env.EXPLORER_URL || undefined,
   afterVerdict: keeper?.afterVerdict,
   triage,
-  recordExemptions: recordExemptions || undefined,
+  recordExemptions: recordExemptions ?? undefined,
 });
 const webhook = createWebhookHandler({ secret: env("WEBHOOK_SECRET"), app, keeper: keeper ?? undefined, bounties });
 const keeperRoutes = keeper && createKeeperRoutes(keeper, { bounties });
@@ -266,6 +266,7 @@ function notServed(error: string): Response {
   return Response.json({ error, code: "not-served" } satisfies RefusalBody, { status: 404 });
 }
 
+// eslint-disable-next-line @typescript-eslint/no-misused-promises -- hardening follow-up, unreachable today: the catch's writeHead(500) would throw, unhandled, only if something failed after the response's own writeHead, and every route answers with a body already in memory; review-by: 2027-04-18
 const server = createServer(async (req, res) => {
   if (req.url === "/health") {
     res.writeHead(200, { "content-type": "text/plain" }).end("ok\n");

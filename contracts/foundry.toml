@@ -11,6 +11,28 @@ remappings = [
     "forge-std/=lib/forge-std/src/",
 ]
 
+# forge fmt formats the tests and scripts. src/ is left as deployed: its text is the source verified
+# on Arc, and the contracts can't change.
+[fmt]
+ignore = ["src/**/*.sol"]
+
+[lint]
+# `forge lint` runs on its own in CI and `npm run check`; the TypeScript suites' `forge build`
+# needn't repeat it.
+lint_on_build = false
+# Each of these is found only in src/, which can't change, so it is excluded here rather than
+# suppressed in the verified source. Review by 2027-04-18, or with the next deployment.
+exclude_lints = [
+    # Timestamps are compared with Timeouts of days, an hour's binding delay, signature deadlines
+    # and payout periods: a validator's few seconds of drift change none of them.
+    "block-timestamp",
+    # uint64(block.timestamp) holds any time for the next 500 billion years.
+    "unsafe-typecast",
+    # The call before each flagged event is an ERC-1271 staticcall or the factory's own
+    # `new BountyWallet`, and every entry point that moves USDC is nonReentrant.
+    "reentrancy-events",
+]
+
 [fuzz]
 runs = 1_000
 

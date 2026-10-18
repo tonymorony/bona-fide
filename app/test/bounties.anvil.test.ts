@@ -11,7 +11,7 @@ import { createEscrowChain } from "../src/escrow.ts";
 import { createKeeperRoutes } from "../src/keeper/routes.ts";
 import type { Decision, ResolutionRequest } from "../src/ports.ts";
 import { createWebhookHandler } from "../src/webhook.ts";
-import { artifact, type Anvil } from "./support/anvil.ts";
+import { artifact, POLLING_INTERVAL, type Anvil } from "./support/anvil.ts";
 import { BOUNTY_PAGE, closedPr, mergedPr, PAYEE, text } from "./support/bounties.ts";
 import { FakeGitHub } from "./support/fake-github.ts";
 import { FakeModel, resolution } from "./support/fake-model.ts";
@@ -90,7 +90,7 @@ function harness() {
   const github = new FakeGitHub();
   github.addRepo(REPO);
   github.setFile(REPO, ".github/bona-fide.yml", "");
-  const client = createPublicClient({ transport: http(anvil.url) });
+  const client = createPublicClient({ transport: http(anvil.url), pollingInterval: POLLING_INTERVAL });
   const chain = createEscrowChain({ client, escrow: anvil.escrow, fromBlock: anvil.deployBlock });
   const wallets = createBountyWallets({
     client,
@@ -139,7 +139,7 @@ async function signPayout(
   signer: Address,
   message: { issueNumber: bigint; serial: bigint; payee: Address; amount: bigint; deadline: bigint },
 ): Promise<Hex> {
-  return createWalletClient({ transport: http(anvil.url) }).signTypedData({
+  return createWalletClient({ transport: http(anvil.url), pollingInterval: POLLING_INTERVAL }).signTypedData({
     account: signer,
     domain: {
       name: "BonaFide Bounty",

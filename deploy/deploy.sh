@@ -6,8 +6,8 @@
 #   deploy/deploy.sh [--dry-run] <ssh-host>
 #
 #   --dry-run        print the plan and the commands, and run nothing on the server
-#   PAGES_DIR        the built static pages to publish (default: web/dist). If it doesn't
-#                    exist, the pages already on the server stay.
+#   PAGES_DIR        built static pages to publish as they are. Without it, the pages are built
+#                    into web/dist first, for the network web/landing/config.js names.
 #   CADDY_CONTAINER  passed to install.sh: the Caddy container, if detection picks the wrong one
 #   CADDYFILE        passed to install.sh: the main Caddyfile of a Caddy that runs on the host
 set -euo pipefail
@@ -51,9 +51,19 @@ pages=${PAGES_DIR:-web/dist}
 case "$pages" in /*) pages_dir=$pages ;; *) pages_dir="$repo/$pages" ;; esac
 
 revision=$(git -C "$repo" rev-parse HEAD)
-if [ -n "$(git -C "$repo" status --porcelain -- package.json package-lock.json sdk/package.json sdk/src app/package.json app/src deploy)" ]; then
+if [ -n "$(git -C "$repo" status --porcelain -- package.json package-lock.json sdk/package.json sdk/src app/package.json app/src web deploy)" ]; then
 	revision="$revision-dirty"
-	say "warning: the App, the SDK or deploy/ has uncommitted changes. They're deployed too, and the revision is marked -dirty."
+	say "warning: the App, the SDK, the pages or deploy/ have uncommitted changes. They're deployed too, and the revision is marked -dirty."
+fi
+
+# A web/dist left from an earlier build would publish old pages beside the new App, so it is built
+# again for every deploy, for the network the landing page shows.
+if [ -z "${PAGES_DIR:-}" ]; then
+	network=$(cd "$repo/web" && node --input-type=module -e 'const { CONFIG } = await import("./landing/config.js"); console.log(CONFIG.network)') ||
+		die "Can't read the network from web/landing/config.js."
+	say "Building the pages for $network into web/dist."
+	(cd "$repo/web" && node build.ts "$network" >/dev/null) ||
+		die "Nothing was sent: the pages didn't build. Run 'npm ci' at the repo root, then deploy again."
 fi
 short=$(printf '%.12s' "$revision")
 domain=$(awk '/^[^#[:space:]][^{]* \{$/ { sub(/,$/, "", $1); print $1; exit }' "$repo/deploy/Caddyfile.bonafide")
@@ -94,8 +104,10 @@ esac
 
 # The release goes to a directory only the deploy user can write, made fresh for it, and is checked
 # against its digest before anything in it runs: anyone on the server can write to /tmp.
-if command -v sha256sum >/dev/null 2>&1; then digest=$(sha256sum "$tarball" | cut -d' ' -f1)
+if command -v sha256sum >/dev/null 2>&1; then
+	digest=$(sha256sum "$tarball" | cut -d' ' -f1)
 else digest=$(shasum -a 256 "$tarball" | cut -d' ' -f1); fi
+# shellcheck disable=SC2016 # the server's shell expands it, not this one; review-by: 2027-04-18
 remote_tmp='$remote_tmp'
 remote_tarball="$remote_tmp/bona-fide-$short.tgz"
 caddy_env=""

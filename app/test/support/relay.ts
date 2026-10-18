@@ -13,7 +13,7 @@ import {
 } from "viem";
 import { generatePrivateKey, privateKeyToAccount } from "viem/accounts";
 import { foundry } from "viem/chains";
-import { artifact, type Anvil } from "./anvil.ts";
+import { artifact, POLLING_INTERVAL, type Anvil } from "./anvil.ts";
 import { REPO } from "./webhooks.ts";
 
 export const RELAY_URL = "https://app.example/relay/deposit";
@@ -29,8 +29,13 @@ export interface SignedDepositOptions {
 // Signs and funds with fresh keys, as a Contributor's own wallet would; anvil's dev accounts stay the
 // deployer, Keeper and Maintainer.
 export async function relayKit(anvil: Anvil) {
-  const wallet = createWalletClient({ chain: foundry, transport: http(anvil.url) });
-  const test = createTestClient({ chain: foundry, mode: "anvil", transport: http(anvil.url) });
+  const wallet = createWalletClient({ chain: foundry, transport: http(anvil.url), pollingInterval: POLLING_INTERVAL });
+  const test = createTestClient({
+    chain: foundry,
+    mode: "anvil",
+    transport: http(anvil.url),
+    pollingInterval: POLLING_INTERVAL,
+  });
   const [deployer, keeper, contributor] = await wallet.getAddresses();
   const usdcAbi = artifact("MockUSDC").abi;
   const usdc = (await anvil.client.readContract({
@@ -67,7 +72,7 @@ export async function relayKit(anvil: Anvil) {
     async relayer() {
       const account = privateKeyToAccount(generatePrivateKey());
       await this.fundGas(account.address);
-      return createWalletClient({ account, transport: http(anvil.url) });
+      return createWalletClient({ account, transport: http(anvil.url), pollingInterval: POLLING_INTERVAL });
     },
 
     /** Replaces the repo's Binding with a new amount and waits out the binding delay. */

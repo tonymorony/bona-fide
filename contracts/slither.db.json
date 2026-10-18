@@ -1,0 +1,83 @@
+[
+  {
+    "id": "41b1af5a07d69dbd22eb4d3d37a7ca86eccaaba83dcf66bf51133ac12a6d0820",
+    "check": "incorrect-equality",
+    "impact": "Medium",
+    "confidence": "High",
+    "description": "CharityRouter.flush() (src/CharityRouter.sol#37-45) uses a dangerous strict equality:\n\t- amount == 0 (src/CharityRouter.sol#39)\n",
+    "reason": "`amount == 0` only stops an empty flush with NothingToFlush. Anyone can raise the router's USDC balance by sending it USDC, and that only lets flush() burn the whole balance to the one fixed recipient, which is what it is for; no balance value can block a later flush or send USDC anywhere else. The contract is deployed and immutable, so a change would only reach a future deployment.",
+    "review_by": "2027-10-18"
+  },
+  {
+    "id": "37ce70fb35ac0d11ee713f6c7b14e377fcaebbc024b129c5de1189d251d11808",
+    "check": "timestamp",
+    "impact": "Low",
+    "confidence": "Medium",
+    "description": "BonaFideEscrow._record(bytes32,BonaFideEscrow.Kind,uint64,address) (src/BonaFideEscrow.sol#225-239) uses timestamp for comparisons\n\tDangerous comparisons:\n\t- repo.maintainer == address(0) (src/BonaFideEscrow.sol#230)\n",
+    "reason": "The flagged comparison is `repo.maintainer == address(0)`, which reads the active Binding and is not about time; block.timestamp is only added to the Timeout (days) to set the deadline, where seconds of drift don't matter. The contract is deployed and immutable, so a change would only reach a future deployment.",
+    "review_by": "2027-10-18"
+  },
+  {
+    "id": "779b451182a8aac695c3f84e37806584d595390009170478378d71c5cd3515a8",
+    "check": "timestamp",
+    "impact": "Low",
+    "confidence": "Medium",
+    "description": "BonaFideEscrow.activateRepo(bytes32) (src/BonaFideEscrow.sol#146-153) uses timestamp for comparisons\n\tDangerous comparisons:\n\t- p.config.maintainer == address(0) (src/BonaFideEscrow.sol#148)\n\t- block.timestamp < p.effectiveAt (src/BonaFideEscrow.sol#149)\n",
+    "reason": "The Binding delay is at least 1 hour; a block producer can move block.timestamp by seconds, so it can make a Binding take effect seconds early or late, never skip the delay. The `maintainer == address(0)` comparison Slither lists here is not a time comparison. The contract is deployed and immutable, so a change would only reach a future deployment.",
+    "review_by": "2027-10-18"
+  },
+  {
+    "id": "5b131bfd86d86cbe7cf7f2eed9654b4580e900d3251d3a63fcd581652906e610",
+    "check": "timestamp",
+    "impact": "Low",
+    "confidence": "Medium",
+    "description": "BonaFideEscrow.forfeit(bytes32,uint256,bytes) (src/BonaFideEscrow.sol#187-202) uses timestamp for comparisons\n\tDangerous comparisons:\n\t- block.timestamp >= d.deadline (src/BonaFideEscrow.sol#190)\n\t- block.timestamp > sigDeadline (src/BonaFideEscrow.sol#191)\n",
+    "reason": "A Forfeit still needs the Maintainer's signature for this Deposit's serial and takes at most 50%. Seconds of drift against a deadline measured in days, or against the Maintainer's own sigDeadline, only move by seconds when that signed Forfeit stops being accepted. The contract is deployed and immutable, so a change would only reach a future deployment.",
+    "review_by": "2027-10-18"
+  },
+  {
+    "id": "75228df45b27e8d2c95a5d22bbc201fd0d828b913bfea48999d0a040e933afe0",
+    "check": "timestamp",
+    "impact": "Low",
+    "confidence": "Medium",
+    "description": "BonaFideEscrow.refund(bytes32) (src/BonaFideEscrow.sol#176-185) uses timestamp for comparisons\n\tDangerous comparisons:\n\t- ! byKeeper && block.timestamp < d.deadline (src/BonaFideEscrow.sol#180)\n",
+    "reason": "The Timeout is 1 to 60 days. Seconds of timestamp drift can at most let a non-Keeper Refund land seconds early, and a Refund pays 100% to the Deposit's own Depositor, the only address it can reach. The contract is deployed and immutable, so a change would only reach a future deployment.",
+    "review_by": "2027-10-18"
+  },
+  {
+    "id": "17ce4a891d4688f1eed1b11b3b4fd8b1bf35f12268e5c38dd3e12cc74eff5c66",
+    "check": "timestamp",
+    "impact": "Low",
+    "confidence": "Medium",
+    "description": "BountyWallet.keeperAllowance() (src/BountyWallet.sol#232-235) uses timestamp for comparisons\n\tDangerous comparisons:\n\t- block.timestamp >= uint256(periodStart) + periodLength (src/BountyWallet.sol#233)\n",
+    "reason": "keeperAllowance() is a view that mirrors keeperPay's period rollover for the pages and the App; it changes no state, and drift only changes its answer for the seconds around a period boundary. The contract is deployed and immutable, so a change would only reach a future deployment.",
+    "review_by": "2027-10-18"
+  },
+  {
+    "id": "1b2ee670204f87ef278c6f2ca45583ea99850342fe85fdb8f1388ffe6cd6bbbc",
+    "check": "timestamp",
+    "impact": "Low",
+    "confidence": "Medium",
+    "description": "BountyWallet.keeperPay(uint64,address) (src/BountyWallet.sol#158-172) uses timestamp for comparisons\n\tDangerous comparisons:\n\t- block.timestamp >= uint256(periodStart) + periodLength (src/BountyWallet.sol#165)\n",
+    "reason": "The Keeper's spending period is at least 1 hour. Seconds of drift can move a period boundary by seconds; the documented bound (at most periodLimit per period, 2x periodLimit within any periodLength) holds whatever the timestamp, and the Keeper can still only pay posted Bounties within perPayoutLimit. The contract is deployed and immutable, so a change would only reach a future deployment.",
+    "review_by": "2027-10-18"
+  },
+  {
+    "id": "a7908dbc30409260631343c44dd8ce556159d0e6a1533c37684a5db96ddc9216",
+    "check": "timestamp",
+    "impact": "Low",
+    "confidence": "Medium",
+    "description": "BountyWallet.payWithSignature(uint64,address,uint256,bytes) (src/BountyWallet.sol#177-189) uses timestamp for comparisons\n\tDangerous comparisons:\n\t- block.timestamp > deadline (src/BountyWallet.sol#183)\n",
+    "reason": "`deadline` is the owner's own expiry on a signed Payout. Drift can only let that signature be relayed seconds after it; the signature still fixes the issue, serial, payee and amount, and the Bounty pays once. The contract is deployed and immutable, so a change would only reach a future deployment.",
+    "review_by": "2027-10-18"
+  },
+  {
+    "id": "b05623a1c028dac57bbb405710a2ccd99febd04f6cb90ed2bf2c79f55a12d4fe",
+    "check": "too-many-digits",
+    "impact": "Informational",
+    "confidence": "Medium",
+    "description": "BountyWalletFactory.constructor(IERC20,address) (src/BountyWalletFactory.sol#29-34) uses literals with too many digits:\n\t- walletInitCodeHash = keccak256(bytes)(type()(BountyWallet).creationCode) (src/BountyWalletFactory.sol#33)\n",
+    "reason": "The 'literal' is `type(BountyWallet).creationCode`, the wallet's compiled bytecode hashed for CREATE2 address prediction, not a number someone typed; there are no digits to miscount. The contract is deployed and immutable, so a change would only reach a future deployment.",
+    "review_by": "2027-10-18"
+  }
+]

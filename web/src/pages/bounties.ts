@@ -319,7 +319,9 @@ const QUOTING = ["post", "withdraw", "fund", "pay"] as const;
 function figures(state: BountyWalletState | null, link: BountyState | null): string {
   if (!state) return "";
   const { address: _, owner: __, keeper: ___, ...amounts } = state;
-  return JSON.stringify({ ...amounts, link }, (_key, value) => (typeof value === "bigint" ? value.toString() : value));
+  return JSON.stringify({ ...amounts, link }, (_key, value: unknown) =>
+    typeof value === "bigint" ? value.toString() : value,
+  );
 }
 
 /** Reads the wallet's state and the linked Bounty again, as after a transaction. */
@@ -434,6 +436,7 @@ async function transact(
   busy.add(action);
   paint();
   try {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-argument -- viem's generic call type doesn't follow a union of calls; review-by: 2027-04-18
     await client.simulateContract({ ...(call as any), account });
   } catch (error) {
     busy.delete(action);

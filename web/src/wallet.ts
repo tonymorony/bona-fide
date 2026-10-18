@@ -15,8 +15,25 @@ import {
 /** An EIP-1193 provider, as wallets inject it. */
 export interface Provider {
   request(args: { method: string; params?: unknown }): Promise<unknown>;
+  /* eslint-disable @typescript-eslint/no-explicit-any -- each EIP-1193 event passes its own arguments, and a listener typed for one must still fit; review-by: 2027-04-18 */
   on?(event: string, listener: (...args: any[]) => void): void;
   removeListener?(event: string, listener: (...args: any[]) => void): void;
+  /* eslint-enable @typescript-eslint/no-explicit-any */
+}
+
+/** What an EIP-6963 announcement may carry. Nothing in it is promised: discoverWallets checks it. */
+interface Announcement {
+  provider?: Provider;
+  info?: { uuid?: unknown; name?: unknown; icon?: unknown; rdns?: unknown };
+}
+
+/** What a wallet's error may carry. Nothing in it is promised. */
+interface WalletError {
+  message?: unknown;
+  name?: unknown;
+  code?: unknown;
+  data?: { originalError?: { code?: unknown } | null } | null;
+  cause?: unknown;
 }
 
 export interface WalletInfo {
@@ -47,12 +64,12 @@ export function discoverWallets(
 ): () => void {
   const wallets: Wallet[] = [];
   const onAnnounce = (event: Event) => {
-    const detail = (event as CustomEvent).detail;
+    const detail = (event as CustomEvent<Announcement | null | undefined>).detail;
     const provider = detail?.provider;
     const uuid = detail?.info?.uuid;
     if (typeof uuid !== "string" || typeof provider?.request !== "function") return;
     if (wallets.some((wallet) => wallet.info.uuid === uuid)) return;
-    const { name, icon, rdns } = detail.info;
+    const { name, icon, rdns } = detail!.info!;
     wallets.push({
       info: {
         uuid,
@@ -84,14 +101,14 @@ export interface Connection {
 
 /** Asks the wallet for its account, and reads which network it's on. */
 export async function connect(provider: Provider): Promise<Connection> {
-  const accounts = (await provider.request({ method: "eth_requestAccounts" })) as string[];
+  const accounts = (await provider.request({ method: "eth_requestAccounts" })) as string[] | null | undefined;
   if (!accounts?.[0]) throw new Error("The wallet shared no account.");
   return { account: getAddress(accounts[0]), chainId: await chainIdOf(provider) };
 }
 
 /** The wallet's account without asking, if this page is already allowed to see it. */
 export async function connectedAccount(provider: Provider): Promise<Address | null> {
-  const accounts = (await provider.request({ method: "eth_accounts" }).catch(() => [])) as string[];
+  const accounts = (await provider.request({ method: "eth_accounts" }).catch(() => [])) as string[] | null | undefined;
   return accounts?.[0] ? getAddress(accounts[0]) : null;
 }
 
@@ -133,21 +150,28 @@ export async function switchToNetwork(provider: Provider, network: NetworkDetail
 
 function codesOf(error: unknown): unknown[] {
   const codes: unknown[] = [];
-  for (let e: any = error, depth = 0; e && depth < 5; e = e.cause, depth++) {
+  for (let e = error as WalletError | null | undefined, depth = 0; e && depth < 5; e = e.cause as typeof e, depth++) {
     codes.push(e.code, e.data?.originalError?.code);
   }
   return codes;
 }
 
+/** A wallet error's message, or "" if it has none. */
+export function messageOf(error: unknown): string {
+  const message = (error as WalletError | null | undefined)?.message;
+  // eslint-disable-next-line @typescript-eslint/no-base-to-string -- a wallet's message can be anything, and the callers' patterns read it as String() does; review-by: 2027-04-18
+  return message === undefined || message === null ? "" : String(message);
+}
+
 function isUnknownChain(error: unknown): boolean {
   if (codesOf(error).includes(4902)) return true;
-  return /unrecognized chain|unknown chain|wallet_addEthereumChain/i.test(String((error as Error)?.message ?? ""));
+  return /unrecognized chain|unknown chain|wallet_addEthereumChain/i.test(messageOf(error));
 }
 
 /** The person said no in their wallet. */
 export function isUserRejection(error: unknown): boolean {
   if (codesOf(error).includes(4001)) return true;
-  for (let e: any = error, depth = 0; e && depth < 5; e = e.cause, depth++) {
+  for (let e = error as WalletError | null | undefined, depth = 0; e && depth < 5; e = e.cause as typeof e, depth++) {
     if (e.name === "UserRejectedRequestError") return true;
   }
   return false;
@@ -155,7 +179,7 @@ export function isUserRejection(error: unknown): boolean {
 
 /** Asks the wallet to sign EIP-712 typed data (eth_signTypedData_v4). */
 export function signTypedData(provider: Provider, account: Address, typedData: TypedDataDefinition): Promise<Hex> {
-  return createWalletClient({ account, transport: custom(provider) }).signTypedData(typedData as any);
+  return createWalletClient({ account, transport: custom(provider) }).signTypedData(typedData);
 }
 
 /** Asks the wallet to send a contract call. The wallet must be on `chain`: viem checks. */
@@ -174,6 +198,7 @@ export function sendContractCall<
   },
 ): Promise<Hex> {
   const wallet = createWalletClient({ account, chain, transport: custom(provider) });
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-argument -- viem can't match a generic call to writeContract's overloads; review-by: 2027-04-18
   return wallet.writeContract({ ...call, account, chain } as any);
 }
 

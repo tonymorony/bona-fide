@@ -1,0 +1,560 @@
+{
+  "about": "The reviewed dependencies, checked by scripts/dependency-policy.ts. The rules and how to add, bump or remove a dependency: docs/security/dependency-policy.md. Edit direct, installScripts and submodules by hand; refresh resolved with node scripts/dependency-policy.ts --write.",
+  "direct": {
+    "@anthropic-ai/sdk": {
+      "scope": [
+        "app"
+      ],
+      "kind": "runtime",
+      "why": "The App's calls to Claude for triage and Bounty review, with structured output parsed through zod. The model only advises; nothing pays out on its answer.",
+      "exit": "Call the Messages API with fetch and validate the JSON with zod: about 100 lines, losing the SDK's retries and typed errors.",
+      "maintainers": [
+        "benjmann",
+        "claude-code-npm",
+        "dylanc-anthropic",
+        "ejlangev-ant",
+        "felixrieseberg-anthropic",
+        "joan-anthropic",
+        "jv-anthropic",
+        "meorphis-anthropic",
+        "nikhil-anthropic",
+        "noahz-anthropic",
+        "ollie-ant-2025",
+        "packy-anthropic",
+        "sbidasaria",
+        "wolffiex",
+        "zak-anthropic"
+      ]
+    },
+    "@octokit/auth-app": {
+      "scope": [
+        "app"
+      ],
+      "kind": "runtime",
+      "why": "Signs the GitHub App's JWT with its private key and exchanges it for installation tokens, which every call the App makes to GitHub needs.",
+      "exit": "Sign the RS256 JWT with node:crypto and cache installation tokens ourselves: small, but it is the App's credential handling, so we'd rather run the reviewed library.",
+      "maintainers": [
+        "gr2m",
+        "octokitbot",
+        "wolfy1339"
+      ]
+    },
+    "@octokit/rest": {
+      "scope": [
+        "app"
+      ],
+      "kind": "runtime",
+      "why": "The App's GitHub REST client: checks, comments, labels, pull requests and issues, with pagination and retries.",
+      "exit": "fetch against api.github.com for the dozen endpoints the App uses, with our own pagination.",
+      "maintainers": [
+        "gr2m",
+        "octokitbot",
+        "wolfy1339"
+      ]
+    },
+    "@modelcontextprotocol/server": {
+      "scope": [
+        "agent"
+      ],
+      "kind": "runtime",
+      "why": "The MCP server protocol and its stdio transport, which let an AI agent call the agent package's tools to read a repo's rules and make a Deposit.",
+      "exit": "None short of writing the MCP protocol ourselves; it is the reference implementation.",
+      "maintainers": [
+        "cliffhall",
+        "fweinberger",
+        "jspahrsummers",
+        "ochafik-ant",
+        "pcarleton",
+        "thedsp"
+      ]
+    },
+    "@modelcontextprotocol/client": {
+      "scope": [
+        "agent"
+      ],
+      "kind": "dev",
+      "why": "The agent package's tests drive its MCP server through a real client, over stdio and HTTP, as an AI agent would.",
+      "maintainers": [
+        "fweinberger",
+        "jspahrsummers",
+        "ochafik-ant",
+        "pcarleton",
+        "thedsp"
+      ]
+    },
+    "viem": {
+      "scope": [
+        "agent",
+        "app",
+        "sdk",
+        "web"
+      ],
+      "kind": "runtime",
+      "why": "Everything on Arc: ABI encoding, EIP-712 and EIP-3009 typed data, signature checks, RPC calls and the Keeper's transactions. The sdk declares it as a peer and builds against it; the App, the agent and the pages ship it.",
+      "exit": "None reasonable: it is the chain library the whole repo is built on.",
+      "maintainers": [
+        "awkweb",
+        "jmoxey"
+      ]
+    },
+    "yaml": {
+      "scope": [
+        "app",
+        "web"
+      ],
+      "kind": "runtime",
+      "why": "Parses a repo's .github/bona-fide.yml, in the App and in the setup page's preview. It has no dependencies of its own.",
+      "exit": "The config is a few flat keys: a strict hand-written subset parser would do, at the cost of YAML's edge cases.",
+      "maintainers": [
+        "eemeli"
+      ]
+    },
+    "zod": {
+      "scope": [
+        "agent",
+        "app"
+      ],
+      "kind": "runtime",
+      "why": "Validates untrusted input at the edges: the MCP tools' arguments in the agent, and the model's structured answers in the App.",
+      "exit": "Hand-written validators for each shape; the MCP server and the Anthropic SDK's helpers both expect zod schemas, so it would stay as their dependency.",
+      "maintainers": [
+        "colinhacks"
+      ]
+    },
+    "@types/node": {
+      "scope": [
+        "agent",
+        "app",
+        "sdk",
+        "web"
+      ],
+      "kind": "dev",
+      "why": "Node's type declarations for tsc --noEmit; Node strips types at run time, so nothing of it ships.",
+      "maintainers": [
+        "types"
+      ]
+    },
+    "prettier": {
+      "scope": [
+        ".",
+        "agent",
+        "app",
+        "sdk",
+        "web"
+      ],
+      "kind": "tool",
+      "why": "Formats the TypeScript at 120 columns (npm run format), and the root's eslint.config.ts, so diffs carry only real changes.",
+      "maintainers": [
+        "azz",
+        "duailibe",
+        "fisker",
+        "ikatyang",
+        "jlongster",
+        "lydell",
+        "prettier-bot",
+        "sosukesuzuki",
+        "suchipi",
+        "thorn0",
+        "vjeux"
+      ]
+    },
+    "typescript": {
+      "scope": [
+        "agent",
+        "app",
+        "sdk",
+        "web"
+      ],
+      "kind": "tool",
+      "why": "tsc --noEmit type-checks every workspace; Node runs the sources directly, so the compiler never emits code that ships.",
+      "maintainers": [
+        "andrewbranch",
+        "jakebailey",
+        "microsoft-oss-releases",
+        "microsoft1es",
+        "typescript-bot",
+        "typescript-deploys",
+        "weswigham"
+      ]
+    },
+    "vitest": {
+      "scope": [
+        "agent",
+        "app",
+        "sdk",
+        "web"
+      ],
+      "kind": "dev",
+      "why": "The test runner for every workspace, including the anvil and Chrome suites.",
+      "maintainers": [
+        "antfu",
+        "ariperkkio",
+        "hiogawa",
+        "oreanno",
+        "yyx990803"
+      ]
+    },
+    "rolldown": {
+      "scope": [
+        "app",
+        "web"
+      ],
+      "kind": "dev",
+      "why": "Bundles the pages in web/build.ts so they load nothing from another site, and the App's portability test bundles its source the same way.",
+      "exit": "esbuild would do the same job; rolldown was chosen for its plugin API. Either is a build-time tool only.",
+      "maintainers": [
+        "broooooklyn",
+        "rolldownbot",
+        "sapphi-red",
+        "yyx990803"
+      ]
+    },
+    "eslint": {
+      "scope": [
+        "."
+      ],
+      "kind": "tool",
+      "why": "npm run lint: one flat config at the root lints every package's sources, tests and build scripts, and fails on any finding. It finds bugs; Prettier formats.",
+      "exit": "Rely on tsc --noEmit and code review alone, losing the typed rules (floating promises, unsafe any, exhaustive switches) that tsc doesn't check.",
+      "maintainers": [
+        "eslintbot",
+        "openjsfoundation"
+      ]
+    },
+    "@eslint/js": {
+      "scope": [
+        "."
+      ],
+      "kind": "tool",
+      "why": "ESLint's recommended JavaScript rules, which eslint.config.ts applies to the landing page's scripts and under typescript-eslint's rules.",
+      "maintainers": [
+        "eslintbot",
+        "openjsfoundation"
+      ]
+    },
+    "typescript-eslint": {
+      "scope": [
+        "."
+      ],
+      "kind": "tool",
+      "why": "The TypeScript parser and the strictTypeChecked and stylisticTypeChecked rules ESLint runs over every package, reading each package's tsconfig.json through the project service.",
+      "maintainers": [
+        "bradzacher",
+        "jameshenry"
+      ]
+    },
+    "@typescript/typescript6": {
+      "scope": [
+        "."
+      ],
+      "kind": "tool",
+      "why": "TypeScript 6, installed at the root as \"typescript\": \"npm:@typescript/typescript6@6.0.2\", for typescript-eslint only. typescript-eslint needs TypeScript's JavaScript API, which TypeScript 7 doesn't have yet, so ESLint loads 6.0.2 while each package keeps typescript 7.0.2 for tsc. Published by the TypeScript team, as Microsoft's 7.0 notes advise for tools that need the API.",
+      "exit": "Drop the alias once typescript-eslint supports TypeScript 7's API; the root then needs no TypeScript of its own.",
+      "maintainers": [
+        "andrewbranch",
+        "jakebailey",
+        "microsoft-oss-releases",
+        "microsoft1es",
+        "typescript-bot",
+        "typescript-deploys",
+        "weswigham"
+      ]
+    },
+    "@vitest/eslint-plugin": {
+      "scope": [
+        "."
+      ],
+      "kind": "tool",
+      "why": "ESLint rules for the vitest suites in every package, such as expects that can't run and focused or skipped tests left in.",
+      "exit": "Drop it and lose those rules; vitest itself keeps running the tests.",
+      "maintainers": [
+        "antfu",
+        "ariperkkio",
+        "hiogawa",
+        "oreanno",
+        "veritemm",
+        "yyx990803"
+      ]
+    },
+    "eslint-config-prettier": {
+      "scope": [
+        "."
+      ],
+      "kind": "tool",
+      "why": "Turns off every ESLint rule that would argue with Prettier's layout, so Prettier stays the only formatter.",
+      "exit": "List the conflicting stylistic rules as off in eslint.config.ts by hand.",
+      "maintainers": [
+        "jounqin",
+        "lydell",
+        "thorn0"
+      ]
+    },
+    "globals": {
+      "scope": [
+        "."
+      ],
+      "kind": "tool",
+      "why": "The browser's global names, which eslint.config.ts declares for the landing page's scripts so no-undef knows window and document.",
+      "exit": "Declare the few globals the landing page's scripts use in eslint.config.ts by hand.",
+      "maintainers": [
+        "byk",
+        "lo1tuma",
+        "nzakas",
+        "sindresorhus"
+      ]
+    }
+  },
+  "installScripts": {
+    "fsevents": "macOS only (os: darwin), an optional peer of vite's file watcher. Its install script is `node-gyp rebuild` of the native module it ships prebuilt; it never runs on Linux CI or in the Docker image, which also install with --ignore-scripts. Reviewed 2026-10-19."
+  },
+  "submodules": {
+    "contracts/lib/openzeppelin-contracts": {
+      "url": "https://github.com/OpenZeppelin/openzeppelin-contracts",
+      "tag": "v5.7.0",
+      "commit": "cab19933c33c2ad1d4c7a84864a3601dddfd16f3",
+      "why": "SafeERC20, ReentrancyGuard, EIP712 and SignatureChecker are compiled into the escrow, the Charity router and the Bounty wallets. The contracts on Arc were built from this tag; moving it changes only the next deployment.",
+      "osv": {
+        "ecosystem": "npm",
+        "name": "@openzeppelin/contracts"
+      },
+      "ignoreAdvisories": {}
+    },
+    "contracts/lib/forge-std": {
+      "url": "https://github.com/foundry-rs/forge-std",
+      "tag": "v1.16.2",
+      "commit": "bf647bd6046f2f7da30d0c2bf435e5c76a780c1b",
+      "why": "Foundry's test and script library: the unit, fuzz and invariant suites and the deploy scripts. Nothing of it is deployed."
+    }
+  },
+  "resolved": [
+    "@adraffy/ens-normalize",
+    "@anthropic-ai/sdk",
+    "@babel/runtime",
+    "@cacheable/memory",
+    "@cacheable/utils",
+    "@eslint-community/eslint-utils",
+    "@eslint-community/regexpp",
+    "@eslint/config-array",
+    "@eslint/config-helpers",
+    "@eslint/core",
+    "@eslint/js",
+    "@eslint/object-schema",
+    "@eslint/plugin-kit",
+    "@humanfs/core",
+    "@humanfs/node",
+    "@humanfs/types",
+    "@humanwhocodes/module-importer",
+    "@humanwhocodes/retry",
+    "@jridgewell/resolve-uri",
+    "@jridgewell/sourcemap-codec",
+    "@jridgewell/trace-mapping",
+    "@keyv/bigmap",
+    "@keyv/serialize",
+    "@modelcontextprotocol/client",
+    "@modelcontextprotocol/core",
+    "@modelcontextprotocol/server",
+    "@noble/ciphers",
+    "@noble/curves",
+    "@noble/hashes",
+    "@octokit/auth-app",
+    "@octokit/auth-oauth-app",
+    "@octokit/auth-oauth-device",
+    "@octokit/auth-oauth-user",
+    "@octokit/auth-token",
+    "@octokit/core",
+    "@octokit/endpoint",
+    "@octokit/graphql",
+    "@octokit/oauth-authorization-url",
+    "@octokit/oauth-methods",
+    "@octokit/openapi-types",
+    "@octokit/plugin-paginate-rest",
+    "@octokit/plugin-request-log",
+    "@octokit/plugin-rest-endpoint-methods",
+    "@octokit/request",
+    "@octokit/request-error",
+    "@octokit/rest",
+    "@octokit/types",
+    "@oxc-project/types",
+    "@rolldown/binding-android-arm-eabi",
+    "@rolldown/binding-android-arm64",
+    "@rolldown/binding-darwin-arm64",
+    "@rolldown/binding-darwin-x64",
+    "@rolldown/binding-freebsd-x64",
+    "@rolldown/binding-linux-arm-gnueabihf",
+    "@rolldown/binding-linux-arm64-gnu",
+    "@rolldown/binding-linux-arm64-musl",
+    "@rolldown/binding-linux-ppc64-gnu",
+    "@rolldown/binding-linux-s390x-gnu",
+    "@rolldown/binding-linux-x64-gnu",
+    "@rolldown/binding-linux-x64-musl",
+    "@rolldown/binding-openharmony-arm64",
+    "@rolldown/binding-win32-arm64-msvc",
+    "@rolldown/binding-win32-x64-msvc",
+    "@rolldown/pluginutils",
+    "@scure/base",
+    "@scure/bip32",
+    "@scure/bip39",
+    "@stablelib/base64",
+    "@types/chai",
+    "@types/deep-eql",
+    "@types/esrecurse",
+    "@types/estree",
+    "@types/json-schema",
+    "@types/node",
+    "@typescript-eslint/eslint-plugin",
+    "@typescript-eslint/parser",
+    "@typescript-eslint/project-service",
+    "@typescript-eslint/scope-manager",
+    "@typescript-eslint/tsconfig-utils",
+    "@typescript-eslint/type-utils",
+    "@typescript-eslint/types",
+    "@typescript-eslint/typescript-estree",
+    "@typescript-eslint/utils",
+    "@typescript-eslint/visitor-keys",
+    "@typescript/typescript-aix-ppc64",
+    "@typescript/typescript-darwin-arm64",
+    "@typescript/typescript-darwin-x64",
+    "@typescript/typescript-freebsd-arm64",
+    "@typescript/typescript-freebsd-x64",
+    "@typescript/typescript-linux-arm",
+    "@typescript/typescript-linux-arm64",
+    "@typescript/typescript-linux-loong64",
+    "@typescript/typescript-linux-mips64el",
+    "@typescript/typescript-linux-ppc64",
+    "@typescript/typescript-linux-riscv64",
+    "@typescript/typescript-linux-s390x",
+    "@typescript/typescript-linux-x64",
+    "@typescript/typescript-netbsd-arm64",
+    "@typescript/typescript-netbsd-x64",
+    "@typescript/typescript-openbsd-arm64",
+    "@typescript/typescript-openbsd-x64",
+    "@typescript/typescript-sunos-x64",
+    "@typescript/typescript-win32-arm64",
+    "@typescript/typescript-win32-x64",
+    "@typescript/typescript6",
+    "@vitest/eslint-plugin",
+    "@vitest/mocker",
+    "@vitest/spy",
+    "abitype",
+    "acorn",
+    "acorn-jsx",
+    "ajv",
+    "assertion-error",
+    "balanced-match",
+    "before-after-hook",
+    "brace-expansion",
+    "cacheable",
+    "chai",
+    "content-type",
+    "cross-spawn",
+    "debug",
+    "deep-is",
+    "detect-libc",
+    "es-module-lexer",
+    "escape-string-regexp",
+    "eslint",
+    "eslint-config-prettier",
+    "eslint-scope",
+    "eslint-visitor-keys",
+    "espree",
+    "esquery",
+    "esrecurse",
+    "estraverse",
+    "estree-walker",
+    "esutils",
+    "eventemitter3",
+    "eventsource",
+    "eventsource-parser",
+    "expect-type",
+    "fast-deep-equal",
+    "fast-json-stable-stringify",
+    "fast-levenshtein",
+    "fast-sha256",
+    "fdir",
+    "file-entry-cache",
+    "find-up",
+    "flat-cache",
+    "flatted",
+    "fsevents",
+    "glob-parent",
+    "globals",
+    "hashery",
+    "hookified",
+    "ignore",
+    "imurmurhash",
+    "is-extglob",
+    "is-glob",
+    "isexe",
+    "isows",
+    "jose",
+    "json-schema-to-ts",
+    "json-schema-traverse",
+    "json-stable-stringify-without-jsonify",
+    "json-with-bigint",
+    "keyv",
+    "levn",
+    "lightningcss",
+    "lightningcss-android-arm64",
+    "lightningcss-darwin-arm64",
+    "lightningcss-darwin-x64",
+    "lightningcss-freebsd-x64",
+    "lightningcss-linux-arm-gnueabihf",
+    "lightningcss-linux-arm64-gnu",
+    "lightningcss-linux-arm64-musl",
+    "lightningcss-linux-x64-gnu",
+    "lightningcss-linux-x64-musl",
+    "lightningcss-win32-arm64-msvc",
+    "lightningcss-win32-x64-msvc",
+    "locate-path",
+    "magic-string",
+    "minimatch",
+    "ms",
+    "nanoid",
+    "natural-compare",
+    "obug",
+    "optionator",
+    "ox",
+    "p-limit",
+    "p-locate",
+    "path-exists",
+    "path-key",
+    "picocolors",
+    "picomatch",
+    "pkce-challenge",
+    "postcss",
+    "prelude-ls",
+    "prettier",
+    "punycode",
+    "qified",
+    "rolldown",
+    "semver",
+    "shebang-command",
+    "shebang-regex",
+    "source-map-js",
+    "standardwebhooks",
+    "std-env",
+    "tinybench",
+    "tinyexec",
+    "tinyglobby",
+    "toad-cache",
+    "ts-algebra",
+    "ts-api-utils",
+    "type-check",
+    "typescript",
+    "typescript-eslint",
+    "undici-types",
+    "universal-github-app-jwt",
+    "universal-user-agent",
+    "uri-js",
+    "viem",
+    "vite",
+    "vitest",
+    "which",
+    "why-is-node-running",
+    "word-wrap",
+    "ws",
+    "yaml",
+    "yocto-queue",
+    "zod"
+  ]
+}

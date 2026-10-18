@@ -24,7 +24,7 @@ import {
   type Witness,
 } from "../ports.ts";
 import { cooldown, REVERT_COOLDOWN_MS } from "../relay/rate-limit.ts";
-import { repoOf } from "../webhook.ts";
+import { repoOf, type WebhookPayload } from "../webhook.ts";
 import { bountyHeldNote, bountyLink, bountyPaidNote, payeeNeededNote, transactionLink } from "./copy.ts";
 import { payeeOf, type Payee } from "./payee.ts";
 import { RESOLUTION_QUESTION } from "./question.ts";
@@ -62,7 +62,7 @@ export interface Bounties {
    * naming their wallet. It resolves at once and works in the background, as the model can take
    * longer than GitHub waits for a webhook. It never rejects.
    */
-  onWebhook(event: string | null, payload: any): Promise<void>;
+  onWebhook(event: string | null, payload: WebhookPayload): Promise<void>;
   /** Relays a Payout the Maintainer signed and returns its transaction. Throws a Refusal. */
   relayPayout(payout: SignedPayout): Promise<Hex>;
   /** Resolves once every Bounty started so far is settled. */
@@ -553,7 +553,8 @@ interface Asked {
 type Trigger = { repo: Repo; source: string } & ({ pr: number } | { issue: number });
 
 // GitHub's webhook JSON; only the fields read below are relied on.
-function triggerOf(event: string | null, payload: any): Trigger | null {
+/* eslint-disable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access -- GitHub's webhook JSON is untyped, as in webhook.ts; review-by: 2027-04-18 */
+function triggerOf(event: string | null, payload: WebhookPayload): Trigger | null {
   const source = `webhook ${event} ${payload.action}`;
   const declares = (text: unknown) => typeof text === "string" && /bounty wallet:/i.test(text);
   if (event === "pull_request" && payload.pull_request?.merged === true) {
@@ -575,6 +576,7 @@ function triggerOf(event: string | null, payload: any): Trigger | null {
   }
   return null;
 }
+/* eslint-enable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access */
 
 function sameLogin(a: unknown, b: unknown): boolean {
   return typeof a === "string" && typeof b === "string" && a.toLowerCase() === b.toLowerCase();

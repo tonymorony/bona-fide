@@ -3,7 +3,7 @@ import { createPublicClient, http } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
 import { afterAll, beforeAll, expect, test } from "vitest";
 import { createKeeperEscrow } from "../src/keeper/escrow.ts";
-import type { Anvil } from "./support/anvil.ts";
+import { POLLING_INTERVAL, type Anvil } from "./support/anvil.ts";
 import type { FakeGitHub } from "./support/fake-github.ts";
 import { keeperHarness, startKeeperAnvil } from "./support/keeper.ts";
 import { createDepositWatcher } from "../src/watcher.ts";
@@ -476,7 +476,7 @@ test("a Deposit made while the Keeper refunds an earlier one on the same PR is l
 
 test("a Deposit someone else refunds just before the Keeper does is no error", async () => {
   await anvil.deposit(REPO, "pr", 191);
-  const client = createPublicClient({ transport: http(anvil.url) });
+  const client = createPublicClient({ transport: http(anvil.url), pollingInterval: POLLING_INTERVAL });
   const racing = new Proxy(client, {
     get(target, property, receiver) {
       if (property !== "simulateContract") return Reflect.get(target, property, receiver);

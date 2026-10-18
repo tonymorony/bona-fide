@@ -35,6 +35,7 @@ export async function startSite({ dir, relayUrl, endpoint }: { dir: string; rela
   const port = await freePort();
   const origin = `http://127.0.0.1:${port}`;
   const served: string[] = [];
+  // eslint-disable-next-line @typescript-eslint/no-misused-promises -- a test server: a failure it doesn't answer should fail the run; review-by: 2027-04-18
   const server = createServer(async (req, res) => {
     const url = new URL(req.url ?? "/", origin);
     served.push(`${req.method} ${url.pathname}`);
@@ -43,7 +44,7 @@ export async function startSite({ dir, relayUrl, endpoint }: { dir: string; rela
         const body = await bodyOf(req);
         const request = new Request(url, {
           method: "POST",
-          headers: { "content-type": String(req.headers["content-type"] ?? "application/json") },
+          headers: { "content-type": req.headers["content-type"] ?? "application/json" },
           body,
         });
         let response = endpoint ? await endpoint(request) : null;

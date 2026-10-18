@@ -1,0 +1,28 @@
+# The scanners the security check runs, pinned by version and SHA-256.
+# .github/scripts/fetch-pinned.sh reads this file; CI uses the linux-x64 rows, a Mac the darwin-arm64 rows.
+#
+# Where each hash comes from (check it again when you bump a row):
+#   gitleaks, actionlint, osv-scanner, forge  the release's own checksums file
+#                                             (*_checksums.txt, osv-scanner_SHA256SUMS, foundry_*.sha256)
+#   solc                                      binaries.soliditylang.org/<platform>/list.json
+#   zizmor, shellcheck                        no checksums file is published: GitHub's asset digest
+#                                             (gh api repos/<owner>/<repo>/releases/tags/<tag> --jq '.assets[].digest')
+#
+# Pick a release at least 7 days old, as Dependabot's cooldown does for everything else.
+# Columns: tool version platform sha256 member url
+#   member  the file inside the archive to install, or - for a bare binary
+
+zizmor       1.30.1  linux-x64     e65324f4430c2717591937edcec90ccbefaf14c174f8ec9415e03ca875b46e1a  zizmor                      https://github.com/zizmorcore/zizmor/releases/download/v1.30.1/zizmor-x86_64-unknown-linux-gnu.tar.gz
+zizmor       1.30.1  darwin-arm64  e28d22b087f9ebb8d99da6e740d348c930f559961c7c3f12badda54f882195a2  zizmor                      https://github.com/zizmorcore/zizmor/releases/download/v1.30.1/zizmor-aarch64-apple-darwin.tar.gz
+actionlint   1.7.12  linux-x64     8aca8db96f1b94770f1b0d72b6dddcb1ebb8123cb3712530b08cc387b349a3d8  actionlint                  https://github.com/rhysd/actionlint/releases/download/v1.7.12/actionlint_1.7.12_linux_amd64.tar.gz
+actionlint   1.7.12  darwin-arm64  aba9ced2dee8d27fecca3dc7feb1a7f9a52caefa1eb46f3271ea66b6e0e6953f  actionlint                  https://github.com/rhysd/actionlint/releases/download/v1.7.12/actionlint_1.7.12_darwin_arm64.tar.gz
+shellcheck   0.11.0  linux-x64     b7af85e41cc99489dcc21d66c6d5f3685138f06d34651e6d34b42ec6d54fe6f6  shellcheck-v0.11.0/shellcheck  https://github.com/koalaman/shellcheck/releases/download/v0.11.0/shellcheck-v0.11.0.linux.x86_64.tar.gz
+shellcheck   0.11.0  darwin-arm64  339b930feb1ea764467013cc1f72d09cd6b869ebf1013296ba9055ab2ffbd26f  shellcheck-v0.11.0/shellcheck  https://github.com/koalaman/shellcheck/releases/download/v0.11.0/shellcheck-v0.11.0.darwin.aarch64.tar.gz
+gitleaks     8.30.1  linux-x64     551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb  gitleaks                    https://github.com/gitleaks/gitleaks/releases/download/v8.30.1/gitleaks_8.30.1_linux_x64.tar.gz
+gitleaks     8.30.1  darwin-arm64  b40ab0ae55c505963e365f271a8d3846efbc170aa17f2607f13df610a9aeb6a5  gitleaks                    https://github.com/gitleaks/gitleaks/releases/download/v8.30.1/gitleaks_8.30.1_darwin_arm64.tar.gz
+osv-scanner  2.6.0   linux-x64     ca69b3d3cd08f889a49dc0a383122f71cc528b83803671df5fd874d97485b108  -                           https://github.com/google/osv-scanner/releases/download/v2.6.0/osv-scanner_linux_amd64
+osv-scanner  2.6.0   darwin-arm64  98c460dcd37de25819babd757d04542045b6243113e209edcd4d89fedb0256b4  -                           https://github.com/google/osv-scanner/releases/download/v2.6.0/osv-scanner_darwin_arm64
+forge        1.8.5   linux-x64     6c66ffcc55fa4249197721baa3098bc208014ea1d8aa04b2ed50ac6bccffb226  forge                       https://github.com/foundry-rs/foundry/releases/download/v1.8.5/foundry_v1.8.5_linux_amd64.tar.gz
+forge        1.8.5   darwin-arm64  56049728e25e44a61c7f2e49438023b0890cb45850ffcb7c882f90cd998baf83  forge                       https://github.com/foundry-rs/foundry/releases/download/v1.8.5/foundry_v1.8.5_darwin_arm64.tar.gz
+solc         0.8.30  linux-x64     f3e987dc6ecebd4bd350c48edcbc320b46cf9e3109bd3fc3d88f1acaf4c428f7  -                           https://binaries.soliditylang.org/linux-amd64/solc-linux-amd64-v0.8.30+commit.73712a01
+solc         0.8.30  darwin-arm64  738dcdc6afddeb505ee4e4ef24f1c1fdba2b8c924e614cbbf5801a5b062dd683  -                           https://binaries.soliditylang.org/macosx-amd64/solc-macosx-amd64-v0.8.30+commit.73712a01

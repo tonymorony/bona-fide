@@ -161,7 +161,7 @@ export function createSession(network: LiveNetwork, onChange: () => void): Walle
   document.addEventListener("keydown", (event) => {
     if (event.key === "Escape" && !picker.hidden) close(false);
   });
-  picker.querySelector("[data-picker-copy]")!.addEventListener("click", async () => {
+  const copyLink = async () => {
     const label = picker.querySelector<HTMLElement>("[data-picker-copy-label]")!;
     try {
       await navigator.clipboard.writeText(location.href);
@@ -169,7 +169,8 @@ export function createSession(network: LiveNetwork, onChange: () => void): Walle
     } catch {
       label.textContent = "Copy the address bar's link instead";
     }
-  });
+  };
+  picker.querySelector("[data-picker-copy]")!.addEventListener("click", () => void copyLink());
 
   return {
     get wallet() {

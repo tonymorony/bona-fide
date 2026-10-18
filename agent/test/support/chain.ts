@@ -33,6 +33,10 @@ export const ARC_TESTNET = defineChain({
   rpcUrls: { default: { http: ["http://127.0.0.1"] } },
 });
 
+// anvil can answer eth_sendTransaction just before the receipt is ready (1.8 does after
+// evm_increaseTime). viem then looks again one polling interval later, 4 s by default: poll fast.
+const POLLING_INTERVAL = 50;
+
 function artifact(name: string): { abi: Abi; bytecode: Hex } {
   const json = JSON.parse(readFileSync(`${CONTRACTS}out/${name}.sol/${name}.json`, "utf8"));
   return { abi: json.abi, bytecode: json.bytecode.object };
@@ -50,9 +54,14 @@ export async function startChain() {
   const port = await freePort();
   const anvil = spawn("anvil", ["--port", String(port), "--chain-id", String(ARC_TESTNET.id)], { stdio: "ignore" });
   const url = `http://127.0.0.1:${port}`;
-  const client = createPublicClient({ chain: ARC_TESTNET, transport: http(url) });
-  const test = createTestClient({ chain: ARC_TESTNET, mode: "anvil", transport: http(url) });
-  const wallet = createWalletClient({ chain: ARC_TESTNET, transport: http(url) });
+  const client = createPublicClient({ chain: ARC_TESTNET, transport: http(url), pollingInterval: POLLING_INTERVAL });
+  const test = createTestClient({
+    chain: ARC_TESTNET,
+    mode: "anvil",
+    transport: http(url),
+    pollingInterval: POLLING_INTERVAL,
+  });
+  const wallet = createWalletClient({ chain: ARC_TESTNET, transport: http(url), pollingInterval: POLLING_INTERVAL });
   await until(async () => (await client.getChainId()) === ARC_TESTNET.id);
 
   const [deployer, keeper, maintainer, stranger] = await wallet.getAddresses();
@@ -201,7 +210,12 @@ export async function startChain() {
 
     /** Deposits directly, as `account`'s own two transactions. */
     async deposit(account: LocalAccount, repo: string, kind: "pr" | "issue", number: number, amount = 1_000_000n) {
-      const own = createWalletClient({ account, chain: ARC_TESTNET, transport: http(url) });
+      const own = createWalletClient({
+        account,
+        chain: ARC_TESTNET,
+        transport: http(url),
+        pollingInterval: POLLING_INTERVAL,
+      });
       await client.waitForTransactionReceipt({
         hash: await own.writeContract({
           address: usdc,
@@ -222,7 +236,12 @@ export async function startChain() {
 
     /** Sends a prepared transaction from `account`. */
     async sendFrom(account: LocalAccount, to: Address, data: Hex) {
-      const own = createWalletClient({ account, chain: ARC_TESTNET, transport: http(url) });
+      const own = createWalletClient({
+        account,
+        chain: ARC_TESTNET,
+        transport: http(url),
+        pollingInterval: POLLING_INTERVAL,
+      });
       return client.waitForTransactionReceipt({ hash: await own.sendTransaction({ to, data }) });
     },
 

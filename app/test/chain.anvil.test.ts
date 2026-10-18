@@ -3,7 +3,7 @@ import { createWalletClient, http } from "viem";
 import { afterAll, beforeAll, expect, test } from "vitest";
 import { createEscrowChain } from "../src/escrow.ts";
 import { createRecordIndex } from "../src/records/records.ts";
-import { startAnvil, type Anvil } from "./support/anvil.ts";
+import { POLLING_INTERVAL, startAnvil, type Anvil } from "./support/anvil.ts";
 import { FakeGitHub } from "./support/fake-github.ts";
 import { HELLO_WORLD, NEWCOMER, REPO } from "./support/webhooks.ts";
 
@@ -75,7 +75,10 @@ test("a Binding taking effect comes in block order with the Deposits, whoever ac
   await anvil.propose(repo);
   await anvil.deposit(REPO, "pr", 45);
   await anvil.mine(1, anvil.bindingDelaySeconds);
-  const hash = await createWalletClient({ transport: http(anvil.url) }).writeContract({
+  const hash = await createWalletClient({
+    transport: http(anvil.url),
+    pollingInterval: POLLING_INTERVAL,
+  }).writeContract({
     account: anvil.contributor,
     chain: null,
     address: anvil.escrow,

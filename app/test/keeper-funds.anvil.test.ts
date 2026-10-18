@@ -14,7 +14,7 @@ import { afterAll, beforeAll, expect, test } from "vitest";
 import { createBindingActivator } from "../src/keeper/activator.ts";
 import { createTimeoutRefunder } from "../src/keeper/timeouts.ts";
 import { EscrowRejection } from "../src/keeper/escrow.ts";
-import { artifact, type Anvil } from "./support/anvil.ts";
+import { artifact, POLLING_INTERVAL, type Anvil } from "./support/anvil.ts";
 import { keeperHarness, signBinding, signForfeit, startKeeperAnvil } from "./support/keeper.ts";
 import { NEWCOMER, payload, REPO } from "./support/webhooks.ts";
 
@@ -61,7 +61,7 @@ function event(name: string, kind: Kind, number: number, change: (body: any) => 
 
 test("across every Keeper path, USDC leaves the escrow only to its Depositor or the Forfeit sink", async () => {
   const { deliver, post, escrow, github } = keeperHarness(anvil, keeperKey);
-  const chain = createTestClient({ mode: "anvil", transport: http(anvil.url) });
+  const chain = createTestClient({ mode: "anvil", transport: http(anvil.url), pollingInterval: POLLING_INTERVAL });
   const from = (await anvil.blockNumber()) + 1n;
   const at = (date: Date) => date.toISOString();
 

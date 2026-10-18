@@ -1,0 +1,9 @@
+# zizmor, the GitHub Actions security lint that the security check runs (docs: https://docs.zizmor.sh/configuration/).
+# An `ignore:` here needs a reason and a review-by date on its line or the line above
+# (docs/security/suppressions.md); there are none.
+rules:
+  unpinned-uses:
+    config:
+      policies:
+        # Every action, GitHub's own included, is pinned to a full commit SHA. A tag can be moved; a SHA can't.
+        "*": hash-pin

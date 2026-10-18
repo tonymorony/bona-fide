@@ -412,6 +412,7 @@ async function startTwoStep(): Promise<void> {
   phase = "two-step-approve";
   paint();
   const allowance = await reader.allowance(session.account!).catch(() => 0n);
+  // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- a click can change phase while the allowance loads; review-by: 2027-04-18
   if (phase === "two-step-approve" && allowance >= terms.active.amount) {
     approvedBefore = true;
     phase = "two-step-deposit";
@@ -442,12 +443,14 @@ async function sendStep(action: "approve" | "deposit"): Promise<void> {
   notes.twoStep = "";
   paint();
   try {
+    // eslint-disable-next-line @typescript-eslint/no-unnecessary-type-assertion -- tsc needs it to pick the overload for this union of calls; review-by: 2027-04-18
     await client.simulateContract({ ...call, account } as Parameters<typeof client.simulateContract>[0]);
   } catch (error) {
     busy.delete(action);
     return stepRefused(action, revertReason(error));
   }
   try {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-argument -- viem's generic call type doesn't follow a union of calls; review-by: 2027-04-18
     const hash = await sendContractCall(session.wallet!.provider, account, chain, call as any);
     const receipt = await client.waitForTransactionReceipt({ hash, pollingInterval: 1000 });
     busy.delete(action);
@@ -461,6 +464,7 @@ async function sendStep(action: "approve" | "deposit"): Promise<void> {
       return paint();
     }
     const [made] = parseEventLogs({ abi: escrowAbi, logs: receipt.logs, eventName: "Deposited" });
+    // eslint-disable-next-line @typescript-eslint/return-await -- returned without await on purpose: the Deposit is mined by here, so an error from paint() in confirmed() must not reach this catch and show "Your wallet couldn't send the Deposit"; review-by: 2027-04-18
     return confirmed(made?.transactionHash ?? hash);
   } catch (error) {
     busy.delete(action);

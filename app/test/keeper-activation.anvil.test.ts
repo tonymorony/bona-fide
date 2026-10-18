@@ -2,7 +2,7 @@ import { repoIdOf } from "@bona-fide/sdk";
 import { createTestClient, createWalletClient, http, type Address } from "viem";
 import { afterAll, beforeAll, expect, test } from "vitest";
 import { createBindingActivator } from "../src/keeper/activator.ts";
-import type { Anvil } from "./support/anvil.ts";
+import { POLLING_INTERVAL, type Anvil } from "./support/anvil.ts";
 import { keeperHarness, signBinding, startKeeperAnvil } from "./support/keeper.ts";
 
 let anvil: Anvil;
@@ -39,7 +39,7 @@ async function propose(repo: string, config = "") {
 }
 
 async function wait(seconds: bigint) {
-  const chain = createTestClient({ mode: "anvil", transport: http(anvil.url) });
+  const chain = createTestClient({ mode: "anvil", transport: http(anvil.url), pollingInterval: POLLING_INTERVAL });
   await chain.increaseTime({ seconds: Number(seconds) });
   await chain.mine({ blocks: 1 });
 }
@@ -58,7 +58,7 @@ test("a proposed Binding is activated once its delay has passed, not before", as
 }, 30_000);
 
 async function activateAsSomeoneElse(repo: string) {
-  const wallet = createWalletClient({ transport: http(anvil.url) });
+  const wallet = createWalletClient({ transport: http(anvil.url), pollingInterval: POLLING_INTERVAL });
   const hash = await wallet.writeContract({
     account: anvil.contributor,
     chain: null,

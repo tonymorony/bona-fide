@@ -166,7 +166,7 @@ test("after the Timeout, prepare_refund's transaction, sent from an unrelated wa
   });
 
   expect(result.isError).toBeFalsy();
-  const plan = result.structuredContent as unknown as RefundPlan;
+  const plan = result.structuredContent as RefundPlan;
   expect(plan).toMatchObject({ from: stranger.account.address, depositor });
   expect(plan.step.circleCommand).toBe(
     `circle wallet execute "refund(bytes32)" ${key} --contract ${chain.escrow} --address ${stranger.account.address} --chain ARC-TESTNET --output json`,
