@@ -157,6 +157,8 @@ export function createRecordExemptions({
       action = `failed: ${error instanceof ReviewFailed ? error.reason : "unexpected error"}`;
     }
     const reasons = plainReasons(answer?.suggestion?.reasons ?? [], MAX_REASONS);
+    // As for triage: a suggestion with nothing for the Maintainer to check is no suggestion.
+    if (answer?.suggestion && reasons.length === 0) action = "silent";
     const decision = newDecision(
       {
         repo: fullName(item.repo),

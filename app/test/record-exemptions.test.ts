@@ -2,7 +2,7 @@ import type { Kind } from "@bona-fide/sdk";
 import { expect, test } from "vitest";
 import { createApp } from "../src/app.ts";
 import { openDecisionFile } from "../src/decisions/file.ts";
-import type { DecisionLog, GitHubProfile } from "../src/ports.ts";
+import type { Advice, DecisionLog, GitHubProfile } from "../src/ports.ts";
 import { ASK_AGAIN_MS, createRecordExemptions, FLAG_MARKER } from "../src/records/exemption.ts";
 import { createRecordIndex } from "../src/records/records.ts";
 import { ReviewFailed } from "../src/triage/triage.ts";
@@ -326,6 +326,22 @@ test("a model that flags the record keeps the Deposit ask and posts a note for t
       },
     },
   ]);
+});
+
+// As for triage: a suggestion with nothing for the Maintainer to check is no suggestion.
+test.each([
+  ["waive", []],
+  ["waive", [" ", "\n"]],
+  ["flag", []],
+] as [Advice, string[]][])("a %s with no reasons %j grants nothing and posts nothing", async (verdict, reasons) => {
+  const { github, advisor, logged, open } = await recorded();
+  advisor.answers = [advice(verdict, reasons)];
+
+  await open();
+
+  expect(github.checkOn(REPO, HEAD_SHA)?.conclusion).toBe("pending");
+  expect(github.markedNotesOn(REPO, PR)).toEqual([]);
+  expect(logged).toMatchObject([{ action: "silent", outcome: "escalated", suggestion: { verdict, reasons: [] } }]);
 });
 
 test.each([
