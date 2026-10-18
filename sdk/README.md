@@ -8,7 +8,7 @@ use, built on [viem](https://viem.sh) and nothing else.
 Use it to read a repo's terms and Deposits, to let a wallet or an agent sign a one-signature
 Deposit, to check a Maintainer's signature before you relay it, or to build your own app on the
 same escrow and Bounty wallets. Terms such as Binding, Deposit and Forfeit are defined in
-[CONTEXT.md](../CONTEXT.md).
+[CONTEXT.md](https://github.com/tonymorony/bona-fide/blob/main/CONTEXT.md).
 
 ## Install
 
@@ -130,7 +130,7 @@ Arc's public RPC serves at most 10,000 blocks per `getLogs` call: page through l
 ## The contracts
 
 The escrow, the Charity router and the Bounty wallets are separate, immutable contracts with no
-owner and no upgrade. [contracts/README.md](../contracts/README.md) says what each one guarantees and
+owner and no upgrade. [contracts/README.md](https://github.com/tonymorony/bona-fide/blob/main/contracts/README.md) says what each one guarantees and
 how to use them from Solidity.
 
 ## Develop
