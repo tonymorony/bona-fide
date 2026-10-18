@@ -88,8 +88,10 @@ export interface GitHub {
   profileOf(repo: Repo, login: string): Promise<GitHubProfile | null>;
   /** What a Payout reads of a PR: whether it was merged, what it closes, and its author's words. Null if there is no such PR. */
   pullRequestFacts(repo: Repo, number: number): Promise<PullRequestFacts | null>;
-  /** The PRs in the repo that GitHub links as closing the issue, open, closed or merged. Empty if there is no such issue. */
-  closingPullRequests(repo: Repo, issueNumber: number): Promise<ClosingPullRequest[]>;
+  /** What GitHub says of the issue's closing: the PRs that link to it, and what closed it. */
+  closingPullRequests(repo: Repo, issueNumber: number): Promise<IssueClosing>;
+  /** When the repo was created on GitHub, or null if there is no such repo. */
+  repoCreatedAt(repo: Repo): Promise<Date | null>;
   /** The latest check runs and commit statuses on a commit, other than the App's own check. */
   checksOf(repo: Repo, sha: string): Promise<CommitCheck[]>;
 }
@@ -125,6 +127,16 @@ export interface ClosingPullRequest {
   number: number;
   /** Null unless it was merged. */
   mergedAt: Date | null;
+}
+
+export interface IssueClosing {
+  /** The PRs in the repo that GitHub links as closing the issue, open, closed or merged. Empty if there is no such issue. */
+  prs: ClosingPullRequest[];
+  /** False if GitHub links more PRs than the App reads. */
+  complete: boolean;
+  open: boolean;
+  /** The PR in the repo whose merge last closed the issue. Null while it's open, or if a person or a commit closed it. */
+  closedBy: number | null;
 }
 
 /** A check run or commit status, as green, still running or not green. */

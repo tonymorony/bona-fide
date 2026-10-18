@@ -357,7 +357,9 @@ test("the Maintainer pays a held Bounty directly, and a wrong or broken Payout l
   expect(await page.evaluate(`document.querySelector('[data-if="payout-actions"]').hidden`)).toBe(true);
   await page.open(site.url(`bounties.html?repo=${repo}&issue=9&payee=${payee}`));
   await page.waitForState("manage");
-  expect(await page.text()).toContain("It's within your limits: Bona Fide held it for you to check.");
+  expect(await page.text()).toContain("It's within your limits. The note on the PR says why the Keeper didn't pay it.");
+  expect(await page.text()).toContain("anyone can make a link to this page");
+  expect(await page.text()).toContain("From the link. Check it against the wallet the Contributor named on their PR.");
   await page.click('[data-action="pay-owner"]');
   expect(await statusOf(page, "pay")).toContain("Paid 30 USDC");
   expect(await reader().bountyOf(wallet, 9)).toMatchObject({ status: "paid", payee });

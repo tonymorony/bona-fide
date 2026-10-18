@@ -410,33 +410,42 @@ often.
 longer than GitHub waits:
 
 - `pull_request` `closed` with `merged: true`: each issue in the same repo the PR closes;
-- `issues` `closed` as completed: the first merged PR that closes it, so a missed PR delivery is
-  caught up by the issue's;
+- `issues` `closed` as completed: the PR whose merge closed it, or else the first merged PR that
+  closes it, so a missed PR delivery is caught up by the issue's;
 - `issue_comment` `created` or `edited` on a merged PR, by its author, with a `Bounty wallet:` line,
   and `pull_request` `edited` on a merged PR whose body has one: the author naming their wallet.
 
 **Which issues a PR closes.** GitHub's own links, read through GraphQL: the PR's
 `closingIssuesReferences`, the issues its closing keywords (`Fixes #42`) or the Development sidebar
 link to, in the same repo; and, the other way, an issue's `closedByPullRequestsReferences`, to find
-the first merged one. These are the links GitHub closes issues by on merge, so they hold after a
-restart or a redelivery, where a timeline or a parse of the body could miss a sidebar link.
+the first merged one, all of them, 100 a page. These hold after a restart or a redelivery, where a
+parse of the body could miss a sidebar link. But they show the links as they are now, and a PR's
+author can add one after the merge by editing its description. GitHub closes an issue on merge by the
+links the PR had then, so the issue's last `ClosedEvent` names the PR whose merge closed it, and that
+is the witness that the merge was for the issue. A merge's delivery can arrive before GitHub closes the
+issue; it waits, and the issue's `closed` delivery settles the Bounty.
 
 **The witnesses.** The Keeper pays only when all of these hold, and the model can't change any:
 
 1. the PR is merged;
-2. GitHub links it as closing the issue;
-3. it is the first merged PR that closes the issue. A later one waits for the Maintainer;
-4. every check on the PR's head commit is green: each latest check run is `success`, `neutral` or
+2. the repo was created before its Binding took effect. A repo's id is its `owner/name`, and a rename
+   or a deletion frees the name for anyone to take, with its Binding and Bounty wallet: a newer repo
+   by that name waits for the Maintainer;
+3. GitHub links the PR as closing the issue;
+4. it is the first merged PR that closes the issue. A later one waits for the Maintainer, and so does
+   any PR when more than 500 PRs link the issue;
+5. its merge closed the issue: a person, a commit or another PR closing it waits for the Maintainer;
+6. every check on the PR's head commit is green: each latest check run is `success`, `neutral` or
    `skipped`, and each commit status `success`. One that failed, or is still running, holds the
    Payout. The App reads all of them, not only a branch protection's required checks, which GitHub
    only shows an App with the Administration permission. Its own "Bona Fide" check is left out: it
    is about the Deposit, not the code. A commit with no checks at all passes;
-5. the PR's author named a wallet the Bounty wallet can pay: not the zero address, the wallet
+7. the PR's author named a wallet the Bounty wallet can pay: not the zero address, the wallet
    itself or the Keeper's;
-6. the Bounty is open, the Keeper's payouts are on, and its amount is within `perPayoutLimit` and
+8. the Bounty is open, the Keeper's payouts are on, and its amount is within `perPayoutLimit` and
    what is left of the period's `keeperAllowance()`;
-7. `bounties` is on in `.github/bona-fide.yml`;
-8. and the model says the PR `resolves` the issue, with at least one reason.
+9. `bounties` is on in `.github/bona-fide.yml`;
+10. and the model says the PR `resolves` the issue, with at least one reason.
 
 The witnesses are read first. When one fails, the model isn't asked.
 

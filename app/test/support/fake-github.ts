@@ -7,6 +7,7 @@ import type {
   CommitCheck,
   GitHub,
   GitHubProfile,
+  IssueClosing,
   Item,
   ItemContent,
   ItemOutcome,
@@ -39,6 +40,11 @@ interface RepoState {
   commitChecks: Map<string, CommitCheck[]>;
   /** PRs an issue lists as closing it beyond those whose `closes` name it. */
   closingLinks: Map<number, ClosingPullRequest[]>;
+  /** How an issue was closed, when not by the first merged PR that closes it. */
+  closings: Map<number, { open: boolean; closedBy: number | null }>;
+  /** Issues whose closing PRs GitHub lists only in part. */
+  incompleteClosing: Set<number>;
+  createdAt: Date;
   /** Items closed since they were added. */
   closed: Set<number>;
   /** When items were merged or closed, where it matters. */
@@ -79,6 +85,9 @@ export class FakeGitHub implements GitHub {
       pullRequests: new Map(),
       commitChecks: new Map(),
       closingLinks: new Map(),
+      closings: new Map(),
+      incompleteClosing: new Set(),
+      createdAt: new Date(0),
       closed: new Set(),
       closedAt: new Map(),
       labelers: new Map(),
@@ -143,6 +152,11 @@ export class FakeGitHub implements GitHub {
     return this.state(fullName).notes.get(number);
   }
 
+  /** Deletes the item's comments posted with addNote, as a repo admin can. */
+  deleteMarkedNotes(fullName: string, number: number): void {
+    this.state(fullName).markedNotes.delete(number);
+  }
+
   /** The comments posted with addNote on an item, each with its marker. */
   markedNotesOn(fullName: string, number: number): string[] {
     return this.state(fullName).markedNotes.get(number) ?? [];
@@ -178,6 +192,21 @@ export class FakeGitHub implements GitHub {
   linkClosing(fullName: string, issue: number, pr: ClosingPullRequest): void {
     const links = this.state(fullName).closingLinks;
     links.set(issue, [...(links.get(issue) ?? []), pr]);
+  }
+
+  /** Says how the issue was closed: by default, by the first merged PR that closes it, and open without one. */
+  setClosing(fullName: string, issue: number, closing: { open: boolean; closedBy: number | null }): void {
+    this.state(fullName).closings.set(issue, closing);
+  }
+
+  /** Makes GitHub list the issue's closing PRs only in part. */
+  truncateClosing(fullName: string, issue: number): void {
+    this.state(fullName).incompleteClosing.add(issue);
+  }
+
+  /** When the repo was created. By default, at the epoch, before any Binding. */
+  setRepoCreatedAt(fullName: string, at: Date): void {
+    this.state(fullName).createdAt = at;
   }
 
   /** The check runs and statuses on a commit. A commit without any has none. */
@@ -350,13 +379,23 @@ export class FakeGitHub implements GitHub {
     return facts ? structuredClone(facts) : null;
   }
 
-  async closingPullRequests(repo: Repo, issueNumber: number): Promise<ClosingPullRequest[]> {
+  async closingPullRequests(repo: Repo, issueNumber: number): Promise<IssueClosing> {
     await this.roundTrip();
     const state = this.state(fullNameOf(repo));
-    const closing = [...state.pullRequests.values()]
+    const linked = [...state.pullRequests.values()]
       .filter((pr) => pr.closes.includes(issueNumber))
       .map((pr) => ({ number: pr.number, mergedAt: pr.mergedAt }));
-    return [...closing, ...(state.closingLinks.get(issueNumber) ?? [])];
+    const prs = [...linked, ...(state.closingLinks.get(issueNumber) ?? [])];
+    const [first] = prs
+      .filter((pr) => pr.mergedAt !== null)
+      .sort((a, b) => a.mergedAt!.getTime() - b.mergedAt!.getTime() || a.number - b.number);
+    const closing = state.closings.get(issueNumber) ?? { open: !first, closedBy: first?.number ?? null };
+    return { prs, complete: !state.incompleteClosing.has(issueNumber), ...closing };
+  }
+
+  async repoCreatedAt(repo: Repo): Promise<Date | null> {
+    await this.roundTrip();
+    return this.state(fullNameOf(repo)).createdAt;
   }
 
   async checksOf(repo: Repo, sha: string): Promise<CommitCheck[]> {

@@ -151,7 +151,8 @@ and trust model are in [../contracts/README.md](../contracts/README.md#bounty-wa
 
 **The App (built).** Details are in [../app/README.md](../app/README.md#bounties). When a PR that
 GitHub links as closing an issue with an open Bounty is merged, the App checks the witnesses: merged,
-linked to the issue, the first merged PR that closes it, every check on its head commit green, a
+in a repo older than its Binding, linked to the issue, the first merged PR that closes it, the PR whose
+merge closed the issue, every check on its head commit green, a
 payee wallet its author named in a `Bounty wallet: 0x…` line of their own, the Keeper switch on, and
 the amount within the per-payout limit and the period's allowance. Only then does it ask a model
 whether the PR resolves the issue. The model can hold a Payout back, never trigger one: only
@@ -197,8 +198,8 @@ transaction, and the wallet's limits and balance, read from the chain.
   anything else.
 - A Keeper period starts at the first Keeper Payout after the last one ended, so within any span
   of one period length the Keeper can pay up to twice the period limit.
-- The App pays the author of the first merged PR that GitHub links as closing the issue, to the
-  wallet they named. A collaborator who can push could merge their own PR to claim a Bounty; the
+- The App pays the author of the first merged PR that GitHub links as closing the issue, and whose
+  merge closed it, to the wallet they named. A collaborator who can push could merge their own PR to claim a Bounty; the
   checks, the model, the limits and the Keeper switch stand against that, and the Maintainer can
   cancel a Bounty before a merge.
 - A Contributor's record links Deposits to GitHub accounts, not addresses, so someone running several

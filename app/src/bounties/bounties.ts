@@ -14,6 +14,7 @@ import {
   type DecisionCost,
   type DecisionLog,
   type GitHub,
+  type IssueClosing,
   type PullRequestFacts,
   type Repo,
   type Resolution,
@@ -31,6 +32,8 @@ import { BountyRejection, type BountyWallets, type WalletBounty, type WalletStat
 
 /** Most reasons a held note shows. */
 const MAX_REASONS = 3;
+/** Most Bounties left to the Maintainer remembered in memory. */
+const MAX_LEFT = 10_000;
 /** Most check names a note lists, and most characters of each. */
 const MAX_CHECK_NAMES = 5;
 const MAX_CHECK_NAME_CHARS = 100;
@@ -38,7 +41,7 @@ const MAX_CHECK_NAME_CHARS = 100;
 export interface BountyDeps {
   github: GitHub;
   /** The escrow, for the repo's active Binding: its Maintainer's Bounty wallet is the repo's. */
-  chain: Pick<Chain, "bindingOf">;
+  chain: Pick<Chain, "bindingOf" | "startedAt">;
   wallets: BountyWallets;
   /** The model asked whether a PR resolves the issue. Without one, every Bounty waits for the Maintainer. */
   resolver?: Resolver;
@@ -86,6 +89,10 @@ export function bountyMarkers(issue: number, serial: bigint) {
   };
 }
 
+interface Closing extends IssueClosing {
+  merged: ClosingPullRequest[];
+}
+
 /** One fact checked before a Payout, and why it holds the Payout back for the Maintainer, if it does. */
 interface Check {
   witness: Witness;
@@ -93,11 +100,11 @@ interface Check {
 }
 
 // The model can hold a Payout back, never make one alone. The Keeper pays only when the PR is merged,
-// GitHub links it as closing the issue, it was the first such PR merged, its checks are green, its
-// author named a wallet the Bounty wallet can pay, the Bounty is open and within the Maintainer's
-// limits, the Keeper's payouts are on, and the model says the PR resolves the issue. The model never
-// sees the witnesses, and its answer can't change them. Anything else is left to the Maintainer,
-// who can sign the Payout.
+// the repo is older than its Binding, GitHub links the PR as closing the issue, it was the first such
+// PR merged and its merge closed the issue, its checks are green, its author named a wallet the Bounty
+// wallet can pay, the Bounty is open and within the Maintainer's limits, the Keeper's payouts are on,
+// and the model says the PR resolves the issue. The model never sees the witnesses, and its answer
+// can't change them. Anything else is left to the Maintainer, who can sign the Payout.
 export function createBounties({
   github,
   chain,
@@ -112,6 +119,8 @@ export function createBounties({
   const running = new Set<Promise<void>>();
   const queues = new Map<string, Promise<void>>();
   const afterRevert = cooldown(REVERT_COOLDOWN_MS, Date.now);
+  /** The Bounties left to the Maintainer in this process, by repo, issue, Serial and PR. */
+  const left = new Set<string>();
 
   // One Bounty at a time per issue: a merge sends both a pull_request and an issues delivery, and
   // the second must see what the first did.
@@ -140,15 +149,20 @@ export function createBounties({
     return parsed.ok && parsed.config.bounties;
   }
 
-  /** The merged PRs that close the issue, the first merged first. `known` counts even before GitHub lists it. */
-  async function mergedClosing(repo: Repo, issue: number, known?: PullRequestFacts): Promise<ClosingPullRequest[]> {
-    const prs = await github.closingPullRequests(repo, issue);
+  /**
+   * What GitHub says of the issue's closing, with `merged`: the merged PRs that close it, the first
+   * merged first. `known` counts even before GitHub lists it.
+   */
+  async function closingOf(repo: Repo, issue: number, known?: PullRequestFacts): Promise<Closing> {
+    const closing = await github.closingPullRequests(repo, issue);
+    const prs = [...closing.prs];
     if (known?.mergedAt && !prs.some((pr) => pr.number === known.number)) {
       prs.push({ number: known.number, mergedAt: known.mergedAt });
     }
-    return prs
+    const merged = prs
       .filter((pr) => pr.mergedAt !== null)
       .sort((a, b) => a.mergedAt!.getTime() - b.mergedAt!.getTime() || a.number - b.number);
+    return { ...closing, merged };
   }
 
   async function run(trigger: Trigger): Promise<void> {
@@ -168,9 +182,11 @@ export function createBounties({
     // Most closed issues have no Bounty, and the chain says so before GitHub is asked.
     const { status } = (await wallets.stateOf(wallet, trigger.issue)).bounty;
     if (status === "none" || status === "cancelled") return;
-    const [first] = await mergedClosing(repo, trigger.issue);
-    if (!first) return;
-    const facts = await github.pullRequestFacts(repo, first.number);
+    // The PR whose merge closed it, or else the first merged that closes it, to leave to the Maintainer.
+    const closing = await closingOf(repo, trigger.issue);
+    const number = closing.closedBy ?? closing.merged[0]?.number;
+    if (number === undefined) return;
+    const facts = await github.pullRequestFacts(repo, number);
     if (!facts?.merged) return;
     await inOrder(repo, trigger.issue, () => settle(repo, wallet, trigger.issue, facts, trigger.source));
   }
@@ -188,13 +204,20 @@ export function createBounties({
     if (bounty.status === "none" || bounty.status === "cancelled") return;
     const markers = bountyMarkers(issue, bounty.serial);
     if (bounty.status === "paid") return notePaidLater(repo, wallet, issue, bounty, facts);
-    // Left to the Maintainer once: the model isn't asked again, and the Keeper doesn't pay.
-    if (await github.hasNote(repo, facts.number, markers.held)) return;
+    // Left to the Maintainer once: the model isn't asked again, and the Keeper doesn't pay. The note
+    // says so after a restart; until then, so does memory, since a repo admin can delete the note.
+    const leftId = `${fullName(repo)}#${issue}:${bounty.serial}:${facts.number}`.toLowerCase();
+    if (left.has(leftId) || (await github.hasNote(repo, facts.number, markers.held))) return;
 
-    const [checks, merged] = await Promise.all([
+    const [closing, checks, created, started] = await Promise.all([
+      closingOf(repo, issue, facts),
       github.checksOf(repo, facts.headSha),
-      mergedClosing(repo, issue, facts),
+      github.repoCreatedAt(repo),
+      chain.startedAt(repoIdOf(fullName(repo))),
     ]);
+    // GitHub closes the issue a moment after the merge, and the issue's own delivery settles it then.
+    // An issue the merge left open isn't the merge's to pay for.
+    if (closing.open) return;
     const payee = payeeOf(facts);
     const payeeAddress = payee.kind === "declared" ? payee.address : null;
     const problem = payeeAddress && payeeProblem(payeeAddress, wallet, wallets.keeper);
@@ -203,13 +226,15 @@ export function createBounties({
         witness: { name: "Merged", value: facts.mergedBy ? `yes, by @${facts.mergedBy}` : "yes" },
         hold: null,
       },
+      repoCheck(created, started),
       {
         witness: { name: "Closes the issue", value: facts.closes.includes(issue) ? `yes, #${issue}` : "no" },
         hold: facts.closes.includes(issue)
           ? null
           : { why: "GitHub doesn't link this PR as closing the issue", action: "held: not linked" },
       },
-      firstMergedCheck(facts, merged),
+      firstMergedCheck(facts, closing),
+      closedByCheck(facts, closing),
       checksCheck(facts.headSha, checks),
       {
         witness: { name: "Payee wallet", value: payeeValue(payee, facts.author, problem) },
@@ -319,6 +344,8 @@ export function createBounties({
   ): Promise<void> {
     const reasons = plainReasons(asked?.answer?.suggestion?.reasons ?? [], MAX_REASONS).map(markdownSafe);
     const marker = bountyMarkers(facts.issue, state.bounty.serial).held;
+    if (left.size >= MAX_LEFT) left.clear();
+    left.add(`${fullName(facts.repo)}#${facts.issue}:${state.bounty.serial}:${facts.pr}`.toLowerCase());
     const body = bountyHeldNote({
       issue: facts.issue,
       amount: state.bounty.amount,
@@ -487,7 +514,8 @@ export function createBounties({
       ];
       // The Payout is made: notes that fail mustn't fail the request.
       try {
-        const [first] = await mergedClosing(repo, issue);
+        const closing = await closingOf(repo, issue);
+        const pr = closing.closedBy ?? closing.merged[0]?.number;
         const decision = newDecision(
           {
             repo: fullName(repo),
@@ -495,7 +523,7 @@ export function createBounties({
             item: { kind: "issue", number: issue },
             serial: String(bounty.serial),
             type: "pay",
-            inputs: { source: "POST /bounty/payout", method: "signature", ...(first ? { pr: first.number } : {}) },
+            inputs: { source: "POST /bounty/payout", method: "signature", ...(pr !== undefined ? { pr } : {}) },
             suggestion: null,
             witnesses,
             action: "paid",
@@ -508,7 +536,7 @@ export function createBounties({
         );
         safely(() => decisions?.append(decision));
         safely(() => record?.(decision));
-        await notePaid(repo, issue, first?.number ?? null, bounty, payee, "signature", txHash);
+        await notePaid(repo, issue, pr ?? null, bounty, payee, "signature", txHash);
       } catch (error) {
         console.error(`notes on the Payout ${txHash} failed:`, error);
       }
@@ -566,9 +594,46 @@ function sameLogin(a: unknown, b: unknown): boolean {
   return typeof a === "string" && typeof b === "string" && a.toLowerCase() === b.toLowerCase();
 }
 
+// A repo's id is its owner/name, which a rename or a deletion frees for anyone to take. A repo
+// created after its Binding took effect isn't the one bound, whatever its name.
+function repoCheck(created: Date | null, started: Date | null): Check {
+  const name = "Repo created";
+  if (created && started && created.getTime() <= started.getTime()) {
+    return { witness: { name, value: "before its Binding took effect" }, hold: null };
+  }
+  return {
+    witness: { name, value: created ? "after its Binding took effect" : "unknown" },
+    hold: {
+      why: "this repo is newer than its Binding, so it may have taken the name of a repo that was renamed or deleted",
+      action: "held: repo newer than its Binding",
+    },
+  };
+}
+
+// The links a PR shows now can be added after its merge. GitHub closes an issue on merge only by
+// the links the PR had then, so the issue's closer is the merge's witness.
+function closedByCheck(facts: PullRequestFacts, closing: Closing): Check {
+  const name = "Closed by its merge";
+  if (closing.closedBy === facts.number) return { witness: { name, value: "yes" }, hold: null };
+  const by = closing.closedBy === null ? "not by a merged PR" : `by #${closing.closedBy}`;
+  return {
+    witness: { name, value: `no: closed ${by}` },
+    hold: { why: "the issue wasn't closed by this PR's merge", action: "held: not closed by its merge" },
+  };
+}
+
 // Several merged PRs can close one issue: only the first merged is paid without the Maintainer.
-function firstMergedCheck(facts: PullRequestFacts, merged: ClosingPullRequest[]): Check {
-  const first = merged[0];
+function firstMergedCheck(facts: PullRequestFacts, closing: Closing): Check {
+  if (!closing.complete) {
+    return {
+      witness: { name: "First merged PR that closes it", value: "unknown: too many PRs link the issue" },
+      hold: {
+        why: "more PRs link the issue than the App reads, so it can't tell which was merged first",
+        action: "held: too many linked PRs",
+      },
+    };
+  }
+  const first = closing.merged[0];
   if (!first || first.number === facts.number) {
     return { witness: { name: "First merged PR that closes it", value: "yes" }, hold: null };
   }

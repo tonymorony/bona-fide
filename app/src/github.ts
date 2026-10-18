@@ -8,6 +8,7 @@ import {
   type AuthoredText,
   type CommitCheck,
   type GitHub,
+  type IssueClosing,
   type ItemFields,
   type ItemOutcome,
   type Permission,
@@ -19,6 +20,8 @@ const MARKER = "<!-- bona-fide -->";
 const NOTE_MARKER = "<!-- bona-fide:keeper -->";
 const PERMISSIONS: readonly Permission[] = ["admin", "write", "read", "none"];
 const RELIST_AFTER_MS = 60_000;
+/** Most pages of an issue's closing PRs read, 100 to a page. */
+const MAX_CLOSING_PAGES = 5;
 /** The review states that stand until the reviewer's next one. A comment leaves the last one standing. */
 const STANDING_REVIEWS = ["APPROVED", "CHANGES_REQUESTED", "DISMISSED"];
 
@@ -431,16 +434,43 @@ export function createGitHub({ appId, app, installation }: GitHubOptions): GitHu
       };
     },
 
+    // GitHub lists up to 100 a page. An issue linked by more than MAX_CLOSING_PAGES pages of PRs
+    // is left incomplete, and a Bounty on it waits for the Maintainer.
     async closingPullRequests(repo, issueNumber) {
-      const data = await graphql<{ repository: { issue: GraphIssue | null } | null }>(repo, CLOSING_PULL_REQUESTS, {
-        number: issueNumber,
-      });
-      const issue = data?.repository?.issue;
-      if (!issue) return [];
       const sameRepo = fullName(repo).toLowerCase();
-      return issue.closedByPullRequestsReferences.nodes
-        .filter((pr) => pr.repository.nameWithOwner.toLowerCase() === sameRepo)
-        .map((pr) => ({ number: pr.number, mergedAt: pr.mergedAt ? new Date(pr.mergedAt) : null }));
+      const closing: IssueClosing = { prs: [], complete: false, open: false, closedBy: null };
+      let after: string | null = null;
+      for (let page = 0; page < MAX_CLOSING_PAGES; page++) {
+        const data: { repository: { issue: GraphIssue | null } | null } | null = await graphql(
+          repo,
+          CLOSING_PULL_REQUESTS,
+          { number: issueNumber, after },
+        );
+        const issue: GraphIssue | null | undefined = data?.repository?.issue;
+        if (!issue) return { ...closing, complete: true };
+        const references: GraphIssue["closedByPullRequestsReferences"] = issue.closedByPullRequestsReferences;
+        for (const pr of references.nodes) {
+          if (pr.repository.nameWithOwner.toLowerCase() !== sameRepo) continue;
+          closing.prs.push({ number: pr.number, mergedAt: pr.mergedAt ? new Date(pr.mergedAt) : null });
+        }
+        closing.open = issue.state === "OPEN";
+        const closer = issue.timelineItems.nodes.at(-1)?.closer;
+        const byPr = closer?.__typename === "PullRequest" && closer.repository.nameWithOwner.toLowerCase() === sameRepo;
+        closing.closedBy = !closing.open && byPr ? closer.number : null;
+        if (!references.pageInfo.hasNextPage) return { ...closing, complete: true };
+        after = references.pageInfo.endCursor;
+      }
+      return closing;
+    },
+
+    async repoCreatedAt(repo) {
+      try {
+        const { data } = await api(repo).rest.repos.get(repoParams(repo));
+        return new Date(data.created_at);
+      } catch (error) {
+        if (isNotFound(error)) return null;
+        throw error;
+      }
     },
 
     // Check runs from GitHub Apps and Actions, and statuses from older CI. The App's own check is
@@ -510,10 +540,16 @@ const PULL_REQUEST_FACTS = `query ($owner: String!, $name: String!, $number: Int
   }
 }`;
 
-const CLOSING_PULL_REQUESTS = `query ($owner: String!, $name: String!, $number: Int!) {
+// The last ClosedEvent names what closed the issue: the PR whose merge closed it, a commit, or nobody.
+const CLOSING_PULL_REQUESTS = `query ($owner: String!, $name: String!, $number: Int!, $after: String) {
   repository(owner: $owner, name: $name) {
     issue(number: $number) {
-      closedByPullRequestsReferences(first: 25, includeClosedPrs: true) {
+      state
+      timelineItems(itemTypes: [CLOSED_EVENT], last: 1) {
+        nodes { ... on ClosedEvent { closer { __typename ... on PullRequest { number repository { nameWithOwner } } } } }
+      }
+      closedByPullRequestsReferences(first: 100, after: $after, includeClosedPrs: true) {
+        pageInfo { hasNextPage endCursor }
         nodes { number mergedAt repository { nameWithOwner } }
       }
     }
@@ -538,7 +574,17 @@ interface GraphPullRequest extends GraphText {
 }
 
 interface GraphIssue {
+  state: "OPEN" | "CLOSED";
+  timelineItems: {
+    nodes: {
+      closer?:
+        | { __typename: "PullRequest"; number: number; repository: { nameWithOwner: string } }
+        | { __typename: "Commit" | "ProjectV2" }
+        | null;
+    }[];
+  };
   closedByPullRequestsReferences: {
+    pageInfo: { hasNextPage: boolean; endCursor: string | null };
     nodes: { number: number; mergedAt: string | null; repository: { nameWithOwner: string } }[];
   };
 }

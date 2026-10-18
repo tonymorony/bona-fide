@@ -131,19 +131,19 @@
         <!-- The Payout the App sent the Maintainer here for -->
         <section class="card" data-if="payout-shown" aria-labelledby="payout-title">
           <h2 id="payout-title">Pay the Bounty on <a data-href="payout-issue-url" data-text="payout-issue"></a></h2>
-          <p class="muted" data-if="payout-open">Bona Fide left this Payout to you. Check it, then pay.</p>
+          <p class="muted" data-if="payout-open">Check this Payout before you pay: anyone can make a link to this page, and a Payout can't be undone.</p>
           <dl class="rows mt-12">
             <div><dt>Amount</dt><dd data-text="payout-amount"></dd></div>
             <div data-if="payee-known">
               <dt>Payee</dt>
               <dd>
                 <a class="mono" data-href="payout-payee-url" data-text="payout-payee" target="_blank" rel="noopener"></a>
-                <small data-if="payee-from-link">The wallet the PR's Contributor made known</small>
+                <small data-if="payee-from-link">From the link. Check it against the wallet the Contributor named on their PR.</small>
                 <small data-if="payee-entered">The address you entered. <button class="link-button" type="button" data-action="change-payee">Change</button></small>
               </dd>
             </div>
             <div data-if="payee-unknown"><dt>Payee</dt><dd>Not known yet<small>The Contributor hasn't named a wallet. The Maintainer can enter one here.</small></dd></div>
-            <div data-if="payout-open"><dt>Why it waited</dt><dd data-text="payout-why"></dd></div>
+            <div data-if="payout-open"><dt>Keeper limits</dt><dd data-text="payout-why"></dd></div>
           </dl>
           <form class="fields single mt-16" data-form="payee" data-if="payee-needed" novalidate>
             <div class="field">

@@ -192,7 +192,7 @@ function paintPayout(view: ReturnType<typeof newView>, state: string): void {
           ? `It's above the per-payout limit, ${usdc(wallet.perPayoutLimit)}.`
           : limit === "period"
             ? `It's above what Bona Fide may still pay this period, ${usdc(wallet.keeperAllowance)}.`
-            : "It's within your limits: Bona Fide held it for you to check.";
+            : "It's within your limits. The note on the PR says why the Keeper didn't pay it.";
   }
   const paidRow = rows?.find((row) => row.issue === payout.issue && row.status === "paid");
   view.flags["payout-paid"] = linked.status === "paid";

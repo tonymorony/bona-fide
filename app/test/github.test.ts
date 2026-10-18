@@ -791,40 +791,94 @@ test("a PR or issue GraphQL can't find is null, or has no closing PRs", async ()
   const { github } = fakeApi({ "POST /graphql": notFound });
 
   expect(await github.pullRequestFacts(REPO, 404)).toBeNull();
-  expect(await github.closingPullRequests(REPO, 404)).toEqual([]);
+  expect(await github.closingPullRequests(REPO, 404)).toEqual({ prs: [], complete: true, open: false, closedBy: null });
 });
 
-test("the PRs that close an issue are those in this repo, open, closed or merged", async () => {
-  const { github, sent } = fakeApi({
-    "POST /graphql": {
-      status: 200,
-      body: {
-        data: {
-          repository: {
-            issue: {
-              closedByPullRequestsReferences: {
-                nodes: [
-                  { number: 5, mergedAt: null, repository: { nameWithOwner: "Codertocat/Hello-World" } },
-                  {
-                    number: 7,
-                    mergedAt: "2026-09-30T12:00:00Z",
-                    repository: { nameWithOwner: "Codertocat/Hello-World" },
-                  },
-                  { number: 8, mergedAt: "2026-09-30T11:00:00Z", repository: { nameWithOwner: "fork/Hello-World" } },
-                ],
-              },
-            },
-          },
+const OURS = { nameWithOwner: "Codertocat/Hello-World" };
+
+/** One page of the closing PRs GraphQL answer for issue #42. */
+function closingPage(
+  nodes: unknown[],
+  { state = "CLOSED", closer = null as unknown, next = null as string | null } = {},
+) {
+  return {
+    data: {
+      repository: {
+        issue: {
+          state,
+          timelineItems: { nodes: closer === null ? [] : [{ closer }] },
+          closedByPullRequestsReferences: { pageInfo: { hasNextPage: next !== null, endCursor: next }, nodes },
         },
       },
     },
+  };
+}
+
+test("the PRs that close an issue are those in this repo, open, closed or merged, and its closer is the PR whose merge closed it", async () => {
+  const { github, sent } = fakeApi({
+    "POST /graphql": {
+      status: 200,
+      body: closingPage(
+        [
+          { number: 5, mergedAt: null, repository: OURS },
+          { number: 7, mergedAt: "2026-09-30T12:00:00Z", repository: OURS },
+          { number: 8, mergedAt: "2026-09-30T11:00:00Z", repository: { nameWithOwner: "fork/Hello-World" } },
+        ],
+        { closer: { __typename: "PullRequest", number: 7, repository: OURS } },
+      ),
+    },
   });
 
-  expect(await github.closingPullRequests(REPO, 42)).toEqual([
-    { number: 5, mergedAt: null },
-    { number: 7, mergedAt: new Date("2026-09-30T12:00:00Z") },
-  ]);
+  expect(await github.closingPullRequests(REPO, 42)).toEqual({
+    prs: [
+      { number: 5, mergedAt: null },
+      { number: 7, mergedAt: new Date("2026-09-30T12:00:00Z") },
+    ],
+    complete: true,
+    open: false,
+    closedBy: 7,
+  });
   expect(sent[0]?.body.query).toContain("includeClosedPrs: true");
+});
+
+test.each([
+  ["open", { state: "OPEN", closer: { __typename: "PullRequest", number: 7, repository: OURS } }],
+  ["closed by hand", { closer: null }],
+  ["closed by a commit", { closer: { __typename: "Commit" } }],
+  [
+    "closed by another repo's PR",
+    { closer: { __typename: "PullRequest", number: 7, repository: { nameWithOwner: "fork/x" } } },
+  ],
+])("an issue %s has no closing PR", async (_how, page) => {
+  const { github } = fakeApi({ "POST /graphql": { status: 200, body: closingPage([], page) } });
+
+  expect((await github.closingPullRequests(REPO, 42)).closedBy).toBeNull();
+});
+
+test("an issue's closing PRs are read page by page, and past the last page read they're incomplete", async () => {
+  const pr = (number: number) => ({ number, mergedAt: null, repository: OURS });
+  const { github, sent } = fakeApi({
+    "POST /graphql": (request) => {
+      const after = request.body.variables.after as string | null;
+      const page = after === null ? 0 : Number(after);
+      return { status: 200, body: closingPage([pr(page + 1)], { next: String(page + 1) }) };
+    },
+  });
+
+  const closing = await github.closingPullRequests(REPO, 42);
+
+  expect(closing.complete).toBe(false);
+  expect(closing.prs.map((p) => p.number)).toEqual([1, 2, 3, 4, 5]);
+  expect(sent.map((request) => request.body.variables.after)).toEqual([null, "1", "2", "3", "4"]);
+});
+
+test("a repo's creation time comes from GitHub, and a missing repo has none", async () => {
+  const { github } = fakeApi({
+    [`GET ${API}`]: { status: 200, body: { full_name: "Codertocat/Hello-World", created_at: "2019-05-15T15:19:25Z" } },
+  });
+
+  expect(await github.repoCreatedAt(REPO)).toEqual(new Date("2019-05-15T15:19:25Z"));
+  expect(await github.repoCreatedAt({ ...REPO, name: "gone" })).toBeNull();
 });
 
 test("a commit's checks are its latest check runs and commit statuses, without the App's own check", async () => {

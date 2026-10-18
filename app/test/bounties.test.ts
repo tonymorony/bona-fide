@@ -128,8 +128,10 @@ test("a Payout is recorded as a pay decision with each witness, the model's sugg
       suggestion: { verdict: "resolves", reasons: ["The PR makes the change the issue asks for."] },
       witnesses: [
         { name: "Merged", value: "yes, by @maintainer" },
+        { name: "Repo created", value: "before its Binding took effect" },
         { name: "Closes the issue", value: "yes, #42" },
         { name: "First merged PR that closes it", value: "yes" },
+        { name: "Closed by its merge", value: "yes" },
         { name: "Checks on 7777777", value: "all 1 green" },
         { name: "Payee wallet", value: `${PAYEE}, from @newcomer's PR description` },
         { name: "Bounty", value: "Serial 1: 10 USDC, open" },
@@ -244,6 +246,72 @@ test("a later merged PR that closes the same issue waits for the Maintainer: onl
   });
 });
 
+// GitHub closes a linked issue a moment after the merge, so the merge's delivery can find it open.
+test("a merge that finds the issue still open waits, and the issue's close pays", async () => {
+  const setup = resolving();
+  setup.github.setClosing(REPO, BOUNTY_ISSUE, { open: true, closedBy: null });
+
+  await setup.merge();
+  const waited = { sent: [...setup.wallets.sent], asked: setup.resolver.requests.length, logged: setup.logged.length };
+  setup.github.setClosing(REPO, BOUNTY_ISSUE, { open: false, closedBy: BOUNTY_PR });
+  await setup.deliver("issues", closedIssue());
+
+  expect(waited).toEqual({ sent: [], asked: 0, logged: 0 });
+  expect(setup.wallets.sent).toHaveLength(1);
+});
+
+// The links a PR shows can be added after its merge, as by its author editing its description. The
+// issue's closer is what the merge did.
+test("a merged PR linked to an issue its merge left open isn't paid, whatever it says now", async () => {
+  const setup = resolving();
+  const pr = setup.addPr(mergedPr());
+  setup.github.setClosing(REPO, BOUNTY_ISSUE, { open: true, closedBy: null });
+
+  await setup.deliver("pull_request", closedPr(pr));
+  await setup.deliver("issue_comment", prComment(pr, `Bounty wallet: ${PAYEE}`));
+
+  expect(setup.wallets.sent).toEqual([]);
+  expect(setup.resolver.requests).toEqual([]);
+});
+
+test.each([
+  ["by hand", null, "not by a merged PR"],
+  ["by another PR", 5, "by #5"],
+])("an issue closed %s isn't paid for this PR by the Keeper", async (_how, closedBy, value) => {
+  const setup = resolving();
+  setup.github.setClosing(REPO, BOUNTY_ISSUE, { open: false, closedBy });
+
+  await setup.merge();
+
+  expect(setup.wallets.sent).toEqual([]);
+  expect(heldNote(setup)).toContain("The Keeper won't pay it on its own: the issue wasn't closed by this PR's merge.");
+  expect(setup.logged[0]).toMatchObject({ type: "hold", action: "held: not closed by its merge" });
+  expect(setup.logged[0]?.witnesses).toContainEqual({ name: "Closed by its merge", value: `no: closed ${value}` });
+});
+
+test("an issue with more linked PRs than the App reads waits for the Maintainer", async () => {
+  const setup = resolving();
+  setup.github.truncateClosing(REPO, BOUNTY_ISSUE);
+
+  await setup.merge();
+
+  expect(setup.wallets.sent).toEqual([]);
+  expect(setup.logged[0]).toMatchObject({ type: "hold", action: "held: too many linked PRs" });
+});
+
+// A rename or a deletion frees owner/name, the repo's id, for anyone to take, along with its
+// Binding and Bounty wallet.
+test("a repo created after its Binding took effect isn't paid from the Bounty wallet by the Keeper", async () => {
+  const setup = resolving();
+  setup.github.setRepoCreatedAt(REPO, new Date("2026-09-01T00:00:00Z"));
+
+  await setup.merge();
+
+  expect(setup.wallets.sent).toEqual([]);
+  expect(setup.logged[0]).toMatchObject({ type: "hold", action: "held: repo newer than its Binding" });
+  expect(setup.logged[0]?.witnesses).toContainEqual({ name: "Repo created", value: "after its Binding took effect" });
+});
+
 test("a PR GitHub doesn't link as closing the issue isn't paid, even when the issue lists it", async () => {
   const setup = resolving();
   const pr = setup.addPr(mergedPr({ closes: [] }));
@@ -342,6 +410,20 @@ test("a held Bounty stays with the Maintainer: a redelivery asks the model again
   expect(setup.wallets.sent).toEqual([]);
   expect(setup.github.markedNotesOn(REPO, BOUNTY_PR)).toHaveLength(1);
   expect(setup.logged).toHaveLength(1);
+});
+
+// The note is a comment, which a repo admin can delete, and each answer is paid for.
+test("a held Bounty stays with the Maintainer after its note is deleted: the model isn't asked again", async () => {
+  const setup = bountyHarness();
+  setup.resolver.answers = [resolution("partial"), resolution("partial")];
+  const pr = setup.addPr(mergedPr());
+
+  await setup.deliver("pull_request", closedPr(pr));
+  setup.github.deleteMarkedNotes(REPO, BOUNTY_PR);
+  await setup.deliver("pull_request", closedPr(pr));
+
+  expect(setup.resolver.requests).toHaveLength(1);
+  expect(setup.wallets.sent).toEqual([]);
 });
 
 test("without a named wallet, the author is asked for one, and the Payout runs once they name it in a comment", async () => {
