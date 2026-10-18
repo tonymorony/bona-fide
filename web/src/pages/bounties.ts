@@ -1,17 +1,22 @@
-import { bountyFundAuthorization, payoutSignature, repoIdOf, usdcAbi } from "@bona-fide/sdk";
+import {
+  bountyFundAuthorization,
+  keeperLimitFor,
+  payeeProblem,
+  payoutSignature,
+  repoIdOf,
+  usdcAbi,
+  type BountyState,
+  type BountyWalletState,
+} from "@bona-fide/sdk";
 import type { Address, Hex } from "viem";
 import {
   bountyCalls,
   createBountyReader,
   DEFAULT_LIMITS,
   hasBounties,
-  isRefusedPayee,
-  keeperLimitFor,
   PERIOD_LENGTHS,
   type BountyLimits,
   type BountyRow,
-  type BountyState,
-  type BountyWalletState,
 } from "../bounty.ts";
 import type { RepoTerms } from "../chain.ts";
 import { payoutBody, relayPayout, type PayoutOutcome } from "../endpoints.ts";
@@ -207,7 +212,7 @@ function paintPayout(view: ReturnType<typeof newView>, state: string): void {
     linked.status === "cancelled"
       ? `The Bounty on issue #${payout.issue} was cancelled, so there's nothing to pay.`
       : `Issue #${payout.issue} has no Bounty in this wallet, so there's nothing to pay.`;
-  const refused = open && payee !== null && isRefusedPayee(payee, wallet);
+  const refused = open && payee !== null && payeeProblem(payee, wallet.address, wallet.keeper) !== null;
   view.flags["payout-refused-payee"] = refused;
   const actions = open && payee !== null && !refused && state === "manage";
   view.flags["payout-actions"] = actions;
@@ -852,7 +857,7 @@ function usePayee(): void {
     };
     return paint();
   }
-  if (wallet && isRefusedPayee(entered, wallet)) {
+  if (wallet && payeeProblem(entered, wallet.address, wallet.keeper) !== null) {
     activity.pay = {
       kind: "note",
       text: "The Bounty wallet can't pay that address: it's the Keeper's, the wallet's own, or zero.",

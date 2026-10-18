@@ -10,6 +10,7 @@ import {
   USDC_DECIMALS,
   usdcAbi,
   type AppRefusal,
+  type DepositStatus,
   type Kind,
   type SignedDeposit,
   type Wire,
@@ -28,7 +29,7 @@ import {
   type PublicClient,
 } from "viem";
 import { circleChain, executeCommand, signTypedDataCommand } from "./circle.ts";
-import { itemName } from "./copy.ts";
+import { addressLink, capitalized, itemName, settled, timeLeft } from "./copy.ts";
 
 const STATUS_ACTIVE = DEPOSIT_STATUSES.indexOf("active");
 const DAY_SECONDS = 86_400;
@@ -132,9 +133,46 @@ export interface MadeDeposit extends Target {
   deadline: string;
 }
 
+/** An item's Deposit as the escrow holds it now. */
+export interface DepositState extends Target {
+  key: Hex;
+  escrow: Address;
+  status: DepositStatus;
+  /** Null while the item has no Deposit. */
+  deposit: {
+    depositor: Address;
+    amount: string;
+    amountUsdc: string;
+    serial: string;
+    /** When the Timeout ends: from then on, anyone can Refund an active Deposit. */
+    deadline: string;
+    timeoutPassed: boolean;
+    /** Seconds until the Timeout ends, or 0 once it has. */
+    secondsLeft: number;
+    forfeitPercent: number;
+    /** How a resolved Deposit was split, or null while it is active. */
+    outcome: { refunded: string; refundedUsdc: string; forfeited: string; forfeitedUsdc: string } | null;
+  } | null;
+  /** The chain's time when it was read. */
+  checkedAt: string;
+  /** The Depositor's page on the block explorer, which lists the Deposit and its Refund, or null. */
+  explorerUrl: string | null;
+}
+
+export interface RefundPlan {
+  from: Address;
+  /** Where the Refund goes, whoever sends it. */
+  depositor: Address;
+  amount: string;
+  amountUsdc: string;
+  step: Step;
+}
+
 export interface DepositsOptions {
   client: PublicClient;
   escrow: Address;
+  /** The block explorer, for links; null or left out where none is known. */
+  explorerUrl?: string | null;
   /** The most the tools will prepare or submit for one Deposit, in USDC base units. */
   maxDeposit: bigint;
   /** The Bona Fide App's base URL, whose relay submits signed Deposits. */
@@ -149,6 +187,7 @@ export function createDeposits({
   escrow: configured,
   maxDeposit,
   appUrl,
+  explorerUrl = null,
   fetch = globalThis.fetch,
   receiptTimeoutMs = RECEIPT_TIMEOUT_MS,
 }: DepositsOptions) {
@@ -349,7 +388,82 @@ export function createDeposits({
     };
   }
 
-  return { rules, prepareSigned, prepareTwoStep, submitSigned };
+  async function status(target: Target): Promise<DepositState> {
+    const key = keyOf(repoIdOf(target.repo), target.kind, target.number);
+    const [deposit, block] = await Promise.all([
+      client.readContract({ address: escrow, abi: escrowAbi, functionName: "depositOf", args: [key] }),
+      client.getBlock(),
+    ]);
+    const state = DEPOSIT_STATUSES[deposit.status] ?? "none";
+    const base = { ...target, key, escrow, status: state, checkedAt: isoTime(block.timestamp) };
+    if (state === "none") return { ...base, deposit: null, explorerUrl: null };
+    // The escrow's own split: the Forfeit sink's share rounds down, and the rest is refunded.
+    const forfeited = state === "forfeited" ? (deposit.amount * BigInt(deposit.forfeitBps)) / 10_000n : 0n;
+    const refunded = deposit.amount - forfeited;
+    return {
+      ...base,
+      deposit: {
+        depositor: deposit.depositor,
+        amount: deposit.amount.toString(),
+        amountUsdc: usdc6(deposit.amount),
+        serial: deposit.serial.toString(),
+        deadline: isoTime(deposit.deadline),
+        // refund() checks block.timestamp >= deadline, and the next block is no earlier than this one.
+        timeoutPassed: block.timestamp >= deposit.deadline,
+        secondsLeft: Number(deposit.deadline > block.timestamp ? deposit.deadline - block.timestamp : 0n),
+        forfeitPercent: deposit.forfeitBps / 100,
+        outcome:
+          state === "active"
+            ? null
+            : {
+                refunded: refunded.toString(),
+                refundedUsdc: usdc6(refunded),
+                forfeited: forfeited.toString(),
+                forfeitedUsdc: usdc6(forfeited),
+              },
+      },
+      explorerUrl: explorerUrl && addressLink(explorerUrl, deposit.depositor),
+    };
+  }
+
+  /** The escrow's refund(key), once anyone may send it: the Deposit is active and its Timeout has passed. */
+  async function prepareRefund(target: Target, from: Address): Promise<RefundPlan> {
+    const current = await status(target);
+    const { deposit } = current;
+    const item = `${itemName(target)} in ${target.repo}`;
+    if (!deposit) throw new Refusal(`${capitalized(item)} has no Deposit, so there is nothing to Refund.`);
+    if (current.status === "refunded") {
+      throw new Refusal(
+        `The Deposit for ${item} was already refunded: ${deposit.amountUsdc} USDC went back to ${deposit.depositor}.`,
+      );
+    }
+    if (current.status === "forfeited") {
+      throw new Refusal(
+        `The Deposit for ${item} was forfeited by its Maintainer's signed verdict: ${deposit.outcome!.forfeitedUsdc} USDC went to the Forfeit sink and ${deposit.outcome!.refundedUsdc} USDC back to ${deposit.depositor}. Nothing is left to Refund.`,
+      );
+    }
+    if (!deposit.timeoutPassed) {
+      throw new Refusal(
+        `The Deposit for ${item} is still within its Timeout, which ends at ${deposit.deadline}, ${timeLeft(deposit.secondsLeft)} from now. Until then only the Keeper can Refund it, which it does once ${settled(target)}. Call prepare_refund again after ${deposit.deadline}.`,
+      );
+    }
+    const sender = getAddress(from);
+    const chain = circleChain(await client.getChainId());
+    return {
+      from: sender,
+      depositor: deposit.depositor,
+      amount: deposit.amount,
+      amountUsdc: deposit.amountUsdc,
+      step: {
+        description: `Refund the Deposit for ${item}: ${deposit.amountUsdc} USDC goes back to ${deposit.depositor}.`,
+        to: escrow,
+        data: encodeFunctionData({ abi: escrowAbi, functionName: "refund", args: [current.key] }),
+        circleCommand: chain ? executeCommand("refund(bytes32)", [current.key], escrow, sender, chain) : null,
+      },
+    };
+  }
+
+  return { rules, prepareSigned, prepareTwoStep, submitSigned, status, prepareRefund };
 }
 
 function relayRefusal(status: number, { code, error, txHash }: AppRefusal): string {

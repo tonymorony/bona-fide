@@ -1,6 +1,6 @@
-import { escrowAbi, repoIdOf, routerAbi } from "@bona-fide/sdk";
+import { escrowAbi, repoIdOf, routerAbi, type BountyWalletState } from "@bona-fide/sdk";
 import { parseEventLogs, type Hex } from "viem";
-import { createBountyReader, hasBounties, type BountyRow, type BountyWalletState } from "../bounty.ts";
+import { createBountyReader, hasBounties, type BountyRow } from "../bounty.ts";
 import type { RepoTerms, Terms } from "../chain.ts";
 import { decisionWords } from "../decisions.ts";
 import { readDecisions, type Decision, type DecisionsOutcome } from "../endpoints.ts";

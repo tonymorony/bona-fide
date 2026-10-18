@@ -1,4 +1,4 @@
-import { payoutSignature, repoIdOf, type SignedPayout } from "@bona-fide/sdk";
+import { payeeProblem, payoutSignature, repoIdOf, type SignedPayout } from "@bona-fide/sdk";
 import { hashTypedData, isAddressEqual, type Address, type Hex } from "viem";
 import { ARC_EXPLORER_URL, CONFIG_PATH, parseConfig } from "../config.ts";
 import { markdownSafe, usdc } from "../copy.ts";
@@ -26,7 +26,7 @@ import {
 import { cooldown, REVERT_COOLDOWN_MS } from "../relay/rate-limit.ts";
 import { repoOf } from "../webhook.ts";
 import { bountyHeldNote, bountyLink, bountyPaidNote, payeeNeededNote, transactionLink } from "./copy.ts";
-import { payeeOf, payeeProblem, type Payee } from "./payee.ts";
+import { payeeOf, type Payee } from "./payee.ts";
 import { RESOLUTION_QUESTION } from "./question.ts";
 import { BountyRejection, type BountyWallets, type WalletBounty, type WalletState } from "./wallet.ts";
 

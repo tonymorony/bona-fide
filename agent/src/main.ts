@@ -16,5 +16,5 @@ try {
 }
 
 const client = createPublicClient({ transport: http(config.rpcUrl) });
-serveStdio(() => createServer({ client, escrow: config.escrow, maxDeposit: config.maxDeposit, appUrl: config.appUrl }));
+serveStdio(() => createServer({ client, ...config }));
 console.error("Bona Fide MCP server running on stdio");

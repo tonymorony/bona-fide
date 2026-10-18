@@ -1,5 +1,5 @@
-import { USDC_DECIMALS } from "@bona-fide/sdk";
-import { getAddress, isAddress, type Address } from "viem";
+import { arcMainnet, arcTestnet, USDC_DECIMALS } from "@bona-fide/sdk";
+import { getAddress, isAddress, isAddressEqual, type Address } from "viem";
 
 export interface Config {
   rpcUrl: string;
@@ -7,6 +7,10 @@ export interface Config {
   /** The most the tools will prepare or submit for one Deposit, in USDC base units. */
   maxDeposit: bigint;
   appUrl: string | undefined;
+  /** The Bounty wallet factory, or null where none is known. */
+  bountyFactory: Address | null;
+  /** The block explorer of the Bona Fide deployment with this escrow, or null for another escrow. */
+  explorerUrl: string | null;
 }
 
 export const DEFAULT_RPC_URL = "https://rpc.testnet.arc.io";
@@ -21,11 +25,19 @@ export function loadConfig(env: Record<string, string | undefined>): Config {
   if (appUrl !== undefined && !URL.canParse(appUrl)) {
     throw new Error("APP_URL must be the Bona Fide App's full URL, such as https://app.example.");
   }
+  const factory = env.BOUNTY_FACTORY_ADDRESS || undefined;
+  if (factory !== undefined && !isAddress(factory)) {
+    throw new Error("BOUNTY_FACTORY_ADDRESS must be an address, such as 0x1234…abcd.");
+  }
+  // Bona Fide's own escrows come with their factory and explorer.
+  const deployment = [arcMainnet, arcTestnet].find((known) => isAddressEqual(known.escrow, escrow));
   return {
     rpcUrl: env.RPC_URL || DEFAULT_RPC_URL,
     escrow: getAddress(escrow),
     maxDeposit: parseUsdc(env.MAX_DEPOSIT_USDC || DEFAULT_MAX_DEPOSIT_USDC),
     appUrl,
+    bountyFactory: factory ? getAddress(factory) : deployment?.bountyFactory || null,
+    explorerUrl: deployment?.explorerUrl ?? null,
   };
 }
 

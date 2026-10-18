@@ -30,6 +30,8 @@ import its TypeScript source directly.
 | `depositAuthorization`, `forfeitVerdict`, `bindingProof`, `payoutSignature`, `bountyFundAuthorization` | Typed data for each signature, ready for viem's `signTypedData` or `hashTypedData` |
 | `escrowDomain`, `usdcDomain`, `bountyDomain` and the `*_TYPES` | Their EIP-712 domains and types, for other signers |
 | `isValidSignatureNow` | The contracts' own signature check: ECDSA for a plain wallet, ERC-1271 for a smart account |
+| `createBountyWalletReader`, `keeperLimitFor`, `payeeProblem` | A repo's Bounty wallet, its limits and each Bounty; whether the Keeper may pay a Bounty within those limits; and the payees the wallet refuses |
+| `payeeLine`, `payeeDeclaredIn` | The `Bounty wallet: 0x…` line with which a PR's author names their Payee, written and read |
 | `DEPOSIT_STATUSES`, `BOUNTY_STATUSES`, `PAYOUT_METHODS` | The contracts' enums, in order |
 | `relayDepositRoute`, `forfeitRoute`, `bindingProofRoute`, `bountyPayoutRoute`, `decisionsRoute`, `APP_PATHS` | The Bona Fide App's HTTP routes: each one's path, its request body encoded and decoded, and its answer |
 | `refusalIn`, `REFUSAL_CODES` | Why the App refused a request, read by its `code` rather than its text |
