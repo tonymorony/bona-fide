@@ -120,11 +120,11 @@ test("a Contributor with a good record passes once the model agrees, and the che
   await recordExemptions!.idle();
   expect(github.checkOn(REPO, HEAD_SHA)).toMatchObject({
     conclusion: "success",
-    title: "No Deposit needed: 4 Refunds, 0 Forfeits across 3 repos",
+    title: "No Deposit needed: 4 Refunds across 3 repos",
     summary: [
-      "@newcomer's Bona Fide record: 4 Deposits refunded on accepted work across 3 public repos, and none forfeited in any repo.",
+      "@newcomer's Bona Fide record: 4 Deposits refunded on accepted work across 3 public repos.",
       "",
-      "An automated reviewer read the record and agreed, so this PR needs no Deposit. A Forfeit of any of @newcomer's Deposits ends this. Maintainers can turn it off with `record_exemption: off` in .github/bona-fide.yml.",
+      "An automated reviewer read the record and agreed, so this PR needs no Deposit. Forfeits in 2 repos end this. Maintainers can turn it off with `record_exemption: off` in .github/bona-fide.yml.",
     ].join("\n"),
   });
   expect(github.markedNotesOn(REPO, PR)).toEqual([]);
@@ -138,7 +138,7 @@ test("an issue's comment says no Deposit is needed, and its label comes off", as
 
   expect(github.commentsOn(REPO, ISSUE)).toEqual([
     expect.stringMatching(
-      /^\*\*No Deposit needed: 1 Refund, 0 Forfeits across 1 repo\*\*\n\n@newcomer's Bona Fide record: 1 Deposit refunded/,
+      /^\*\*No Deposit needed: 1 Refund across 1 repo\*\*\n\n@newcomer's Bona Fide record: 1 Deposit refunded/,
     ),
   ]);
   expect(github.labelsOn(REPO, ISSUE)).toEqual([]);
@@ -167,8 +167,11 @@ test("the model reads the record and profile as numbers, never the threshold or 
 test.each([
   ["the score is below the threshold", { history: GOOD.slice(0, 2) }],
   [
-    "one Deposit was forfeited, even in a private repo",
-    { history: [...GOOD, ["acme/secret", "forfeited"]], privateRepos: ["acme/secret"] },
+    "Deposits were forfeited in two repos, even a private one",
+    {
+      history: [...GOOD, ["acme/secret", "forfeited"], ["octo/spam", "forfeited"]],
+      privateRepos: ["acme/secret"],
+    },
   ],
   ["the threshold is higher than the score", { config: "record_threshold: 5\n", profile: { mergedElsewhere: 0 } }],
 ] as [string, Options][])("no waiver and no model when %s, even if the model would say waive", async (_, options) => {
@@ -180,6 +183,19 @@ test.each([
   expect(advisor.requests).toEqual([]);
   expect(github.checkOn(REPO, HEAD_SHA)?.conclusion).toBe("pending");
   expect(logged).toEqual([]);
+});
+
+// One Maintainer can deposit on anyone's item in their repo and forfeit it.
+test("a Forfeit in one repo doesn't keep a good record from a waiver", async () => {
+  const { github, advisor, open } = await recorded({
+    history: [...GOOD, ["acme/secret", "forfeited"], ["acme/secret", "forfeited"]],
+    privateRepos: ["acme/secret"],
+  });
+  advisor.answers = [advice("waive")];
+
+  await open();
+
+  expect(github.checkOn(REPO, HEAD_SHA)?.conclusion).toBe("success");
 });
 
 test("a denounced Contributor gets no waiver and no model, whatever their record", async () => {
@@ -205,7 +221,7 @@ test("merged PRs in other people's repos count, but at most two", async () => {
   await none.open();
 
   expect(one.github.checkOn(REPO, HEAD_SHA)).toMatchObject({
-    title: "No Deposit needed: 1 Refund, 0 Forfeits across 1 repo",
+    title: "No Deposit needed: 1 Refund across 1 repo",
     summary: expect.stringContaining("They also have 57 merged PRs in other people's repos."),
   });
   expect(one.logged[0]?.witnesses[0]).toEqual({
@@ -227,7 +243,7 @@ test("with a lower threshold, merged PRs alone can do it, and the check says so"
 
   await open();
 
-  expect(github.checkOn(REPO, HEAD_SHA)?.title).toBe("No Deposit needed: 5 merged PRs elsewhere, 0 Forfeits");
+  expect(github.checkOn(REPO, HEAD_SHA)?.title).toBe("No Deposit needed: 5 merged PRs elsewhere");
 });
 
 test("a private repo's Deposits count toward nothing the check shows", async () => {
@@ -247,7 +263,7 @@ test("a private repo's Deposits count toward nothing the check shows", async () 
   await open();
 
   expect(advisor.requests[0]?.record).toMatchObject({ refunds: 2, repos: 2 });
-  expect(github.checkOn(REPO, HEAD_SHA)?.title).toBe("No Deposit needed: 2 Refunds, 0 Forfeits across 2 repos");
+  expect(github.checkOn(REPO, HEAD_SHA)?.title).toBe("No Deposit needed: 2 Refunds across 2 repos");
 });
 
 test("a model that says require keeps the Deposit ask and posts nothing", async () => {
@@ -358,7 +374,7 @@ test("a waiver is logged as decided, with the record's numbers, the witnesses an
           name: "Score",
           value: "5, threshold 3: 4 Refunds on accepted work, and 1 merged PR elsewhere (at most 2 count)",
         },
-        { name: "Forfeits", value: "none, in any repo" },
+        { name: "Forfeits", value: "in fewer than 2 repos" },
         { name: "Denounced in VOUCHED.td", value: "no" },
         { name: "Record Exemption in bona-fide.yml", value: "on" },
       ],
@@ -430,7 +446,7 @@ test("a granted Record Exemption stays on later checks without asking the model 
   await open("pr", "reopened");
 
   expect(advisor.requests).toHaveLength(1);
-  expect(github.checkOn(REPO, HEAD_SHA)?.title).toBe("No Deposit needed: 4 Refunds, 0 Forfeits across 3 repos");
+  expect(github.checkOn(REPO, HEAD_SHA)?.title).toBe("No Deposit needed: 4 Refunds across 3 repos");
 });
 
 test("a Record Exemption survives a restart: the decision log on disk keeps it", async () => {
@@ -460,15 +476,16 @@ test("a Record Exemption survives a restart: the decision log on disk keeps it",
   );
 
   expect(restartedAdvisor.requests).toEqual([]);
-  expect(github.checkOn(REPO, HEAD_SHA)?.title).toBe("No Deposit needed: 4 Refunds, 0 Forfeits across 3 repos");
+  expect(github.checkOn(REPO, HEAD_SHA)?.title).toBe("No Deposit needed: 4 Refunds across 3 repos");
 });
 
-test("a later Forfeit of the Contributor's, in any repo, ends the Record Exemption on the next check", async () => {
+test("later Forfeits of the Contributor's in two repos, even private ones, end the Record Exemption on the next check", async () => {
   const { github, advisor, past, catchUp, open } = await recorded();
   advisor.answers = [advice("waive"), advice("waive")];
   await open();
   github.addRepo("acme/secret", 1, true);
   past("acme/secret", "forfeited", 900);
+  past("acme/widgets", "forfeited", 901);
   await catchUp();
 
   await open("pr", "synchronize");
@@ -495,7 +512,7 @@ test("a Deposit made while the model reads is outranked by the Record Exemption 
   answerNow();
   await recordExemptions!.idle();
 
-  expect(github.checkOn(REPO, HEAD_SHA)?.title).toBe("No Deposit needed: 4 Refunds, 0 Forfeits across 3 repos");
+  expect(github.checkOn(REPO, HEAD_SHA)?.title).toBe("No Deposit needed: 4 Refunds across 3 repos");
 });
 
 test.each(["off", "false"])("`record_exemption: %s` asks no model", async (value) => {

@@ -28,11 +28,19 @@ export interface Overrides {
 
 type ItemEvent = "pull_request" | "issues";
 
+/** The account id tests give `login`: one per login, whatever its case, as if no account were ever renamed. */
+export function userIdOf(login: string): number {
+  let hash = 2_166_136_261;
+  for (const char of login.toLowerCase()) hash = Math.imul(hash ^ char.charCodeAt(0), 16_777_619) >>> 0;
+  return hash;
+}
+
 export function payload(event: ItemEvent, action: string, o: Overrides = {}) {
   const p = fixture(`${event}.${action}`);
   p.installation ??= { id: 1, node_id: "MDIzOkludGVncmF0aW9uSW5zdGFsbGF0aW9uMQ==" };
   const item = event === "pull_request" ? p.pull_request : p.issue;
   if (o.author) item.user.login = o.author;
+  item.user.id = userIdOf(item.user.login);
   if (o.createdAt) item.created_at = o.createdAt;
   if (o.labels) item.labels = o.labels.map((name) => ({ id: 1, name, color: "ededed", default: false }));
   if (o.label) p.label = { ...p.label, name: o.label };

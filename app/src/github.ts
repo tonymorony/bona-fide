@@ -9,6 +9,7 @@ import {
   type CommitCheck,
   type GitHub,
   type ItemFields,
+  type ItemOutcome,
   type Permission,
   type Repo,
 } from "./ports.ts";
@@ -336,26 +337,38 @@ export function createGitHub({ appId, app, installation }: GitHubOptions): GitHu
 
     // Only someone with write access can merge. Closing an issue as completed, or adding the label,
     // counts only when someone else who can push did it: anyone can close their own issue, and triage
-    // access is enough for either. Access is read now, not as it was then. A deleted account's item is nobody's.
+    // access is enough for either. And a record counts only work someone else accepted: not a PR its
+    // author merged, nor work in a repo they can push to, such as an org of their own. Access is read
+    // now, not as it was then. A deleted account's item is nobody's.
     async outcomeOf(repo, kind, number) {
       const labelledOk = async (labels: (string | { name?: string })[]) =>
         labelled(labels, ACCEPTED) && (await maintainerAdded({ labeledBy, permissionOf }, repo, number, ACCEPTED));
+      const outcome = async (
+        user: { login: string; id: number },
+        accepted: boolean,
+        closedAt: string | null,
+      ): Promise<ItemOutcome> => ({
+        author: user.login,
+        authorId: user.id,
+        accepted: accepted && !canPush(await permissionOf(repo, user.login)),
+        closedAt: closedAt ? new Date(closedAt) : null,
+      });
       try {
         if (kind === "pr") {
           const { data } = await api(repo).rest.pulls.get({ ...repoParams(repo), pull_number: number });
           if (!data.user) return null;
-          return { author: data.user.login, accepted: data.merged === true || (await labelledOk(data.labels)) };
+          const merged = data.merged === true && data.merged_by?.id !== data.user.id;
+          return outcome(data.user, merged || (await labelledOk(data.labels)), data.closed_at);
         }
         const { data } = await api(repo).rest.issues.get({ ...repoParams(repo), issue_number: number });
         if (data.pull_request || !data.user) return null;
-        const author = data.user.login;
         const closer = data.closed_by?.login;
         const completed =
           data.state_reason === "completed" &&
           closer !== undefined &&
-          closer.toLowerCase() !== author.toLowerCase() &&
+          closer.toLowerCase() !== data.user.login.toLowerCase() &&
           canPush(await permissionOf(repo, closer));
-        return { author, accepted: completed || (await labelledOk(data.labels)) };
+        return outcome(data.user, completed || (await labelledOk(data.labels)), data.closed_at);
       } catch (error) {
         if (isNotFound(error)) return null;
         throw error;
@@ -552,7 +565,7 @@ function statusState(state: string): CommitCheck["state"] {
 
 interface RestItem {
   number: number;
-  user: { login: string } | null;
+  user: { login: string; id: number } | null;
   created_at: string;
   labels: (string | { name?: string })[];
 }
@@ -562,6 +575,7 @@ function itemFields(repo: Repo, data: RestItem): ItemFields {
     repo,
     number: data.number,
     author: data.user?.login ?? "ghost",
+    ...(data.user ? { authorId: data.user.id } : {}),
     createdAt: new Date(data.created_at),
     labels: data.labels.map((label) => (typeof label === "string" ? label : (label.name ?? ""))),
   };

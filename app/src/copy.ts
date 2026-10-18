@@ -1,7 +1,7 @@
 import type { Kind } from "@bona-fide/sdk";
 import { formatUnits } from "viem";
 import type { Exemption, NewTerms } from "./app.ts";
-import { CONFIG_PATH, DAY_SECONDS, USDC_DECIMALS } from "./config.ts";
+import { CONFIG_PATH, DAY_SECONDS, FORFEIT_REPOS, USDC_DECIMALS } from "./config.ts";
 import { ACCEPTED, BAD_FAITH, WAIVER } from "./labels.ts";
 import { fullName, type Binding, type Deposit, type Item, type PendingBinding, type Repo } from "./ports.ts";
 import type { RecordGrant } from "./records/exemption.ts";
@@ -43,16 +43,16 @@ export function exemptText(kind: Kind, exemption: Exclude<Exemption, "record">, 
   return { title: `No Deposit needed: ${title}`, summary };
 }
 
-// A Record Exemption's check cites public repos' counts only, as they were when it was granted. A
-// Forfeit anywhere ends it, so it always has none.
+// A Record Exemption's check cites public repos' counts only, as they were when it was granted. It
+// never says whether a Deposit was forfeited, which could tell of a private repo.
 export function recordExemptText(kind: Kind, author: string, grant: RecordGrant): Wording {
   const { refunds, repos, mergedElsewhere } = grant;
   const title =
     refunds > 0
-      ? `${count(refunds, "Refund")}, 0 Forfeits across ${count(repos, "repo")}`
-      : `${count(mergedElsewhere, "merged PR")} elsewhere, 0 Forfeits`;
+      ? `${count(refunds, "Refund")} across ${count(repos, "repo")}`
+      : `${count(mergedElsewhere, "merged PR")} elsewhere`;
   const record = [
-    `@${author}'s Bona Fide record: ${count(refunds, "Deposit")} refunded on accepted work across ${count(repos, "public repo")}, and none forfeited in any repo.`,
+    `@${author}'s Bona Fide record: ${count(refunds, "Deposit")} refunded on accepted work across ${count(repos, "public repo")}.`,
   ];
   if (mergedElsewhere > 0)
     record.push(`They also have ${count(mergedElsewhere, "merged PR")} in other people's repos.`);
@@ -61,7 +61,7 @@ export function recordExemptText(kind: Kind, author: string, grant: RecordGrant)
     summary: [
       record.join(" "),
       "",
-      `An automated reviewer read the record and agreed, so this ${WORDS[kind].noun} needs no Deposit. A Forfeit of any of @${author}'s Deposits ends this. Maintainers can turn it off with \`record_exemption: off\` in ${CONFIG_PATH}.`,
+      `An automated reviewer read the record and agreed, so this ${WORDS[kind].noun} needs no Deposit. Forfeits in ${FORFEIT_REPOS} repos end this. Maintainers can turn it off with \`record_exemption: off\` in ${CONFIG_PATH}.`,
     ].join("\n"),
   };
 }

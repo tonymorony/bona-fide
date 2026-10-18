@@ -1,6 +1,7 @@
 import type { Kind } from "@bona-fide/sdk";
 import type { Hex } from "viem";
 import { createBlockScanner } from "../blocks.ts";
+import { CLOCK_SKEW_SECONDS } from "../config.ts";
 import { fullName, type Chain, type ContributorRecord, type ContributorRecords, type GitHub } from "../ports.ts";
 
 /** Most Deposits looked up on GitHub per tick, so catching up on a long history stays under GitHub's rate limit. */
@@ -20,8 +21,14 @@ export interface RecordLink {
   repo: string;
   /** Whether the repo was private. Unknown counts as private. */
   private: boolean;
+  /** The author's login when it was looked up. */
   author: string;
-  /** "accepted": refunded on accepted work. "refunded": refunded otherwise, such as at the Timeout. */
+  /** GitHub's id of the author's account. A link saved without one is looked up again. */
+  authorId?: number;
+  /**
+   * "accepted": refunded on work someone else accepted while the Deposit was on it. "refunded":
+   * refunded otherwise, such as at the Timeout.
+   */
   outcome: "active" | "accepted" | "refunded" | "forfeited";
 }
 
@@ -55,6 +62,7 @@ interface Tracked {
   key: Hex;
   serial: bigint;
   status: Status;
+  madeAt: Date;
 }
 
 interface Lookup {
@@ -71,8 +79,9 @@ export function createRecordIndex({ chain, github, fromBlock, links = [], save }
   const blocks = createBlockScanner(fromBlock);
   const tracked = new Map<string, Tracked>();
   const linked = new Map<string, RecordLink>();
-  /** Each author's linked Deposits, by lowercase login. */
-  const byAuthor = new Map<string, Map<string, RecordLink>>();
+  /** Each author's linked Deposits, by account id, and by lowercase login as it was when looked up. */
+  const byId = new Map<number, Map<string, RecordLink>>();
+  const byLogin = new Map<string, Map<string, RecordLink>>();
   const lookups = new Map<string, Lookup>();
   /** Deposits whose item couldn't be found, with the status they had then: a new status looks again. */
   const unlinkable = new Map<string, Status>();
@@ -84,19 +93,26 @@ export function createRecordIndex({ chain, github, fromBlock, links = [], save }
   function keep(link: RecordLink): void {
     const id = `${link.key}:${link.serial}`;
     const before = linked.get(id);
-    if (before) byAuthor.get(before.author.toLowerCase())?.delete(id);
+    if (before) {
+      byLogin.get(before.author.toLowerCase())?.delete(id);
+      if (before.authorId !== undefined) byId.get(before.authorId)?.delete(id);
+    }
     linked.set(id, link);
-    const login = link.author.toLowerCase();
-    if (!byAuthor.has(login)) byAuthor.set(login, new Map());
-    byAuthor.get(login)!.set(id, link);
+    add(byLogin, link.author.toLowerCase(), id, link);
+    if (link.authorId !== undefined) add(byId, link.authorId, id, link);
+  }
+
+  function add<K>(index: Map<K, Map<string, RecordLink>>, author: K, id: string, link: RecordLink): void {
+    if (!index.has(author)) index.set(author, new Map());
+    index.get(author)!.set(id, link);
   }
 
   // A Deposit needs a lookup until its link says how it ended. A saved link from before a restart
-  // needs none.
+  // needs none, unless it was saved before links named the author's account id.
   function needsLookup(id: string, deposit: Tracked): boolean {
     if (unlinkable.get(id) === deposit.status) return false;
     const link = linked.get(id);
-    return !link || (deposit.status !== "active" && link.outcome === "active");
+    return !link || link.authorId === undefined || (deposit.status !== "active" && link.outcome === "active");
   }
 
   function follow(id: string): void {
@@ -111,13 +127,18 @@ export function createRecordIndex({ chain, github, fromBlock, links = [], save }
     // Not a repo the App can see, or no such item, such as a Deposit made before its item opened.
     if (!repo || !outcome) return void unlinkable.set(id, deposit.status);
     unlinkable.delete(id);
-    const ended = { active: "active", forfeited: "forfeited", refunded: outcome.accepted ? "accepted" : "refunded" };
+    // Work accepted before the Deposit was made put nothing at risk.
+    const atRisk =
+      outcome.closedAt === null || deposit.madeAt.getTime() <= outcome.closedAt.getTime() + CLOCK_SKEW_SECONDS * 1000;
+    const refunded = outcome.accepted && atRisk ? "accepted" : "refunded";
+    const ended = { active: "active", forfeited: "forfeited", refunded };
     const link: RecordLink = {
       key: deposit.key,
       serial: String(deposit.serial),
       repo: fullName(repo),
       private: repo.private !== false,
       author: outcome.author,
+      authorId: outcome.authorId,
       outcome: ended[deposit.status] as RecordLink["outcome"],
     };
     keep(link);
@@ -146,9 +167,9 @@ export function createRecordIndex({ chain, github, fromBlock, links = [], save }
       await blocks.scan(await chain.latestBlock(), async (from, to) => {
         for (const event of await chain.escrowEvents(from, to)) {
           if (event.type === "deposited") {
-            const { key, serial, repoId, kind, number } = event.deposit;
+            const { key, serial, repoId, kind, number, blockTime } = event.deposit;
             const id = `${key}:${serial}`;
-            tracked.set(id, { repoId, kind, number, key, serial, status: "active" });
+            tracked.set(id, { repoId, kind, number, key, serial, status: "active", madeAt: blockTime });
             follow(id);
           } else if (event.type === "refunded" || event.type === "forfeited") {
             const id = `${event.key}:${event.serial}`;
@@ -178,9 +199,9 @@ export function createRecordIndex({ chain, github, fromBlock, links = [], save }
     },
 
     // Counts of public repos only: a record shown to anyone never says who contributes to a private
-    // repo. A Forfeit anywhere counts in forfeitsAnywhere, which is only ever shown as none.
-    recordOf(login) {
-      const wanted = login.toLowerCase();
+    // repo. Forfeits anywhere count in forfeitsAnywhere and forfeitReposAnywhere, which are never shown.
+    recordOf(login, authorId) {
+      const links = authorId === undefined ? byLogin.get(login.toLowerCase()) : byId.get(authorId);
       const record: ContributorRecord = {
         refunds: 0,
         repos: 0,
@@ -188,15 +209,23 @@ export function createRecordIndex({ chain, github, fromBlock, links = [], save }
         forfeits: 0,
         active: 0,
         forfeitsAnywhere: 0,
+        forfeitReposAnywhere: 0,
         complete: scanned && ![...lookups.keys()].some((id) => tracked.get(id)?.status === "forfeited"),
       };
+      const accepted = new Set<Hex>();
       const repos = new Set<string>();
-      for (const link of byAuthor.get(wanted)?.values() ?? []) {
-        if (link.outcome === "forfeited") record.forfeitsAnywhere += 1;
+      const forfeitRepos = new Set<string>();
+      for (const link of links?.values() ?? []) {
+        if (link.outcome === "forfeited") {
+          record.forfeitsAnywhere += 1;
+          forfeitRepos.add(link.repo.toLowerCase());
+        }
         if (link.private) continue;
-        // In their own repo a Contributor can accept their own work.
-        const own = link.repo.split("/")[0]!.toLowerCase() === wanted;
-        if (link.outcome === "accepted" && !own) {
+        // In their own repo a Contributor can accept their own work. And one item counts once,
+        // however many Deposits were made on it.
+        const own = link.repo.split("/")[0]!.toLowerCase() === link.author.toLowerCase();
+        if (link.outcome === "accepted" && !own && !accepted.has(link.key)) {
+          accepted.add(link.key);
           record.refunds += 1;
           repos.add(link.repo.toLowerCase());
         } else if (link.outcome === "accepted" || link.outcome === "refunded") record.otherRefunds += 1;
@@ -204,6 +233,7 @@ export function createRecordIndex({ chain, github, fromBlock, links = [], save }
         else record.active += 1;
       }
       record.repos = repos.size;
+      record.forfeitReposAnywhere = forfeitRepos.size;
       return record;
     },
   };

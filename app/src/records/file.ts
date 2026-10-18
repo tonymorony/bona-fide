@@ -69,6 +69,7 @@ function parse(line: string): RecordLink | null {
     typeof l.repo === "string" &&
     typeof l.private === "boolean" &&
     typeof l.author === "string" &&
+    (l.authorId === undefined || Number.isSafeInteger(l.authorId)) &&
     OUTCOMES.includes(l.outcome as RecordLink["outcome"]);
   return valid ? (l as RecordLink) : null;
 }

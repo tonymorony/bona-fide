@@ -17,6 +17,8 @@ export interface ItemFields {
   repo: Repo;
   number: number;
   author: string;
+  /** GitHub's id of the author's account: a rename keeps it, and nobody else ever gets it. */
+  authorId?: number;
   createdAt: Date;
   labels: string[];
 }
@@ -131,14 +133,18 @@ export interface CommitCheck {
   state: "success" | "pending" | "failure";
 }
 
-/**
- * Whose PR or issue a Deposit was for, and whether it was accepted: a PR merged, an issue closed as
- * completed by someone other than its author who can push, or either labelled bona-fide:ok by
- * someone who can push.
- */
+/** Whose PR or issue a Deposit was for, and whether someone else accepted it, for the author's record. */
 export interface ItemOutcome {
   author: string;
+  authorId: number;
+  /**
+   * A PR merged, an issue closed as completed by someone other than its author who can push, or either
+   * labelled bona-fide:ok by someone who can push. Not when its author merged it, or can push to the
+   * repo themselves.
+   */
   accepted: boolean;
+  /** When it was merged or closed, or null while it's open. */
+  closedAt: Date | null;
 }
 
 /** A Contributor's public GitHub profile, as a Record Exemption reads it. Numbers only. */
@@ -273,22 +279,25 @@ export interface Reviewer {
  * so a record never shows who contributes to a private repo.
  */
 export interface ContributorRecord {
-  /** Refunds on accepted work in public repos the Contributor doesn't own. The score counts these. */
+  /** PRs and issues in public repos that someone else accepted while the Contributor's Deposit was on them, each once. The score counts these. */
   refunds: number;
   /** How many public repos those Refunds are in. */
   repos: number;
-  /** Other Refunds in public repos: at the Timeout, of a Deposit that wasn't needed, or in their own repos. */
+  /** Other Refunds in public repos: at the Timeout, of a Deposit that wasn't needed, on work they accepted themselves or that was accepted before the Deposit, or a second on one item. */
   otherRefunds: number;
   forfeits: number;
   active: number;
-  /** Forfeits in every repo the App can see, private ones included. Only ever shown as none. */
+  /** Forfeits in every repo the App can see, private ones included. Never shown. */
   forfeitsAnywhere: number;
+  /** How many repos, private ones included, those Forfeits are in. Never shown. */
+  forfeitReposAnywhere: number;
   /** Whether every Forfeit the escrow made so far is linked to its Contributor. Until then, no Record Exemption is granted. */
   complete: boolean;
 }
 
 export interface ContributorRecords {
-  recordOf(login: string): ContributorRecord;
+  /** The record of the account with `authorId`, or, without one, of whoever had `login` when each Deposit was looked up. */
+  recordOf(login: string, authorId?: number): ContributorRecord;
 }
 
 /** A suggestion on a Contributor's record: pass the check with no Deposit, ask for it, or ask for it and flag the item. */

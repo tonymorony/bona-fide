@@ -1,5 +1,6 @@
 import { repoIdOf, type Kind } from "@bona-fide/sdk";
 import type { Hex } from "viem";
+import { userIdOf } from "./webhooks.ts";
 import type {
   CheckRun,
   ClosingPullRequest,
@@ -40,6 +41,8 @@ interface RepoState {
   closingLinks: Map<number, ClosingPullRequest[]>;
   /** Items closed since they were added. */
   closed: Set<number>;
+  /** When items were merged or closed, where it matters. */
+  closedAt: Map<number, Date>;
   /** Who added a label to an item, by "number:label", when not the repo's owner. */
   labelers: Map<string, string>;
 }
@@ -77,6 +80,7 @@ export class FakeGitHub implements GitHub {
       commitChecks: new Map(),
       closingLinks: new Map(),
       closed: new Set(),
+      closedAt: new Map(),
       labelers: new Map(),
     };
     this.repos.set(fullName.toLowerCase(), state);
@@ -110,9 +114,10 @@ export class FakeGitHub implements GitHub {
     state.labels.set(item.number, new Set(item.labels));
   }
 
-  /** Closes the PR or issue. Every item added is open until then. */
-  close(fullName: string, number: number): void {
+  /** Closes the PR or issue, at `at` if told. Every item added is open until then. */
+  close(fullName: string, number: number, at?: Date): void {
     this.state(fullName).closed.add(number);
+    if (at) this.state(fullName).closedAt.set(number, at);
   }
 
   /** Makes reading the item fail `times` times, as GitHub does for an archived repo. */
@@ -319,8 +324,18 @@ export class FakeGitHub implements GitHub {
   async outcomeOf(repo: Repo, kind: Kind, number: number): Promise<ItemOutcome | null> {
     const item = await this.getItem(repo, kind, number);
     if (!item) return null;
-    const accepted = this.state(fullNameOf(repo)).accepted.has(`${kind}#${number}`);
-    return { author: item.author, accepted: accepted || item.labels.includes("bona-fide:ok") };
+    const state = this.state(fullNameOf(repo));
+    const accepted = state.accepted.has(`${kind}#${number}`);
+    return {
+      author: item.author,
+      authorId: item.authorId ?? this.idOf(item.author),
+      accepted: accepted || item.labels.includes("bona-fide:ok"),
+      closedAt: state.closedAt.get(number) ?? null,
+    };
+  }
+
+  private idOf(login: string): number {
+    return userIdOf(login);
   }
 
   async profileOf(_repo: Repo, login: string): Promise<GitHubProfile | null> {

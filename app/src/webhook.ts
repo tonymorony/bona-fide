@@ -60,6 +60,7 @@ export function itemFields(payload: Payload, item: Payload): ItemFields {
     repo: repoOf(payload),
     number: item.number,
     author: item.user.login,
+    authorId: item.user.id,
     createdAt: new Date(item.created_at),
     labels: item.labels.map((label: { name: string }) => label.name),
   };

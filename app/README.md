@@ -273,13 +273,22 @@ record is kept.
 
 **The record.** A Contributor's Deposits across every repo the App is installed on, each linked to
 them through the author of the PR or issue it was for: Deposits are keyed by repo, kind and number,
-and anyone can pay one. The App reads the escrow's `Deposited`, `Refunded` and `Forfeited` events
+and anyone can pay one. The author is their GitHub account's id, which a rename keeps and nobody else
+ever gets, not their login. The App reads the escrow's `Deposited`, `Refunded` and `Forfeited` events
 from `ESCROW_FROM_BLOCK` on, as the Keeper does, and looks each Deposit up on GitHub when it is made
-and again when it ends. A Refund counts as **on accepted work** when, as it is looked up, the PR was
-merged, or the issue was closed as completed by someone other than its author, or either carries
-`bona-fide:ok`. Other Refunds don't count, at the Timeout or of a Deposit that wasn't needed: an
-ignored item is refunded too. Nor does a PR approved but not yet merged when its Deposit was
-refunded, or a Refund in the Contributor's own repo (one whose owner is their login).
+and again when it ends. A Refund counts as **on accepted work** when, as it is looked up, someone else
+accepted the work while the Deposit was on it:
+
+- the PR was merged, not by its author; or the issue was closed as completed, or either labelled
+  `bona-fide:ok`, by someone other than its author with write, maintain or admin access;
+- the author can't push to the repo: work in a repo they own, or in an org where they can push, they
+  could accept themselves;
+- and the Deposit was made before the item was merged or closed, give or take `CLOCK_SKEW_SECONDS`:
+  work accepted before it put nothing at risk.
+
+Each PR or issue counts once, however many Deposits were made on it. Other Refunds don't count, at
+the Timeout or of a Deposit that wasn't needed: an ignored item is refunded too. Nor does a PR
+approved but not yet merged when its Deposit was refunded.
 
 **The score,** in one line:
 
@@ -296,8 +305,10 @@ least one Refund on accepted work.
 change any of them:
 
 1. the score is at least the repo's `record_threshold`;
-2. none of the Contributor's Deposits was ever forfeited, in any repo the App can see, private ones
-   included;
+2. Deposits on the Contributor's items were forfeited in fewer than 2 repos the App can see, private
+   ones included (`FORFEIT_REPOS` in `src/config.ts`). Anyone can deposit on anyone's PR or issue, so
+   one Maintainer could forfeit a Deposit on a Contributor's item in their own repo; one repo's
+   Forfeits alone don't end a Record Exemption;
 3. the repo doesn't denounce them in `VOUCHED.td` (a denouncement is checked first, as always);
 4. `record_exemption` is on;
 5. and the model suggests `waive`.
@@ -307,7 +318,7 @@ back, never grant one alone: it reads the record's numbers and the Contributor's
 profile, never the threshold or the witnesses.
 
 - **`waive`:** the check is evaluated again and passes, citing the counts: "No Deposit needed: 4
-  Refunds, 0 Forfeits across 3 repos". A Deposit made meanwhile is refunded by the Keeper, as for
+  Refunds across 3 repos". A Deposit made meanwhile is refunded by the Keeper, as for
   any Exemption.
 - **`require`,** or a model that declines or fails: nothing changes and nothing is posted. The
   check keeps asking for the Deposit.
@@ -317,8 +328,9 @@ profile, never the threshold or the witnesses.
   add `bona-fide:waive`.
 
 **Private repos.** The counts the check shows, and the model reads, are of public repos only, so a
-record never reveals who contributes to a private repo. A Forfeit in a private repo still blocks a
-Record Exemption; the check only ever says "0 Forfeits", which is true in every repo.
+record never reveals who contributes to a private repo. A Forfeit in a private repo still counts
+toward the 2 repos that end a Record Exemption, and the check never says whether any Deposit was
+forfeited.
 
 **When it runs.** When the check asks a Contributor for a Deposit: they aren't denounced or
 otherwise exempt, no Deposit counts yet, and the repo's Binding is active. The check is posted first,

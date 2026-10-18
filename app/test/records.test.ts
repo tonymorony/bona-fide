@@ -68,6 +68,7 @@ test("a record counts the Contributor's Deposits by how each ended, across repos
     forfeits: 1,
     active: 1,
     forfeitsAnywhere: 1,
+    forfeitReposAnywhere: 1,
     complete: true,
   });
   expect(index.recordOf("someone-else")).toMatchObject({ refunds: 1, repos: 1 });
@@ -93,6 +94,7 @@ test("a private repo's Deposits never show in the counts, but its Forfeit counts
     forfeits: 0,
     active: 0,
     forfeitsAnywhere: 1,
+    forfeitReposAnywhere: 1,
     complete: true,
   });
 });
@@ -174,6 +176,7 @@ test("links are saved, and after a restart they are read back without asking Git
     repo: "acme/widgets",
     private: false,
     author: NEWCOMER,
+    authorId: expect.any(Number),
     outcome: "accepted",
   });
   expect(reads).not.toHaveBeenCalled();
@@ -239,4 +242,98 @@ test("a Deposit made before its item opened is linked once it ends, and a repo t
   await caughtUp(index);
 
   expect(index.recordOf(NEWCOMER)).toMatchObject({ refunds: 0, otherRefunds: 1, forfeitsAnywhere: 0, complete: true });
+});
+
+test("an item counts once, however many Deposits were made on it, and its others count as other Refunds", async () => {
+  const { github, chain, open } = indexed();
+  github.addRepo("acme/widgets");
+  const repo = { owner: "acme", name: "widgets", installationId: 1, private: false };
+  github.addItem({ repo, kind: "pr", number: 7, author: NEWCOMER, createdAt: new Date(0), labels: [], headSha: "abc" });
+  for (let i = 0; i < 3; i++) {
+    const event = chain.deposit({ repo: "acme/widgets", kind: "pr", number: 7, depositor: DEPOSITOR, at: new Date(0) });
+    chain.refund(event.key);
+  }
+  github.accept("acme/widgets", "pr", 7);
+  const index = open();
+
+  await caughtUp(index);
+
+  expect(index.recordOf(NEWCOMER)).toMatchObject({ refunds: 1, repos: 1, otherRefunds: 2 });
+});
+
+// Work accepted before the Deposit put nothing at risk, as for old merged PRs in a repo the App
+// was installed on later.
+test("a Deposit made after its item was merged or closed isn't on accepted work", async () => {
+  const { github, chain, open } = indexed();
+  github.addRepo("acme/widgets");
+  const repo = { owner: "acme", name: "widgets", installationId: 1, private: false };
+  for (const [number, closedAt] of [
+    [7, new Date("2026-01-01T00:00:00Z")],
+    [8, new Date("2026-01-01T00:59:00Z")],
+  ] as const) {
+    github.addItem({ repo, kind: "pr", number, author: NEWCOMER, createdAt: new Date(0), labels: [], headSha: "abc" });
+    github.accept("acme/widgets", "pr", number);
+    github.close("acme/widgets", number, closedAt);
+    const at = new Date("2026-01-01T01:00:00Z");
+    chain.refund(chain.deposit({ repo: "acme/widgets", kind: "pr", number, depositor: DEPOSITOR, at }).key);
+  }
+  const index = open();
+
+  await caughtUp(index);
+
+  // Within CLOCK_SKEW_SECONDS of the merge, as when both happen at once, it still counts.
+  expect(index.recordOf(NEWCOMER)).toMatchObject({ refunds: 1, otherRefunds: 1 });
+});
+
+test("a record follows the account through a rename, and whoever takes its old login starts afresh", async () => {
+  const { github, chain, open } = indexed();
+  github.addRepo("acme/widgets");
+  const repo = { owner: "acme", name: "widgets", installationId: 1, private: false };
+  const items = [
+    { number: 1, author: "old-name", authorId: 7, end: "accepted" },
+    { number: 2, author: "old-name", authorId: 7, end: "forfeited" },
+    { number: 3, author: "new-name", authorId: 7, end: "accepted" },
+    { number: 4, author: "old-name", authorId: 99, end: "accepted" },
+  ];
+  for (const { number, author, authorId, end } of items) {
+    github.addItem({ repo, kind: "pr", number, author, authorId, createdAt: new Date(0), labels: [], headSha: "abc" });
+    const event = chain.deposit({ repo: "acme/widgets", kind: "pr", number, depositor: DEPOSITOR, at: new Date(0) });
+    if (end === "accepted") github.accept("acme/widgets", "pr", number);
+    if (end === "forfeited") chain.forfeit(event.key);
+    else chain.refund(event.key);
+  }
+  const index = open();
+
+  await caughtUp(index);
+
+  expect(index.recordOf("new-name", 7)).toMatchObject({ refunds: 2, forfeitsAnywhere: 1 });
+  expect(index.recordOf("old-name", 99)).toMatchObject({ refunds: 1, forfeitsAnywhere: 0 });
+});
+
+test("Forfeits anywhere are counted by repo too", async () => {
+  const { github, open, deposit } = indexed();
+  github.addRepo("acme/widgets");
+  github.addRepo("acme/secret", 1, true);
+  deposit("acme/widgets", "forfeited");
+  deposit("acme/widgets", "forfeited");
+  deposit("acme/secret", "forfeited");
+  const index = open();
+
+  await caughtUp(index);
+
+  expect(index.recordOf(NEWCOMER)).toMatchObject({ forfeits: 2, forfeitsAnywhere: 3, forfeitReposAnywhere: 2 });
+});
+
+test("a link saved before links named the account is looked up again", async () => {
+  const { github, saved, open, deposit } = indexed();
+  github.addRepo("acme/widgets");
+  deposit("acme/widgets", "accepted");
+  await caughtUp(open());
+  const reads = vi.spyOn(github, "outcomeOf");
+
+  const restarted = open(saved.map(({ authorId: _, ...link }) => link));
+  await caughtUp(restarted);
+
+  expect(reads).toHaveBeenCalledTimes(1);
+  expect(restarted.recordOf(NEWCOMER, saved[0]!.authorId)).toMatchObject({ refunds: 1 });
 });

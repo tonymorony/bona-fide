@@ -1,5 +1,5 @@
 import type { Verdict } from "../app.ts";
-import type { Config } from "../config.ts";
+import { FORFEIT_REPOS, type Config } from "../config.ts";
 import { recordFlagNote } from "../copy.ts";
 import { decisionCost, newDecision } from "../decisions/log.ts";
 import {
@@ -84,7 +84,8 @@ export function scoreOf(record: Pick<ContributorRecord, "refunds">, mergedElsewh
 }
 
 // The model can hold a Record Exemption back, never grant one alone. It is granted only when the
-// score reaches the repo's threshold, no Deposit of the Contributor's was ever forfeited in any repo,
+// score reaches the repo's threshold, Deposits on the Contributor's items were forfeited in fewer
+// than FORFEIT_REPOS repos,
 // the repo hasn't denounced them, and the model suggests waiving. The model never sees the
 // threshold or the witnesses, and its answer can't change them.
 export function createRecordExemptions({
@@ -116,10 +117,10 @@ export function createRecordExemptions({
   }
 
   async function weigh(item: Item, config: Config, recheck: () => Promise<void>): Promise<void> {
-    const contributor = records.recordOf(item.author);
+    const contributor = records.recordOf(item.author, item.authorId);
     // The witnesses first. When one fails, neither GitHub's search nor the model is asked, and
     // nothing is recorded: a skip without the model decides nothing.
-    if (!contributor.complete || contributor.forfeitsAnywhere > 0) return;
+    if (!contributor.complete || contributor.forfeitReposAnywhere >= FORFEIT_REPOS) return;
     if (scoreOf(contributor, Infinity) < config.recordThreshold) return;
     const profile = await profileOf(item.repo, item.author);
     if (!profile) return;
@@ -168,7 +169,7 @@ export function createRecordExemptions({
             name: "Score",
             value: `${score}, threshold ${config.recordThreshold}: ${count(contributor.refunds, "Refund")} on accepted work, and ${count(Math.min(profile.mergedElsewhere, MERGED_CAP), "merged PR")} elsewhere (at most ${MERGED_CAP} count)`,
           },
-          { name: "Forfeits", value: "none, in any repo" },
+          { name: "Forfeits", value: `in fewer than ${FORFEIT_REPOS} repos` },
           { name: "Denounced in VOUCHED.td", value: "no" },
           { name: "Record Exemption in bona-fide.yml", value: "on" },
         ],
@@ -195,8 +196,8 @@ export function createRecordExemptions({
       if (!config.recordExemption) return null;
       const decision = granted(item);
       if (decision?.action !== "waived") return null;
-      // A Forfeit of the Contributor's, in any repo, ends it on the next check.
-      if (records.recordOf(item.author).forfeitsAnywhere > 0) return null;
+      // Forfeits in FORFEIT_REPOS repos, private ones included, end it on the next check.
+      if (records.recordOf(item.author, item.authorId).forfeitReposAnywhere >= FORFEIT_REPOS) return null;
       const inputs = decision.inputs!;
       return {
         refunds: Number(inputs.refunds) || 0,

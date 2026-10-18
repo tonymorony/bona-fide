@@ -37,11 +37,11 @@ nobody has vouched for yet: a small deposit that honest contributors always get 
      are exempt too.
    - **A good record (optional):** a Contributor whose Bona Fide record, across every repo, scores at
      least the repo's `record_threshold` (Refunds on accepted work in public repos, plus up to two
-     merged PRs elsewhere), who never had a Deposit forfeited anywhere and isn't denounced, gets a
-     Record Exemption if an automated reviewer of the record agrees. The reviewer can hold it back,
-     never grant it alone. The check then says why, such as "No Deposit needed: 4 Refunds, 0
-     Forfeits across 3 repos", citing public repos only. A later Forfeit ends it, and a repo turns it
-     off with `record_exemption: off`.
+     merged PRs elsewhere), whose Deposits were forfeited in fewer than two repos and who isn't
+     denounced, gets a Record Exemption if an automated reviewer of the record agrees. The reviewer
+     can hold it back, never grant it alone. The check then says why, such as "No Deposit needed: 4
+     Refunds across 3 repos", citing public repos only. Forfeits in a second repo end it, and a repo
+     turns it off with `record_exemption: off`.
    - **Denounced** in `VOUCHED.td`: the check fails and no Deposit is offered. A denouncement
      outranks the waiver label.
    - Otherwise the check asks for a Deposit, or a vouch from a Maintainer. It links to a deposit
@@ -201,6 +201,7 @@ transaction, and the wallet's limits and balance, read from the chain.
   wallet they named. A collaborator who can push could merge their own PR to claim a Bounty; the
   checks, the model, the limits and the Keeper switch stand against that, and the Maintainer can
   cancel a Bounty before a merge.
-- A Contributor's record links Deposits to GitHub logins, not addresses, so someone running several
-  accounts could build a record by accepting their own work under another login. The witnesses, the
-  reviewer, and the Maintainer's Waiver label and denouncements stand against that.
+- A Contributor's record links Deposits to GitHub accounts, not addresses, so someone running several
+  accounts could build a record by accepting their own work under another login. Work they merged,
+  or could push to, doesn't count, and each item counts once; the witnesses, the reviewer, and the
+  Maintainer's Waiver label and denouncements stand against the rest.

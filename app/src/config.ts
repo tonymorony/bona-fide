@@ -37,6 +37,12 @@ export const DEFAULTS: Config = {
  * GitHub and a Deposit's time from its Arc block, so a Deposit counts for the item if its block
  * is at most this much older than the item.
  */
+/**
+ * Forfeits in this many repos end a Contributor's Record Exemptions. One Maintainer can deposit on
+ * anyone's PR or issue in their repo and forfeit it, so one repo's Forfeits alone don't.
+ */
+export const FORFEIT_REPOS = 2;
+
 export const CLOCK_SKEW_SECONDS = 120;
 
 /** Arc mainnet's block explorer, where a check links each Deposit's transaction by default. */

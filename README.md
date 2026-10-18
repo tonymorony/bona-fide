@@ -78,7 +78,7 @@ suggestion. Facts checked in code decide every payout, and a person signs anythi
 
 1. **Triage.** A reviewer reads each PR or issue that holds a Deposit and leaves the Maintainer a note: accept it, or
    a drafted bad-faith verdict to sign. It never forfeits.
-2. **Record Exemptions.** A Contributor with enough Refunds across repos, and no Forfeit anywhere, needs no Deposit.
+2. **Record Exemptions.** A Contributor with enough Refunds on work others accepted across repos, and Forfeits in fewer than two repos, needs no Deposit.
    The model can hold a waiver back but never grant one alone.
 3. **Bounties.** A Maintainer posts USDC on an issue from their own Bounty wallet. When a PR that closes it is merged
    with green checks, the Keeper pays within the wallet's limits. The model can hold a payout but never trigger one.

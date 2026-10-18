@@ -525,6 +525,7 @@ test("a PR and an issue are read with their author, creation time, labels and he
     kind: "pr",
     number: 2,
     author: "Codertocat",
+    authorId: 21031067,
     createdAt: new Date("2019-05-15T15:20:33Z"),
     labels: ["bug"],
     headSha: "ec26c3e57ca3a959ca5aad62de7213c562f8c821",
@@ -534,6 +535,7 @@ test("a PR and an issue are read with their author, creation time, labels and he
     kind: "issue",
     number: 1,
     author: "Codertocat",
+    authorId: 21031067,
     createdAt: new Date("2019-05-15T15:20:18Z"),
     labels: ["bug"],
   });
@@ -627,7 +629,7 @@ test("an item's outcome is its author and whether it was merged, or completed or
     github.outcomeOf(REPO, "issue", 12),
   ]);
 
-  const by = (accepted: boolean) => ({ author: "Codertocat", accepted });
+  const by = (accepted: boolean) => ({ author: "Codertocat", authorId: 21031067, accepted, closedAt: null });
   expect(outcomes).toEqual([
     by(true),
     by(false),
@@ -643,6 +645,31 @@ test("an item's outcome is its author and whether it was merged, or completed or
     by(false),
     by(false),
   ]);
+});
+
+// A record counts only work someone else accepted.
+test("work its author merged, or could push to the repo, isn't accepted for their record, and an outcome says when it closed", async () => {
+  const pr = fixture("pull_request.opened").pull_request;
+  const merged = { merged: true, closed_at: "2026-09-30T12:00:00Z" };
+  const { github } = fakeApi({
+    [`GET ${API}/pulls/2`]: { status: 200, body: { ...pr, ...merged, merged_by: { login: "mo", id: 7 } } },
+    [`GET ${API}/pulls/3`]: { status: 200, body: { ...pr, number: 3, ...merged, merged_by: pr.user } },
+    [`GET ${API}/pulls/4`]: {
+      status: 200,
+      body: { ...pr, number: 4, ...merged, user: { login: "mo", id: 7 }, merged_by: pr.user },
+    },
+    [`GET ${API}/collaborators/mo/permission`]: { status: 200, body: { permission: "write" } },
+  });
+
+  const outcomes = await Promise.all([2, 3, 4].map((n) => github.outcomeOf(REPO, "pr", n)));
+
+  expect(outcomes.map((o) => o?.accepted)).toEqual([true, false, false]);
+  expect(outcomes[0]).toEqual({
+    author: "Codertocat",
+    authorId: 21031067,
+    accepted: true,
+    closedAt: new Date("2026-09-30T12:00:00Z"),
+  });
 });
 
 test("a profile is the account's public numbers and a search count of merged PRs in other people's repos", async () => {
