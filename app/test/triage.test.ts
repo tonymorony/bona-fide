@@ -1,8 +1,9 @@
 import { expect, test } from "vitest";
 import { DEFAULTS } from "../src/config.ts";
-import type { DepositedEvent, Item } from "../src/ports.ts";
-import { createTriage, decisionLine, DIFF_BUDGET, ReviewFailed, type TriageDecision } from "../src/triage/triage.ts";
-import { answer, FakeReviewer } from "./support/fake-reviewer.ts";
+import type { DepositedEvent, Item, ReviewRequest } from "../src/ports.ts";
+import { DIFF_BUDGET, ModelFailed } from "../src/model/model.ts";
+import { createTriage, decisionLine, type TriageDecision } from "../src/triage/triage.ts";
+import { answer, FakeModel } from "./support/fake-model.ts";
 import { harness, SIGN_PAGE } from "./support/harness.ts";
 import { HEAD_SHA, HELLO_WORLD, ISSUE, NEWCOMER, payload, PR, REPO } from "./support/webhooks.ts";
 
@@ -16,8 +17,8 @@ const SIGN_LINK = `${SIGN_PAGE}?repo=Codertocat%2FHello-World&kind=pr&number=2`;
 
 /** A harness whose PR #2 (or issue #1) holds Deposit 1, and a model that answers what the test says. */
 function deposited(kind: "pr" | "issue" = "pr", config = "", { private: isPrivate = false } = {}) {
-  const reviewer = new FakeReviewer();
-  const setup = harness({ config, reviewer });
+  const model = new FakeModel<ReviewRequest>();
+  const setup = harness({ config, triageModel: model });
   const number = kind === "pr" ? PR : ISSUE;
   const openedAt = kind === "pr" ? PR_OPENED_AT : ISSUE_OPENED_AT;
   setup.chain.deposit({ repo: REPO, kind, number, depositor: DEPOSITOR, at: new Date(openedAt + 60_000) });
@@ -37,12 +38,12 @@ function deposited(kind: "pr" | "issue" = "pr", config = "", { private: isPrivat
     await setup.triage!.idle();
     return response;
   };
-  return { ...setup, reviewer, number, settled };
+  return { ...setup, model, number, settled };
 }
 
 test("good-faith work gets a note suggesting acceptance, and approving refunds the Deposit now", async () => {
-  const { github, reviewer, decisions, settled } = deposited();
-  reviewer.answers = [answer("accept", ["It fixes the typo it names.", "The change is one line in the README."])];
+  const { github, model, decisions, settled } = deposited();
+  model.answers = [answer("accept", ["It fixes the typo it names.", "The change is one line in the README."])];
 
   await settled();
 
@@ -65,8 +66,8 @@ test("good-faith work gets a note suggesting acceptance, and approving refunds t
 });
 
 test("likely bad faith gets a draft verdict that forfeits nothing and links the Maintainer to the sign page", async () => {
-  const { github, reviewer, decisions, settled } = deposited();
-  reviewer.answers = [answer("bad-faith", ["The diff only adds an advertisement."])];
+  const { github, model, decisions, settled } = deposited();
+  model.answers = [answer("bad-faith", ["The diff only adds an advertisement."])];
 
   await settled();
 
@@ -91,21 +92,21 @@ test("likely bad faith gets a draft verdict that forfeits nothing and links the 
 });
 
 test("an issue's notes name the ways an issue is accepted", async () => {
-  const { github, reviewer, settled } = deposited("issue");
-  reviewer.answers = [answer("accept")];
+  const { github, model, settled } = deposited("issue");
+  model.answers = [answer("accept")];
 
   await settled();
 
   const [note] = github.markedNotesOn(REPO, ISSUE);
   expect(note).toContain("An automated reviewer read this issue.");
   expect(note).toContain("can add the `bona-fide:ok` label or close the issue as completed");
-  expect(reviewer.requests[0]).not.toHaveProperty("diff");
-  expect(reviewer.requests[0]).not.toHaveProperty("files");
+  expect(model.requests[0]).not.toHaveProperty("diff");
+  expect(model.requests[0]).not.toHaveProperty("files");
 });
 
 test("an unsure model posts nothing", async () => {
-  const { github, reviewer, decisions, settled } = deposited();
-  reviewer.answers = [answer("unsure", ["Hard to tell."])];
+  const { github, model, decisions, settled } = deposited();
+  model.answers = [answer("unsure", ["Hard to tell."])];
 
   await settled();
 
@@ -114,10 +115,8 @@ test("an unsure model posts nothing", async () => {
 });
 
 test("a model that declines posts nothing", async () => {
-  const { github, reviewer, decisions, settled } = deposited();
-  reviewer.answers = [
-    { suggestion: null, silence: "refusal", model: "claude-opus-5", inputTokens: 900, outputTokens: 3 },
-  ];
+  const { github, model, decisions, settled } = deposited();
+  model.answers = [{ suggestion: null, silence: "refusal", model: "claude-opus-5", inputTokens: 900, outputTokens: 3 }];
 
   await settled();
 
@@ -126,8 +125,8 @@ test("a model that declines posts nothing", async () => {
 });
 
 test("a model that fails posts nothing and changes neither the webhook's answer nor the check", async () => {
-  const { github, reviewer, decisions, settled } = deposited();
-  reviewer.answers = [new ReviewFailed("rate limited")];
+  const { github, model, decisions, settled } = deposited();
+  model.answers = [new ModelFailed("rate limited")];
 
   const response = await settled();
 
@@ -138,8 +137,8 @@ test("a model that fails posts nothing and changes neither the webhook's answer 
 });
 
 test("a model that throws something unexpected is logged without its message", async () => {
-  const { github, reviewer, decisions, settled } = deposited();
-  reviewer.answers = [new Error("sk-ant-secret in a message")];
+  const { github, model, decisions, settled } = deposited();
+  model.answers = [new Error("sk-ant-secret in a message")];
 
   await settled();
 
@@ -149,10 +148,10 @@ test("a model that throws something unexpected is logged without its message", a
 });
 
 test("the webhook doesn't wait for the model", async () => {
-  const { github, reviewer, triage, deliver } = deposited();
+  const { github, model, triage, deliver } = deposited();
   let answerNow = () => {};
-  reviewer.gate = new Promise((resolve) => (answerNow = resolve));
-  reviewer.answers = [answer("accept")];
+  model.gate = new Promise((resolve) => (answerNow = resolve));
+  model.answers = [answer("accept")];
 
   const response = await deliver("pull_request", payload("pull_request", "opened", { author: NEWCOMER }));
 
@@ -165,8 +164,8 @@ test("the webhook doesn't wait for the model", async () => {
 });
 
 test("each Deposit is triaged once, however often its item is checked", async () => {
-  const { github, reviewer, settled, deliver, triage } = deposited();
-  reviewer.answers = [answer("accept"), answer("accept")];
+  const { github, model, settled, deliver, triage } = deposited();
+  model.answers = [answer("accept"), answer("accept")];
 
   await settled();
   await settled({ action: "synchronize" });
@@ -176,13 +175,13 @@ test("each Deposit is triaged once, however often its item is checked", async ()
   ]);
   await triage!.idle();
 
-  expect(reviewer.requests).toHaveLength(1);
+  expect(model.requests).toHaveLength(1);
   expect(github.markedNotesOn(REPO, PR)).toHaveLength(1);
 });
 
 test("two checks at once ask the model once", async () => {
-  const { reviewer, deliver, triage } = deposited();
-  reviewer.answers = [answer("accept"), answer("accept")];
+  const { model, deliver, triage } = deposited();
+  model.answers = [answer("accept"), answer("accept")];
 
   await Promise.all([
     deliver("pull_request", payload("pull_request", "opened", { author: NEWCOMER })),
@@ -190,18 +189,18 @@ test("two checks at once ask the model once", async () => {
   ]);
   await triage!.idle();
 
-  expect(reviewer.requests).toHaveLength(1);
+  expect(model.requests).toHaveLength(1);
 });
 
 test("after a restart, the note's marker keeps the Deposit from being triaged again", async () => {
-  const { github, chain, reviewer, settled } = deposited();
-  reviewer.answers = [answer("accept")];
+  const { github, chain, model, settled } = deposited();
+  model.answers = [answer("accept")];
   await settled();
-  const restarted = new FakeReviewer();
+  const restarted = new FakeModel<ReviewRequest>();
   const decisions: TriageDecision[] = [];
   const triage = createTriage({
     github,
-    reviewer: restarted,
+    model: restarted,
     signPageUrl: SIGN_PAGE,
     record: (d) => decisions.push(d),
   });
@@ -220,9 +219,9 @@ test("after a restart, the note's marker keeps the Deposit from being triaged ag
 });
 
 test("a note for an earlier Deposit doesn't stop triage of a later one", async () => {
-  const { github, reviewer, triage } = deposited();
+  const { github, model, triage } = deposited();
   await github.addNote(HELLO_WORLD, PR, "<!-- bona-fide:triage serial=1 -->", "An earlier note");
-  reviewer.answers = [answer("accept")];
+  model.answers = [answer("accept")];
   const deposit = { depositor: DEPOSITOR, amount: 1_000_000n, txHash: HEAD_SHA, serial: 12n } as const;
 
   await triage!.afterVerdict(
@@ -232,7 +231,7 @@ test("a note for an earlier Deposit doesn't stop triage of a later one", async (
   );
   await triage!.idle();
 
-  expect(reviewer.requests).toHaveLength(1);
+  expect(model.requests).toHaveLength(1);
   expect(github.markedNotesOn(REPO, PR)[1]).toMatch(/^<!-- bona-fide:triage serial=12 -->\n/);
 });
 
@@ -241,58 +240,58 @@ test.each([
   ["a Maintainer accepted it", "bona-fide:ok"],
   ["a Maintainer marked it bad faith", "bona-fide:bad-faith"],
 ])("nothing is triaged once %s", async (_, label) => {
-  const { github, reviewer, settled } = deposited();
-  reviewer.answers = [answer("accept")];
+  const { github, model, settled } = deposited();
+  model.answers = [answer("accept")];
 
   await settled({ labels: [label] });
 
-  expect(reviewer.requests).toEqual([]);
+  expect(model.requests).toEqual([]);
   expect(github.markedNotesOn(REPO, PR)).toEqual([]);
 });
 
 test("an exempt Contributor's Deposit isn't triaged", async () => {
-  const { github, reviewer, settled } = deposited();
+  const { github, model, settled } = deposited();
   github.setPermission(REPO, NEWCOMER, "write");
 
   await settled();
 
-  expect(reviewer.requests).toEqual([]);
+  expect(model.requests).toEqual([]);
 });
 
 test("a denounced Contributor's Deposit isn't triaged", async () => {
-  const { github, reviewer, settled } = deposited();
+  const { github, model, settled } = deposited();
   github.setFile(REPO, "VOUCHED.td", "-newcomer\n");
 
   await settled();
 
-  expect(reviewer.requests).toEqual([]);
+  expect(model.requests).toEqual([]);
 });
 
 test("an item without a Deposit isn't triaged", async () => {
-  const reviewer = new FakeReviewer();
-  const { deliver, triage } = harness({ config: "", reviewer });
+  const model = new FakeModel<ReviewRequest>();
+  const { deliver, triage } = harness({ config: "", triageModel: model });
 
   await deliver("pull_request", payload("pull_request", "opened", { author: NEWCOMER }));
   await triage!.idle();
 
-  expect(reviewer.requests).toEqual([]);
+  expect(model.requests).toEqual([]);
 });
 
 test.each(["off", "false"])("`triage: %s` in bona-fide.yml turns triage off for the repo", async (value) => {
-  const { github, reviewer, decisions, settled } = deposited("pr", `triage: ${value}\n`);
+  const { github, model, decisions, settled } = deposited("pr", `triage: ${value}\n`);
 
   await settled();
 
-  expect(reviewer.requests).toEqual([]);
+  expect(model.requests).toEqual([]);
   expect(github.markedNotesOn(REPO, PR)).toEqual([]);
   expect(decisions.map((d) => d.action)).toEqual(["skipped: off in bona-fide.yml"]);
 });
 
 test("a label a Maintainer adds while the model reads wins over its suggestion", async () => {
-  const { github, reviewer, triage, deliver } = deposited();
+  const { github, model, triage, deliver } = deposited();
   let answerNow = () => {};
-  reviewer.gate = new Promise((resolve) => (answerNow = resolve));
-  reviewer.answers = [answer("bad-faith")];
+  model.gate = new Promise((resolve) => (answerNow = resolve));
+  model.answers = [answer("bad-faith")];
 
   await deliver("pull_request", payload("pull_request", "opened", { author: NEWCOMER }));
   await github.addLabel(HELLO_WORLD, PR, "bona-fide:ok");
@@ -303,8 +302,8 @@ test("a label a Maintainer adds while the model reads wins over its suggestion",
 });
 
 test("the model's reasons can't ping anyone, link anywhere or carry HTML, and at most four are shown", async () => {
-  const { github, reviewer, settled } = deposited();
-  reviewer.answers = [
+  const { github, model, settled } = deposited();
+  model.answers = [
     answer("bad-faith", [
       "Ask @alice or @org/team\nabout it.",
       "See [the proof](https://evil.example/x), www.evil.example, v2_https://evil.example/a and 3www.evil.example/b",
@@ -330,8 +329,8 @@ test("the model's reasons can't ping anyone, link anywhere or carry HTML, and at
 });
 
 test("a long reason is cut short", async () => {
-  const { github, reviewer, settled } = deposited();
-  reviewer.answers = [answer("accept", ["x".repeat(1_000)])];
+  const { github, model, settled } = deposited();
+  model.answers = [answer("accept", ["x".repeat(1_000)])];
 
   await settled();
 
@@ -339,7 +338,7 @@ test("a long reason is cut short", async () => {
 });
 
 test("the model reads the item's text and files, and a long diff is cut with how much was left out", async () => {
-  const { github, reviewer, decisions, settled } = deposited();
+  const { github, model, decisions, settled } = deposited();
   const diff = "+a line of the change\n".repeat(5_000);
   github.setContent(REPO, "pr", PR, {
     title: "Add a feature",
@@ -351,7 +350,7 @@ test("the model reads the item's text and files, and a long diff is cut with how
 
   await settled();
 
-  const request = reviewer.requests[0]!;
+  const request = model.requests[0]!;
   expect(request).toMatchObject({
     repo: REPO,
     repoDescription: "My first repo",
@@ -377,7 +376,7 @@ test("the model reads the item's text and files, and a long diff is cut with how
 });
 
 test("a PR GitHub makes no diff for is triaged from its text and files", async () => {
-  const { github, reviewer, settled } = deposited();
+  const { github, model, settled } = deposited();
   github.setContent(REPO, "pr", PR, {
     title: "Huge",
     body: "",
@@ -388,12 +387,12 @@ test("a PR GitHub makes no diff for is triaged from its text and files", async (
 
   await settled();
 
-  expect(reviewer.requests[0]).toMatchObject({ diff: null, files: { listed: [], leftOut: 3_000 } });
+  expect(model.requests[0]).toMatchObject({ diff: null, files: { listed: [], leftOut: 3_000 } });
 });
 
 test("each decision is one JSON log line with the item, the Serial, the model's answer, the action and the tokens", async () => {
-  const { reviewer, decisions, settled } = deposited();
-  reviewer.answers = [answer("bad-faith", ["The diff only adds an advertisement."])];
+  const { model, decisions, settled } = deposited();
+  model.answers = [answer("bad-faith", ["The diff only adds an advertisement."])];
 
   await settled();
 
@@ -425,8 +424,8 @@ test("each decision is one JSON log line with the item, the Serial, the model's 
 });
 
 test("a GitHub failure during triage is logged, and the next check tries again", async () => {
-  const { github, reviewer, decisions, settled } = deposited();
-  reviewer.answers = [answer("accept")];
+  const { github, model, decisions, settled } = deposited();
+  model.answers = [answer("accept")];
   const contentOf = github.contentOf.bind(github);
   github.contentOf = async () => {
     github.contentOf = contentOf;
@@ -445,8 +444,8 @@ test("a GitHub failure during triage is logged, and the next check tries again",
 const DEPOSIT_WITNESS = { name: "Deposit", value: `Serial 1: 1 USDC from ${DEPOSITOR}, counted by the check` };
 
 test("a suggestion to accept is logged as decided, with the model's reasons, the facts checked and its cost", async () => {
-  const { reviewer, logged, settled } = deposited();
-  reviewer.answers = [answer("accept", ["It fixes the typo it names."])];
+  const { model, logged, settled } = deposited();
+  model.answers = [answer("accept", ["It fixes the typo it names."])];
 
   await settled();
 
@@ -499,8 +498,8 @@ test.each([
     null,
   ],
 ] as const)("%s is logged as left to the Maintainer", async (_, review, action, suggestion) => {
-  const { reviewer, logged, settled } = deposited();
-  reviewer.answers = [review];
+  const { model, logged, settled } = deposited();
+  model.answers = [review];
 
   await settled();
 
@@ -509,8 +508,8 @@ test.each([
 });
 
 test("a model that fails is logged as left to the Maintainer, with no cost and no error text", async () => {
-  const { reviewer, logged, settled } = deposited();
-  reviewer.answers = [new Error("sk-ant-secret in a message")];
+  const { model, logged, settled } = deposited();
+  model.answers = [new Error("sk-ant-secret in a message")];
 
   await settled();
 
@@ -521,8 +520,8 @@ test("a model that fails is logged as left to the Maintainer, with no cost and n
 });
 
 test("the log keeps reasons as plain text for the page, not escaped for GitHub", async () => {
-  const { reviewer, logged, settled } = deposited();
-  reviewer.answers = [answer("bad-faith", ["Ask @alice\nabout <b>it</b> & see https://evil.example/x"])];
+  const { model, logged, settled } = deposited();
+  model.answers = [answer("bad-faith", ["Ask @alice\nabout <b>it</b> & see https://evil.example/x"])];
 
   await settled();
 
@@ -540,8 +539,8 @@ test("triage that never asked the model logs no decision", async () => {
 });
 
 test("a GitHub failure logs no decision; the check that tries again does", async () => {
-  const { github, reviewer, logged, settled } = deposited();
-  reviewer.answers = [answer("accept")];
+  const { github, model, logged, settled } = deposited();
+  model.answers = [answer("accept")];
   const contentOf = github.contentOf.bind(github);
   github.contentOf = async () => {
     github.contentOf = contentOf;
@@ -555,10 +554,10 @@ test("a GitHub failure logs no decision; the check that tries again does", async
 });
 
 test("a label a Maintainer adds while the model reads is a witness, and the decision is theirs", async () => {
-  const { github, reviewer, triage, deliver, logged } = deposited();
+  const { github, model, triage, deliver, logged } = deposited();
   let answerNow = () => {};
-  reviewer.gate = new Promise((resolve) => (answerNow = resolve));
-  reviewer.answers = [answer("bad-faith")];
+  model.gate = new Promise((resolve) => (answerNow = resolve));
+  model.answers = [answer("bad-faith")];
 
   await deliver("pull_request", payload("pull_request", "opened", { author: NEWCOMER }));
   await github.addLabel(HELLO_WORLD, PR, "bona-fide:ok");
@@ -571,10 +570,10 @@ test("a label a Maintainer adds while the model reads is a witness, and the deci
 
 // The label can come and go, and each look after it went would pay for another answer.
 test("once the model answered, a Maintainer's label that came meanwhile settles it, even after the label comes off", async () => {
-  const { github, reviewer, triage, deliver, settled } = deposited();
+  const { github, model, triage, deliver, settled } = deposited();
   let answerNow = () => {};
-  reviewer.gate = new Promise((resolve) => (answerNow = resolve));
-  reviewer.answers = [answer("bad-faith"), answer("bad-faith")];
+  model.gate = new Promise((resolve) => (answerNow = resolve));
+  model.answers = [answer("bad-faith"), answer("bad-faith")];
 
   await deliver("pull_request", payload("pull_request", "opened", { author: NEWCOMER }));
   await github.addLabel(HELLO_WORLD, PR, "bona-fide:bad-faith");
@@ -584,12 +583,12 @@ test("once the model answered, a Maintainer's label that came meanwhile settles 
   await settled({ action: "synchronize", labels: [] });
   await settled({ action: "synchronize", labels: [] });
 
-  expect(reviewer.requests).toHaveLength(1);
+  expect(model.requests).toHaveLength(1);
 });
 
 test("an item in a private repo is logged as private, so it is never published", async () => {
-  const { reviewer, logged, log, settled } = deposited("issue", "", { private: true });
-  reviewer.answers = [answer("accept")];
+  const { model, logged, log, settled } = deposited("issue", "", { private: true });
+  model.answers = [answer("accept")];
 
   await settled();
 
@@ -599,8 +598,8 @@ test("an item in a private repo is logged as private, so it is never published",
 });
 
 test("an item from a repo GitHub didn't say is public is logged as private", async () => {
-  const { reviewer, logged, deliver, triage } = deposited();
-  reviewer.answers = [answer("accept")];
+  const { model, logged, deliver, triage } = deposited();
+  model.answers = [answer("accept")];
   const body = payload("pull_request", "opened", { author: NEWCOMER });
   delete body.repository.private;
 

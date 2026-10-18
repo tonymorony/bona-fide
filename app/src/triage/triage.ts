@@ -1,45 +1,30 @@
 import type { Kind } from "@bona-fide/sdk";
 import type { Verdict } from "../app.ts";
 import type { Config } from "../config.ts";
-import { depositLink, triageAcceptNote, triageDraftNote, usdc } from "../copy.ts";
-import { decisionCost, newDecision } from "../decisions/log.ts";
+import { depositLink, markdownSafe, triageAcceptNote, triageDraftNote, usdc } from "../copy.ts";
+import { newDecision } from "../decisions/log.ts";
 import { ACCEPTED, BAD_FAITH, WAIVER } from "../labels.ts";
+import { BODY_BUDGET, cut, DIFF_BUDGET } from "../model/model.ts";
 import {
   fullName,
   type Decision,
+  type DecisionCost,
   type DecisionLog,
   type Deposit,
   type GitHub,
   type Item,
   type ItemContent,
-  type Review,
-  type Reviewer,
+  type Model,
   type ReviewRequest,
 } from "../ports.ts";
+import { REVIEW_QUESTION } from "./question.ts";
 
-/** Most characters of an item's body the model reads. */
-export const BODY_BUDGET = 20_000;
-/** Most characters of a PR's diff the model reads, about 15,000 tokens. */
-export const DIFF_BUDGET = 60_000;
-/** Most reasons a note shows, and most characters in each. */
-const MAX_REASONS = 4;
-const MAX_REASON_CHARS = 300;
 /** Most triaged Deposits remembered, so a re-check doesn't ask GitHub again. Past it, the memory is emptied. */
 const MAX_REMEMBERED = 10_000;
 
 const OFF = "skipped: off in bona-fide.yml";
 const DECIDED = "skipped: a Maintainer decided";
 const CHANGEABLE_SKIPS: TriageAction[] = [OFF, DECIDED];
-
-/** The model couldn't be asked, or erred. `reason` is short and names no secret. */
-export class ReviewFailed extends Error {
-  readonly reason: string;
-
-  constructor(reason: string) {
-    super(`Triage failed: ${reason}.`);
-    this.reason = reason;
-  }
-}
 
 export type TriageAction = "noted-accept" | "drafted-verdict" | "silent" | `skipped: ${string}` | `failed: ${string}`;
 
@@ -72,7 +57,7 @@ export interface TriageDecision {
 
 export interface TriageDeps {
   github: GitHub;
-  reviewer: Reviewer;
+  model: Model;
   /** The Maintainer's sign page, which a draft verdict links to. */
   signPageUrl: string;
   /** Hears every decision, such as to log it. */
@@ -96,7 +81,7 @@ export interface Triage {
 // forfeits: a Refund needs a Maintainer's acceptance, and a Forfeit the Maintainer's signature.
 export function createTriage({
   github,
-  reviewer,
+  model,
   signPageUrl,
   record,
   decisions,
@@ -105,8 +90,8 @@ export function createTriage({
   const triaged = new Set<string>();
   const running = new Map<string, Promise<void>>();
 
-  // `seen` collects what the decision log keeps beyond the log line: the reasons as plain text,
-  // and the labels read again after the model answered.
+  // `seen` collects what the decision log keeps beyond the log line: the reasons as plain text, the
+  // cost, and the labels read again after the model answered.
   async function decide(item: Item, serial: bigint, config: Config, seen: Seen): Promise<Outcome> {
     const none = { inputs: null, model: null, verdict: null, reasons: [], usage: null };
     if (!config.triage) return { ...none, action: OFF };
@@ -116,27 +101,21 @@ export function createTriage({
 
     const request = requestFor(item, await github.contentOf(item));
     const inputs = inputsOf(request);
-    let review: Review;
-    try {
-      review = await reviewer.review(request);
-    } catch (error) {
-      const reason = error instanceof ReviewFailed ? error.reason : "unexpected error";
-      return { ...none, inputs, action: `failed: ${reason}` };
-    }
-    const usage = { inputTokens: review.inputTokens, outputTokens: review.outputTokens };
-    const answered = { inputs, model: review.model, usage };
-    const suggestion = review.suggestion;
-    if (!suggestion) return { ...answered, verdict: null, reasons: [], action: "silent" };
-    seen.reasons = plainReasons(suggestion.reasons);
-    const reasons = seen.reasons.map(markdownSafe);
-    const decided = { ...answered, verdict: suggestion.verdict, reasons };
-    if (suggestion.verdict === "unsure" || reasons.length === 0) return { ...decided, action: "silent" };
+    const answer = await model.ask(REVIEW_QUESTION, request);
+    if (answer.status === "failed") return { ...none, inputs, action: `failed: ${answer.why}` };
+    const { cost } = answer;
+    seen.reasons = answer.reasons;
+    seen.cost = cost;
+    const usage = { inputTokens: cost.inputTokens, outputTokens: cost.outputTokens };
+    const reasons = answer.reasons.map(markdownSafe);
+    const decided = { inputs, model: cost.model, usage, verdict: answer.verdict, reasons };
+    if (answer.status !== "suggested" || answer.verdict === "unsure") return { ...decided, action: "silent" };
 
     // A Maintainer may have decided while the model read.
     const current = await github.getItem(item.repo, item.kind, item.number);
     seen.labelsAfter = current?.labels ?? null;
     if (!current || settledByMaintainer(current.labels)) return { ...decided, action: DECIDED };
-    if (suggestion.verdict === "accept") {
+    if (answer.verdict === "accept") {
       await github.addNote(item.repo, item.number, marker, triageAcceptNote(item.kind, reasons));
       return { ...decided, action: "noted-accept" };
     }
@@ -153,7 +132,7 @@ export function createTriage({
       serial: String(deposit.serial),
       author: item.author,
     };
-    const seen: Seen = { reasons: [], labelsAfter: undefined };
+    const seen: Seen = { reasons: [], cost: null, labelsAfter: undefined };
     let decision: TriageDecision;
     try {
       decision = { ...facts, ...(await decide(item, deposit.serial, config, seen)), at: now().toISOString() };
@@ -198,6 +177,8 @@ type Outcome = Omit<TriageDecision, keyof Facts | "at">;
 interface Seen {
   /** The model's reasons as plain lines, before they're made safe for GitHub. */
   reasons: string[];
+  /** What asking the model cost, if it could be asked. */
+  cost: DecisionCost | null;
   /** The item's labels once the model answered; undefined if they weren't read again. */
   labelsAfter: string[] | null | undefined;
 }
@@ -231,10 +212,7 @@ function logged(item: Item, deposit: Deposit, decision: TriageDecision, seen: Se
       action: decision.action,
       txHash: null,
       outcome: decision.action === "noted-accept" ? "decided" : "escalated",
-      cost:
-        decision.model && decision.usage
-          ? decisionCost(decision.model, decision.usage.inputTokens, decision.usage.outputTokens)
-          : null,
+      cost: seen.cost,
     },
     new Date(decision.at),
   );
@@ -275,14 +253,6 @@ function requestFor(item: Item, content: ItemContent): ReviewRequest {
   return request;
 }
 
-/** The text up to `budget` characters, ending at a line break if one is near, and how much was left out. */
-export function cut(text: string, budget: number): { text: string; leftOut: number } {
-  if (text.length <= budget) return { text, leftOut: 0 };
-  const lineEnd = text.lastIndexOf("\n", budget);
-  const end = lineEnd > budget * 0.9 ? lineEnd + 1 : budget;
-  return { text: text.slice(0, end), leftOut: text.length - end };
-}
-
 function inputsOf(request: ReviewRequest): TriageDecision["inputs"] {
   return {
     titleChars: request.title.length,
@@ -293,37 +263,6 @@ function inputsOf(request: ReviewRequest): TriageDecision["inputs"] {
       ? { diffChars: request.diff?.text.length ?? 0, diffLeftOut: request.diff?.leftOut ?? 0 }
       : {}),
   };
-}
-
-// The model read text anyone can write, so its answer is untrusted too. A reason is one plain line
-// with no links; in the note it also can't ping anyone or carry HTML.
-export function plainReasons(reasons: string[], max = MAX_REASONS): string[] {
-  return reasons
-    .map(plainReason)
-    .filter((reason) => reason !== "")
-    .slice(0, max);
-}
-
-function plainReason(reason: string): string {
-  const line = reason
-    .replace(/\s+/g, " ")
-    .replace(/!?\[([^\]]*)\]\([^)]*\)/g, "$1")
-    // GitHub links a URL after an underscore or a digit too, where \b doesn't match.
-    .replace(/(?:[a-z][a-z0-9+.-]*:\/\/|www\.)[^\s)\]>]*/gi, "(link removed)")
-    .trim();
-  return line.length > MAX_REASON_CHARS ? `${line.slice(0, MAX_REASON_CHARS - 1).trimEnd()}…` : line;
-}
-
-export function markdownSafe(line: string): string {
-  return (
-    line
-      .replace(/&/g, "&amp;")
-      .replace(/</g, "&lt;")
-      .replace(/>/g, "&gt;")
-      .replace(/([[\]])/g, "\\$1")
-      // A zero-width space after @ keeps GitHub from turning it into a mention.
-      .replace(/@/g, "@\u200b")
-  );
 }
 
 function safely(work: () => void): void {

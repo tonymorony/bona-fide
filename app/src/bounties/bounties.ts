@@ -1,37 +1,35 @@
 import { payoutSignature, repoIdOf } from "@bona-fide/sdk";
 import { hashTypedData, isAddressEqual, type Address, type Hex } from "viem";
 import { ARC_EXPLORER_URL, CONFIG_PATH, parseConfig } from "../config.ts";
-import { usdc } from "../copy.ts";
-import { decisionCost, newDecision } from "../decisions/log.ts";
+import { markdownSafe, usdc } from "../copy.ts";
+import { newDecision } from "../decisions/log.ts";
 import { TransactionReverted } from "../keeper/escrow.ts";
 import { Refusal } from "../keeper/keeper.ts";
+import { BODY_BUDGET, cut, DIFF_BUDGET } from "../model/model.ts";
 import {
   fullName,
   type Chain,
   type ClosingPullRequest,
   type CommitCheck,
+  type Answer,
   type Decision,
-  type DecisionCost,
   type DecisionLog,
   type GitHub,
   type IssueClosing,
+  type Model,
   type PullRequestFacts,
   type Repo,
   type Resolution,
-  type ResolutionAnswer,
   type ResolutionRequest,
-  type Resolver,
   type Witness,
 } from "../ports.ts";
 import { cooldown, REVERT_COOLDOWN_MS } from "../relay/rate-limit.ts";
-import { BODY_BUDGET, cut, DIFF_BUDGET, markdownSafe, plainReasons, ReviewFailed } from "../triage/triage.ts";
 import { repoOf } from "../webhook.ts";
 import { bountyHeldNote, bountyLink, bountyPaidNote, payeeNeededNote, transactionLink } from "./copy.ts";
 import { payeeOf, payeeProblem, type Payee } from "./payee.ts";
+import { RESOLUTION_QUESTION } from "./question.ts";
 import { BountyRejection, type BountyWallets, type WalletBounty, type WalletState } from "./wallet.ts";
 
-/** Most reasons a held note shows. */
-const MAX_REASONS = 3;
 /** Most Bounties left to the Maintainer remembered in memory. */
 const MAX_LEFT = 10_000;
 /** Most check names a note lists, and most characters of each. */
@@ -44,7 +42,7 @@ export interface BountyDeps {
   chain: Pick<Chain, "bindingOf" | "startedAt">;
   wallets: BountyWallets;
   /** The model asked whether a PR resolves the issue. Without one, every Bounty waits for the Maintainer. */
-  resolver?: Resolver;
+  model?: Model;
   /** The page where the Maintainer signs a Payout, linked with ?repo=owner/name&issue=N&payee=0x…. */
   bountyPageUrl: string;
   /** The block explorer each Payout's note links to. Arc mainnet's by default. */
@@ -109,7 +107,7 @@ export function createBounties({
   github,
   chain,
   wallets,
-  resolver,
+  model,
   bountyPageUrl,
   explorerUrl = ARC_EXPLORER_URL,
   decisions,
@@ -260,25 +258,21 @@ export function createBounties({
       return;
     }
 
-    if (!resolver) {
+    if (!model) {
       const why = "no automated reviewer is set up to check that the PR resolves the issue";
       await holdForMaintainer(about, state, { why, action: "held: no model" }, signLink, null);
       return;
     }
     const request = await requestFor(repo, issue, facts);
-    const asked: Asked = { inputs: inputsOf(request), answer: null };
-    try {
-      asked.answer = await resolver.resolve(request);
-    } catch (error) {
-      const reason = error instanceof ReviewFailed ? error.reason : "unexpected error";
+    const answer = await model.ask(RESOLUTION_QUESTION, request);
+    const asked: Asked = { inputs: inputsOf(request), answer };
+    if (answer.status === "failed") {
       const why = "the automated reviewer couldn't be asked whether the PR resolves the issue";
-      await holdForMaintainer(about, state, { why, action: `failed: ${reason}` }, signLink, asked);
+      await holdForMaintainer(about, state, { why, action: `failed: ${answer.why}` }, signLink, asked);
       return;
     }
-    const verdict = asked.answer.suggestion?.verdict ?? null;
-    const reasons = plainReasons(asked.answer.suggestion?.reasons ?? [], MAX_REASONS);
-    if (verdict !== "resolves" || reasons.length === 0) {
-      await holdForMaintainer(about, state, modelHold(verdict, reasons.length > 0), signLink, asked);
+    if (answer.status !== "suggested" || answer.verdict !== "resolves") {
+      await holdForMaintainer(about, state, modelHold(answer.verdict, answer.reasons.length > 0), signLink, asked);
       return;
     }
 
@@ -342,7 +336,7 @@ export function createBounties({
     signLink: string,
     asked: Asked | null,
   ): Promise<void> {
-    const reasons = plainReasons(asked?.answer?.suggestion?.reasons ?? [], MAX_REASONS).map(markdownSafe);
+    const reasons = (asked?.answer.reasons ?? []).map(markdownSafe);
     const marker = bountyMarkers(facts.issue, state.bounty.serial).held;
     if (left.size >= MAX_LEFT) left.clear();
     left.add(`${fullName(facts.repo)}#${facts.issue}:${state.bounty.serial}:${facts.pr}`.toLowerCase());
@@ -423,13 +417,7 @@ export function createBounties({
     action: string,
     more: { outcome: Decision["outcome"]; txHash?: Hex; asked?: Asked | null },
   ): void {
-    const answer = more.asked?.answer ?? null;
-    const suggestion = answer?.suggestion
-      ? { verdict: answer.suggestion.verdict, reasons: plainReasons(answer.suggestion.reasons, MAX_REASONS) }
-      : null;
-    const cost: DecisionCost | null = answer
-      ? decisionCost(answer.model, answer.inputTokens, answer.outputTokens)
-      : null;
+    const answer = more.asked?.answer;
     const decision = newDecision(
       {
         repo: fullName(facts.repo),
@@ -438,12 +426,12 @@ export function createBounties({
         serial: String(facts.serial),
         type,
         inputs: { source: facts.source, pr: facts.pr, method: "keeper", ...more.asked?.inputs },
-        suggestion,
+        suggestion: answer?.verdict ? { verdict: answer.verdict, reasons: answer.reasons } : null,
         witnesses: facts.witnesses,
         action,
         txHash: more.txHash ?? null,
         outcome: more.outcome,
-        cost,
+        cost: answer?.cost ?? null,
       },
       now(),
     );
@@ -558,10 +546,10 @@ interface DecisionFacts {
   witnesses: Witness[];
 }
 
-/** What the model read, as sizes, and what it answered, if it did. */
+/** What the model read, as sizes, and what it answered. */
 interface Asked {
   inputs: Record<string, number>;
-  answer: ResolutionAnswer | null;
+  answer: Answer<Resolution>;
 }
 
 type Trigger = { repo: Repo; source: string } & ({ pr: number } | { issue: number });

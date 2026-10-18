@@ -55,13 +55,11 @@ export {
   type SignedForfeit,
 } from "./keeper/keeper.ts";
 export { BOUNTY_PAYOUT_PATH, createKeeperRoutes, type KeeperRoutesOptions } from "./keeper/routes.ts";
+export { BODY_BUDGET, DIFF_BUDGET, ModelFailed, settle, type Reply } from "./model/model.ts";
 export {
-  BODY_BUDGET,
   createTriage,
   decisionLine,
-  DIFF_BUDGET,
   markerFor,
-  ReviewFailed,
   type Triage,
   type TriageAction,
   type TriageDecision,
