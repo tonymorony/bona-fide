@@ -1,0 +1,50 @@
+name: Test
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  contracts:
+    # The private working copy carries this file too, and runs nothing.
+    if: github.repository == 'tonymorony/bona-fide'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - uses: foundry-rs/foundry-toolchain@v1
+      - run: forge test
+        working-directory: contracts
+
+  typescript:
+    if: github.repository == 'tonymorony/bona-fide'
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        package: [sdk, app, agent, web]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      # Every suite runs forge build first, and the anvil tests deploy the real contracts.
+      - uses: foundry-rs/foundry-toolchain@v1
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npm run typecheck
+        working-directory: ${{ matrix.package }}
+      # Ubuntu's AppArmor keeps Chrome from making its sandbox; the web suite drives Chrome.
+      - if: matrix.package == 'web'
+        run: sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
+      - run: npm test
+        working-directory: ${{ matrix.package }}
+        env:
+          CHROME: /usr/bin/google-chrome
