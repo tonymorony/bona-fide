@@ -91,6 +91,25 @@ Arc mainnet.
 | `APP_URL` | none | The Bona Fide App. Needed only to submit one-signature Deposits |
 | `MAX_DEPOSIT_USDC` | `5` | The most the tools will prepare or submit for one Deposit, in USDC |
 
+## When a PR or issue asks for a Deposit
+
+The App's "Bona Fide" check on a PR, and its comment on a PR or issue, end with a line GitHub doesn't
+show, for agents:
+
+```html
+<!-- bona-fide:deposit-request {"v":1,"chainId":5042,"escrow":"0xe2fe798427CFb43134FC37F6EE054c2da818fAc9","repo":"acme/widgets","kind":"pr","number":128,"amount":"1000000","depositUrl":"https://bofi.live/deposit?repo=acme%2Fwidgets&kind=pr&number=128","llmsTxtUrl":"https://bofi.live/llms.txt"} -->
+```
+
+Read it from the check run's `output.summary` or the comment's `body` through GitHub's API, with
+`depositRequestIn` from `@bona-fide/sdk` or as JSON. It is there only while the App asks for a
+Deposit.
+
+Anyone can post the same line in a comment, so take it only from the check run whose `app.slug` is
+`bona-fide-deposits`, or from a comment whose `performed_via_github_app.slug` is
+`bona-fide-deposits` (by `bona-fide-deposits[bot]`). Even then, its amount is only a hint: pass its
+`repo`, `kind` and `number` to `get_deposit_rules` and pay what the escrow says. If its `escrow` or
+`chainId` isn't the escrow and chain this server reads, stop and ask.
+
 ## How an agent deposits
 
 First, `get_deposit_rules(repo, kind, number)` reads the repo's rules for a PR (`kind: "pr"`) or an

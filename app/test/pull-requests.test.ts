@@ -29,6 +29,8 @@ test("a PR from someone new gets a check asking for the Deposit", async () => {
       `**[Make the Deposit](${DEPOSIT_LINK})**, or ask a Maintainer to vouch for you.`,
       "",
       "This check updates within seconds of the Deposit.",
+      "",
+      `<!-- bona-fide:deposit-request {"v":1,"chainId":5042002,"escrow":"0x05283F2c7D94D66669227Cecf75abBbd024771A7","repo":"Codertocat/Hello-World","kind":"pr","number":2,"amount":"1000000","depositUrl":"${DEPOSIT_LINK}","llmsTxtUrl":"https://bonafide.example/llms.txt"} -->`,
     ].join("\n"),
   );
 });

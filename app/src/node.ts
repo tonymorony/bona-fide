@@ -87,11 +87,19 @@ const github = createGitHub({
   },
 });
 
+const chainClient = createPublicClient({ transport: rpc });
 const chain = createEscrowChain({
-  client: createPublicClient({ transport: rpc }),
+  client: chainClient,
   escrow: env("ESCROW_ADDRESS") as Address,
   fromBlock: BigInt(process.env.ESCROW_FROM_BLOCK ?? "0"),
 });
+// Read once it is first needed, and again after a failed read.
+let chainId: Promise<number> | undefined;
+const escrowChainId = () =>
+  (chainId ??= chainClient.getChainId().catch((error: unknown) => {
+    chainId = undefined;
+    throw error;
+  }));
 
 const decisionsPath = process.env.DECISIONS_PATH || DEFAULT_DECISIONS_PATH;
 const decisionFile = await openDecisionFile(decisionsPath);
@@ -207,6 +215,7 @@ const app = createApp({
   github,
   chain,
   depositPageUrl: env("DEPOSIT_PAGE_URL"),
+  escrow: { address: env("ESCROW_ADDRESS") as Address, chainId: escrowChainId },
   setupPageUrl: env("SETUP_PAGE_URL"),
   explorerUrl: process.env.EXPLORER_URL || undefined,
   afterVerdict: keeper?.afterVerdict,

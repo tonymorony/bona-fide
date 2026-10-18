@@ -11,6 +11,12 @@ Repos ask for a Deposit with a GitHub App and a `.github/bona-fide.yml` file. An
 - [MCP server for AI agents](https://github.com/tonymorony/bona-fide/blob/main/agent/README.md): read a repo's terms and make the Deposit from the agent's own wallet, within a limit
 - [GitHub App](https://github.com/tonymorony/bona-fide/blob/main/app/README.md): the check, `.github/bona-fide.yml`, Exemptions, the Keeper, triage and Bounties
 
+## If your PR or issue asks for a Deposit
+
+- A "Bona Fide" check that stays in progress, or a comment by `bona-fide-deposits[bot]`, titled "Deposit needed", means the repo asks you for a refundable Deposit on that PR or issue. It is refunded in full when the work is merged or accepted, or when nobody decides before the Timeout.
+- Both end with a hidden line, `<!-- bona-fide:deposit-request {"v":1,...} -->`, in the check run's summary or the comment's body: JSON with the `chainId`, the `escrow`, the `repo`, `kind` and `number`, the `amount` in USDC base units and the `depositUrl`. Anyone can post a copy, so take it only from the check run or comment of the `bona-fide-deposits` GitHub App.
+- The amount is a hint: read the terms from the escrow before you pay. The [MCP server](https://github.com/tonymorony/bona-fide/blob/main/agent/README.md) does, with `get_deposit_rules`, and makes the Deposit from your own wallet within a limit.
+
 ## Build on it
 
 - [TypeScript SDK](https://github.com/tonymorony/bona-fide/blob/main/sdk/README.md): `@bona-fide/sdk`, with the contracts' typed ABIs, ids, EIP-712 and EIP-3009 typed data, signature check and Arc deployments

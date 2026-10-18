@@ -26,6 +26,8 @@ test("an issue from someone new gets one comment asking for the Deposit, and the
       `**[Make the Deposit](${DEPOSIT_LINK})**, or ask a Maintainer to vouch for you.`,
       "",
       "This comment updates within seconds of the Deposit.",
+      "",
+      `<!-- bona-fide:deposit-request {"v":1,"chainId":5042002,"escrow":"0x05283F2c7D94D66669227Cecf75abBbd024771A7","repo":"Codertocat/Hello-World","kind":"issue","number":1,"amount":"1000000","depositUrl":"${DEPOSIT_LINK}","llmsTxtUrl":"https://bonafide.example/llms.txt"} -->`,
     ].join("\n"),
   ]);
   expect(github.labelsOn(REPO, ISSUE)).toContain(REQUIRED);

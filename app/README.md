@@ -112,6 +112,27 @@ The check is evaluated again when the PR or issue is reopened, when a PR gets ne
 lands, when a Record Exemption is granted, and when someone presses **Re-run** on the check or
 **Re-run all checks** on its suite.
 
+### The Deposit request for AI agents
+
+While the check asks for a Deposit, its summary and the App's comment end with a line GitHub doesn't
+show, for AI agents:
+
+```html
+<!-- bona-fide:deposit-request {"v":1,"chainId":5042,"escrow":"0xe2fe798427CFb43134FC37F6EE054c2da818fAc9","repo":"acme/widgets","kind":"pr","number":128,"amount":"1000000","depositUrl":"https://bofi.live/deposit?repo=acme%2Fwidgets&kind=pr&number=128","llmsTxtUrl":"https://bofi.live/llms.txt"} -->
+```
+
+It names the escrow and its chain, the PR or issue, the amount in USDC base units, the deposit page,
+and `llms.txt` on the deposit page's site. `depositRequestIn` in `@bona-fide/sdk` reads it, and finds
+none in a text with two, or with one of another `v` or out of shape. No other check or comment
+carries it, so it goes once the Deposit lands or the item needs none. It leaves out the Timeout and
+the forfeit share, which an agent reads from the escrow.
+
+Anyone can post the same line in a comment. An agent takes it only from the "Bona Fide" check run of
+the [Bona Fide Deposits](https://github.com/apps/bona-fide-deposits) App, whose `app.slug` is
+`bona-fide-deposits`, or from that App's own comment, by `bona-fide-deposits[bot]`. Even then the
+block says only where to look, and its amount is a hint: an agent reads the repo's terms from the
+escrow, as the [MCP server](../agent/README.md)'s `get_deposit_rules` does, before it pays.
+
 ### Clock skew
 
 An item's `created_at` comes from GitHub's clock, and a Deposit's time from its Arc block. A
@@ -645,7 +666,7 @@ The host reads these environment variables:
 | `RPC_URL` | required | An Arc RPC endpoint that serves historical state |
 | `ESCROW_ADDRESS` | required | |
 | `ESCROW_FROM_BLOCK` | `0` | The escrow's deploy block. Searches start here, and on start the Keeper reads every Binding proposed and every Deposit made since |
-| `DEPOSIT_PAGE_URL` | required | The check links to it with `?repo=owner/repo&kind=pr\|issue&number=N` |
+| `DEPOSIT_PAGE_URL` | required | The check links to it with `?repo=owner/repo&kind=pr\|issue&number=N`. The [Deposit request](#the-deposit-request-for-ai-agents) also points agents to `/llms.txt` on its site |
 | `SETUP_PAGE_URL` | required | The Maintainer's setup page. Until a repo is set up, its checks link Maintainers to it with `?repo=owner/repo` |
 | `EXPLORER_URL` | `https://explorer.arc.io` | The block explorer a check links each Deposit's transaction to. On Arc testnet, `https://explorer.testnet.arc.io` |
 | `PORT` | `3000` | |
