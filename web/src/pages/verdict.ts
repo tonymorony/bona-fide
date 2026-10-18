@@ -226,7 +226,7 @@ async function sign(): Promise<void> {
     case "wait":
       return showProblem({
         title: "Verdict not sent yet",
-        body: /paused/i.test(outcome.message)
+        body: outcome.paused
           ? "Bona Fide paused verdicts for this Deposit after one failed on-chain. Nothing was forfeited."
           : "Bona Fide is getting too many requests from your connection right now. Nothing was forfeited.",
         retry: { label: "Sign again", until: Date.now() + outcome.seconds * 1000 },

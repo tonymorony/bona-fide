@@ -7,20 +7,13 @@ export {
   newDecision,
   type DecisionLogOptions,
 } from "./decisions/log.ts";
-export {
-  createDecisionRoutes,
-  DECISIONS_ENDPOINT,
-  LATEST as LATEST_DECISIONS,
-  type DecisionRoutesOptions,
-} from "./decisions/routes.ts";
+export { createDecisionRoutes, LATEST as LATEST_DECISIONS, type DecisionRoutesOptions } from "./decisions/routes.ts";
 export { createEscrowChain, type EscrowChainOptions } from "./escrow.ts";
 export { CHECK_NAME, createGitHub, quietLog, type GitHubOptions } from "./github.ts";
 export { DEPOSIT_REQUIRED, WAIVER } from "./labels.ts";
 export { fullName } from "./ports.ts";
 export {
   createDepositRelay,
-  parseSignedDeposit,
-  RELAY_DEPOSIT_PATH,
   relayerAccount,
   type DepositRelay,
   type DepositRelayOptions,
@@ -54,7 +47,7 @@ export {
   type KeeperDeps,
   type SignedForfeit,
 } from "./keeper/keeper.ts";
-export { BOUNTY_PAYOUT_PATH, createKeeperRoutes, type KeeperRoutesOptions } from "./keeper/routes.ts";
+export { createKeeperRoutes, type KeeperRoutesOptions } from "./keeper/routes.ts";
 export { BODY_BUDGET, DIFF_BUDGET, ModelFailed, settle, type Reply } from "./model/model.ts";
 export {
   createTriage,

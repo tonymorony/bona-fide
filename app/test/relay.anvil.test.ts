@@ -1,4 +1,6 @@
+import { refusalIn } from "@bona-fide/sdk";
 import { createPublicClient, http, type Hex } from "viem";
+import { generatePrivateKey, privateKeyToAccount } from "viem/accounts";
 import { afterAll, beforeAll, expect, test, vi } from "vitest";
 import { createDepositRelay, type DepositRelayOptions } from "../src/relay/deposit.ts";
 import { freePort, startAnvil, type Anvil } from "./support/anvil.ts";
@@ -45,7 +47,7 @@ test("a Deposit signed for an old amount is refused with the current one, and no
   const res = await handle(post(await kit.signedDeposit(signer, { repo, number: 12, value: 1_000_000n })), IP);
 
   expect(res.status).toBe(409);
-  expect(await res.json()).toMatchObject({ amount: "2000000" });
+  expect(await res.json()).toMatchObject({ code: "amount-changed", amount: "2000000" });
   expect(await kit.sent(wallet.account.address)).toBe(0);
 });
 
@@ -57,6 +59,7 @@ test("a Deposit for a repo without an active Binding is refused, and nothing is 
 
   expect(res.status).toBe(409);
   const body = (await res.json()) as { error: string };
+  expect(body).toMatchObject({ code: "inactive" });
   expect(body.error).toContain("isn't active for octo/unbound");
   expect(body).not.toHaveProperty("amount");
   expect(await kit.sent(wallet.account.address)).toBe(0);
@@ -70,7 +73,7 @@ test("a second Deposit for the same PR is refused with who paid the first, and n
   const res = await handle(post(await kit.signedDeposit(signer, { number: 14 })), IP);
 
   expect(res.status).toBe(409);
-  expect(await res.json()).toMatchObject({ depositor: anvil.contributor });
+  expect(await res.json()).toMatchObject({ code: "already-deposited", depositor: anvil.contributor });
   expect(await kit.sent(wallet.account.address)).toBe(0);
 });
 
@@ -83,7 +86,10 @@ test("a Deposit signed by another key is refused with USDC's reason, and nothing
   const res = await handle(post(body), IP);
 
   expect(res.status).toBe(422);
-  expect(((await res.json()) as { error: string }).error).toContain("FiatTokenV2: invalid signature");
+  expect(refusalIn(await res.json())).toMatchObject({
+    code: "bad-signature",
+    error: expect.stringContaining("FiatTokenV2: invalid signature"),
+  });
   expect(await kit.sent(wallet.account.address)).toBe(0);
 });
 
@@ -95,7 +101,40 @@ test("an expired authorization is refused with USDC's reason, and nothing is sen
   const res = await handle(post(await kit.signedDeposit(signer, { number: 16, validBefore: lapsed })), IP);
 
   expect(res.status).toBe(422);
-  expect(((await res.json()) as { error: string }).error).toContain("FiatTokenV2: authorization is expired");
+  expect(refusalIn(await res.json())).toMatchObject({
+    code: "expired",
+    error: expect.stringContaining("FiatTokenV2: authorization is expired"),
+  });
+  expect(await kit.sent(wallet.account.address)).toBe(0);
+});
+
+// USDC says why it refuses a bad or expired authorization, but not always why it refuses a low balance.
+test("a Deposit from a wallet without enough USDC is refused as a low balance, and nothing is sent", async () => {
+  const empty = privateKeyToAccount(generatePrivateKey());
+  const { wallet, handle } = await relay();
+
+  const res = await handle(post(await kit.signedDeposit(empty, { number: 26 })), IP);
+
+  expect(res.status).toBe(422);
+  expect(refusalIn(await res.json())).toMatchObject({
+    code: "low-balance",
+    error: expect.stringMatching(/^The Deposit would fail on-chain: /),
+  });
+  expect(await kit.sent(wallet.account.address)).toBe(0);
+});
+
+test("a Deposit that would fail on-chain for another reason is refused with USDC's reason", async () => {
+  const signer = await kit.fundedSigner();
+  const { wallet, handle } = await relay();
+  const body = { ...(await kit.signedDeposit(signer, { number: 27 })), validAfter: "1900000000" };
+
+  const res = await handle(post(body), IP);
+
+  expect(res.status).toBe(422);
+  expect(await res.json()).toEqual({
+    error: "The Deposit would fail on-chain: FiatTokenV2: authorization is not yet valid.",
+    code: "would-fail",
+  });
   expect(await kit.sent(wallet.account.address)).toBe(0);
 });
 
@@ -118,9 +157,10 @@ test("an authorization that expires within two minutes is refused before anythin
   const res = await handle(post(WELL_FORMED), IP);
 
   expect(res.status).toBe(422);
-  expect(((await res.json()) as { error: string }).error).toBe(
-    "This authorization expires too soon to be relayed. Sign a new one.",
-  );
+  expect(await res.json()).toEqual({
+    error: "This authorization expires too soon to be relayed. Sign a new one.",
+    code: "expired",
+  });
   expect(await kit.sent(wallet.account.address)).toBe(0);
 });
 
@@ -135,7 +175,10 @@ test("one wallet's Deposits are relayed only so many times a day, then it is tol
 
   expect(first.status).toBe(200);
   expect(second.status).toBe(429);
-  expect(((await second.json()) as { error: string }).error).toContain("deposit from your own wallet");
+  expect(refusalIn(await second.json())).toMatchObject({
+    code: "rate-limited",
+    error: expect.stringContaining("deposit from your own wallet"),
+  });
   expect(await kit.sent(wallet.account.address)).toBe(1);
 });
 
@@ -144,9 +187,11 @@ test("of two Deposits for one PR sent at once, only one is relayed", async () =>
   const { wallet, handle } = await relay();
   const bodies = [await kit.signedDeposit(first, { number: 17 }), await kit.signedDeposit(second, { number: 17 })];
 
-  const statuses = await Promise.all(bodies.map(async (body) => (await handle(post(body), IP)).status));
+  const answers = await Promise.all(bodies.map((body) => handle(post(body), IP)));
+  const refused = answers.find((res) => res.status !== 200)!;
 
-  expect(statuses.sort()).toEqual([200, 409]);
+  expect(answers.map((res) => res.status).sort()).toEqual([200, 409]);
+  expect(await refused.json()).toMatchObject({ code: "in-flight" });
   expect(await kit.sent(wallet.account.address)).toBe(1);
 });
 
@@ -175,8 +220,9 @@ test("a relayed Deposit that another one beats on-chain is reported as failed, w
     const res = await relayed;
 
     expect(res.status).toBe(502);
-    const { txHash } = (await res.json()) as { txHash: Hex };
-    expect((await anvil.client.getTransactionReceipt({ hash: txHash })).status).toBe("reverted");
+    const { code, txHash } = refusalIn(await res.json());
+    expect(code).toBe("reverted");
+    expect((await anvil.client.getTransactionReceipt({ hash: txHash! })).status).toBe("reverted");
   } finally {
     await kit.automine(true);
   }
@@ -191,9 +237,10 @@ test("a relayed Deposit that isn't mined in time is reported with its transactio
     const res = await handle(post(body), IP);
 
     expect(res.status).toBe(504);
-    const { txHash } = (await res.json()) as { txHash: Hex };
+    const { code, txHash } = refusalIn(await res.json());
+    expect(code).toBe("unconfirmed");
     await kit.mineBlock();
-    expect(await kit.depositedIn(txHash)).toMatchObject({ depositor: signer.address });
+    expect(await kit.depositedIn(txHash!)).toMatchObject({ depositor: signer.address });
   } finally {
     await kit.automine(true);
   }
@@ -206,6 +253,7 @@ test("only POST is allowed", async () => {
 
   expect(res.status).toBe(405);
   expect(res.headers.get("allow")).toBe("POST");
+  expect(await res.json()).toEqual({ error: "Use POST.", code: "method-not-allowed" });
 });
 
 test("when the chain can't be reached, the caller is told to retry and sees no internals", async () => {
@@ -222,7 +270,9 @@ test("when the chain can't be reached, the caller is told to retry and sees no i
   const res = await handle(post(await kit.signedDeposit(signer, { number: 23 })), IP);
 
   expect(res.status).toBe(503);
-  expect(await res.text()).not.toContain("secret-api-key");
+  const body = await res.text();
+  expect(body).not.toContain("secret-api-key");
+  expect(JSON.parse(body)).toMatchObject({ code: "unavailable" });
   expect(errors).toHaveBeenCalled();
   errors.mockRestore();
 });
@@ -238,6 +288,7 @@ test("an IP that sends too many requests is told when to retry, and other IPs go
   const limited = await from("198.51.100.1");
   expect(limited.status).toBe(429);
   expect(limited.headers.get("retry-after")).toBe("15");
+  expect(await limited.json()).toEqual({ error: "Too many requests. Try again in 15 s.", code: "rate-limited" });
   expect((await from("198.51.100.2")).status).toBe(400);
   now = 60_000;
   expect((await from("198.51.100.1")).status).toBe(400);
@@ -257,6 +308,7 @@ test("a repo that gets too many requests is told when to retry, whatever the IP"
 test.each([
   ["a body that isn't JSON", "{"],
   ["a repo that isn't owner/name", { ...WELL_FORMED, repo: "Hello-World" }],
+  ["an owner GitHub wouldn't allow", { ...WELL_FORMED, repo: "Hello_World/x" }],
   ["an unknown kind", { ...WELL_FORMED, kind: "discussion" }],
   ["a number that isn't a positive whole number", { ...WELL_FORMED, number: 0 }],
   ["a from that isn't an address", { ...WELL_FORMED, from: "0x1234" }],
@@ -270,7 +322,7 @@ test.each([
   const res = await handle(post(body), IP);
 
   expect(res.status).toBe(400);
-  expect(((await res.json()) as { error: string }).error).toMatch(/\w/);
+  expect(refusalIn(await res.json())).toMatchObject({ code: "invalid", error: expect.stringMatching(/\w/) });
   expect(await kit.sent(wallet.account.address)).toBe(0);
 });
 
@@ -301,7 +353,8 @@ test("after a relayed Deposit reverts on-chain, the relay sends none for that PR
   expect(samePr.status).toBe(429);
   expect(sameWallet.status).toBe(429);
   expect(sameWallet.headers.get("retry-after")).toBe("600");
-  expect(((await sameWallet.json()) as { error: string }).error).toMatch(/\w/);
+  expect(refusalIn(await samePr.json())).toMatchObject({ code: "paused" });
+  expect(refusalIn(await sameWallet.json())).toMatchObject({ code: "paused", error: expect.stringMatching(/\w/) });
   expect(later.status).toBe(200);
   expect(await kit.sent(wallet.account.address)).toBe(2);
 });

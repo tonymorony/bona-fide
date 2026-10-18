@@ -242,6 +242,7 @@ test("a Payout signed by anyone but the wallet's owner is refused, and nothing i
   expect(response?.status).toBe(400);
   expect(await response?.json()).toEqual({
     error: `This isn't the Maintainer's signature for this Bounty. Sign it with the Bounty wallet's owner, ${anvil.maintainer}.`,
+    code: "bad-signature",
   });
   expect(await anvil.client.getTransactionCount({ address: anvil.keeper })).toBe(sent);
   expect((await bountyOf(104)).status).not.toBe(PAID);
@@ -258,9 +259,9 @@ test("a Payout for a Bounty already paid, or one never posted, is refused", asyn
   const none = await post({ repo: REPO, issue: 999, payee: PAYEE, deadline, signature });
 
   expect(paid?.status).toBe(409);
-  expect(await paid?.json()).toEqual({ error: "This Bounty was already paid." });
+  expect(await paid?.json()).toEqual({ error: "This Bounty was already paid.", code: "resolved" });
   expect(none?.status).toBe(404);
-  expect(await none?.json()).toEqual({ error: "There's no Bounty on this issue." });
+  expect(await none?.json()).toEqual({ error: "There's no Bounty on this issue.", code: "not-found" });
 }, 30_000);
 
 test("a Bounty posted on-chain gets one note on its issue, and one from a wallet another account made for the repo doesn't", async () => {

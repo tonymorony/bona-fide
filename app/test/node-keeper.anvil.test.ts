@@ -67,7 +67,7 @@ test("the Node host serves the Keeper's endpoints, names the Keeper, and never p
     });
 
     expect(response.status).toBe(404);
-    expect(await response.json()).toEqual({ error: "There's no Deposit on this PR." });
+    expect(await response.json()).toEqual({ error: "There's no Deposit on this PR.", code: "not-found" });
     expect((await fetch(`http://127.0.0.1:${port}/binding-proof`, { method: "OPTIONS" })).status).toBe(204);
     expect(host.output()).toContain(`Keeper ${privateKeyToAccount(keeperKey).address}`);
     expect(host.output().toLowerCase()).not.toContain(keeperKey.slice(2).toLowerCase());

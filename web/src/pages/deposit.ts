@@ -322,17 +322,15 @@ async function settleRelay(outcome: Awaited<ReturnType<typeof relayDeposit>>): P
         retry: { label: "Sign again", action: "sign" },
         offerTwoStep: true,
       });
-    case "wait": {
-      const paused = /paused/i.test(outcome.message);
+    case "wait":
       return showProblem({
         title: "Deposit not sent yet",
-        body: paused
+        body: outcome.paused
           ? `Bona Fide paused Deposits for ${itemName(item!.kind, item!.number)}, or from this wallet, after one failed on-chain. ${noUsdcLeft}`
           : `Bona Fide is getting too many requests from your connection right now. ${noUsdcLeft}`,
         retry: { label: "Try again", action: "sign", until: Date.now() + outcome.seconds * 1000 },
         offerTwoStep: true,
       });
-    }
     case "reverted":
       return showProblem({
         title: "The Deposit failed on-chain",

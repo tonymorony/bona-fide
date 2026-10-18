@@ -1,9 +1,9 @@
-import { KINDS } from "@bona-fide/sdk";
+import { KINDS, REPO_NAME } from "@bona-fide/sdk";
 import { McpServer } from "@modelcontextprotocol/server";
 import type { Address } from "viem";
 import * as z from "zod/v4";
 import { describeMadeDeposit, describeRules, describeSignedPlan, describeTwoStepPlan, withDetails } from "./copy.ts";
-import { createDeposits, type DepositsOptions } from "./deposits.ts";
+import { createDeposits, type DepositsOptions, type SignedDepositFields } from "./deposits.ts";
 
 export type ServerOptions = DepositsOptions;
 
@@ -11,10 +11,7 @@ const address = z.string().regex(/^0x[0-9a-fA-F]{40}$/);
 const hex32 = z.string().regex(/^0x[0-9a-fA-F]{64}$/);
 
 const target = {
-  repo: z
-    .string()
-    .regex(/^[A-Za-z0-9-]{1,39}\/[A-Za-z0-9._-]{1,100}$/)
-    .describe("The GitHub repo, as owner/name."),
+  repo: z.string().regex(REPO_NAME).describe("The GitHub repo, as owner/name."),
   kind: z.enum(KINDS).describe('"pr" for a pull request, "issue" for an issue.'),
   number: z.number().int().positive().describe("The PR or issue number."),
 };
@@ -44,6 +41,7 @@ const rulesOutput = z.object({
 
 const from = address.describe("The wallet that pays the Deposit and gets every Refund: your own.");
 
+// The relay's body, which the App reads with the sdk's relayDepositRoute.
 const signedFields = {
   ...target,
   from,
@@ -51,7 +49,7 @@ const signedFields = {
   validAfter: z.string().regex(/^\d+$/),
   validBefore: z.string().regex(/^\d+$/),
   salt: hex32,
-};
+} satisfies Record<keyof SignedDepositFields, z.ZodType>;
 
 const signedPlanOutput = z.object({
   typedData: z.object({

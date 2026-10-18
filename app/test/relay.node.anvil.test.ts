@@ -86,7 +86,7 @@ test("without RELAYER_PRIVATE_KEY the Node host doesn't relay", async () => {
   try {
     const res = await app.relay({});
     expect(res.status).toBe(404);
-    expect(await res.json()).toEqual({ error: "This App doesn't relay Deposits." });
+    expect(await res.json()).toEqual({ error: "This App doesn't relay Deposits.", code: "not-served" });
   } finally {
     app.stop();
   }

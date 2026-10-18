@@ -15,6 +15,7 @@
 import { AsyncLocalStorage } from "node:async_hooks";
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 import Anthropic from "@anthropic-ai/sdk";
+import { APP_PATHS, type RefusalBody } from "@bona-fide/sdk";
 import { createAppAuth } from "@octokit/auth-app";
 import { Octokit } from "@octokit/rest";
 import { createPublicClient, createWalletClient, http, type Address } from "viem";
@@ -25,19 +26,19 @@ import { createBountyWallets } from "./bounties/wallet.ts";
 import { clientIpOf } from "./client-ip.ts";
 import { MAX_JSON_BODY_BYTES, MAX_WEBHOOK_BODY_BYTES } from "./config.ts";
 import { DEFAULT_DECISIONS_PATH, openDecisionFile } from "./decisions/file.ts";
-import { createDecisionRoutes, DECISIONS_ENDPOINT } from "./decisions/routes.ts";
+import { createDecisionRoutes } from "./decisions/routes.ts";
 import { createEscrowChain } from "./escrow.ts";
 import { createGitHub, quietLog } from "./github.ts";
 import { createBindingActivator } from "./keeper/activator.ts";
 import { createKeeperEscrow, keeperAccount } from "./keeper/escrow.ts";
 import { createKeeper } from "./keeper/keeper.ts";
-import { BINDING_PROOF_PATH, BOUNTY_PAYOUT_PATH, createKeeperRoutes, FORFEIT_PATH } from "./keeper/routes.ts";
+import { createKeeperRoutes } from "./keeper/routes.ts";
 import { createTimeoutRefunder } from "./keeper/timeouts.ts";
 import { createClaudeModel, DEFAULT_MODEL } from "./model/claude.ts";
 import { createRecordExemptions } from "./records/exemption.ts";
 import { DEFAULT_RECORDS_PATH, openRecordFile } from "./records/file.ts";
 import { createRecordIndex } from "./records/records.ts";
-import { createDepositRelay, RELAY_DEPOSIT_PATH, relayerAccount } from "./relay/deposit.ts";
+import { createDepositRelay, relayerAccount } from "./relay/deposit.ts";
 import { createRateLimiter, DEFAULT_RPC_RPS, rateLimited } from "./rpc.ts";
 import { createTriage, decisionLine } from "./triage/triage.ts";
 import { createDepositWatcher, pollDeposits } from "./watcher.ts";
@@ -243,15 +244,17 @@ const decisionRoutes = createDecisionRoutes(decisions);
 
 async function route(request: Request, clientIp: string): Promise<Response> {
   const path = new URL(request.url).pathname;
-  if (path === DECISIONS_ENDPOINT) return (await decisionRoutes(request, clientIp))!;
-  if (path === RELAY_DEPOSIT_PATH) {
+  if (path === APP_PATHS.decisions) return (await decisionRoutes(request, clientIp))!;
+  if (path === APP_PATHS.relayDeposit) {
     if (relay) return relay(request, clientIp);
-    return Response.json({ error: "This App doesn't relay Deposits." }, { status: 404 });
+    return notServed("This App doesn't relay Deposits.");
   }
-  if (path === BOUNTY_PAYOUT_PATH && !bounties) {
-    return Response.json({ error: "This App doesn't pay Bounties." }, { status: 404 });
-  }
+  if (path === APP_PATHS.bountyPayout && !bounties) return notServed("This App doesn't pay Bounties.");
   return handle(request, clientIp);
+}
+
+function notServed(error: string): Response {
+  return Response.json({ error, code: "not-served" } satisfies RefusalBody, { status: 404 });
 }
 
 const server = createServer(async (req, res) => {
@@ -285,7 +288,12 @@ const server = createServer(async (req, res) => {
   }
 });
 
-const JSON_PATHS = [RELAY_DEPOSIT_PATH, FORFEIT_PATH, BINDING_PROOF_PATH, BOUNTY_PAYOUT_PATH];
+const JSON_PATHS: string[] = [
+  APP_PATHS.relayDeposit,
+  APP_PATHS.forfeit,
+  APP_PATHS.bindingProof,
+  APP_PATHS.bountyPayout,
+];
 
 function bodyLimit(path: string): number {
   return JSON_PATHS.includes(path) ? MAX_JSON_BODY_BYTES : MAX_WEBHOOK_BODY_BYTES;
@@ -311,7 +319,10 @@ function readBody(req: IncomingMessage, limit: number): Promise<Buffer | null> {
 // Closing the connection is what stops the read: kept alive, Node would read the rest to reach the next request.
 function tooLarge(res: ServerResponse, limit: number): void {
   const size = limit % (1024 * 1024) === 0 ? `${limit / (1024 * 1024)} MiB` : `${limit / 1024} KiB`;
-  const body = JSON.stringify({ error: `The request body is over the ${size} limit.` });
+  const body = JSON.stringify({
+    error: `The request body is over the ${size} limit.`,
+    code: "too-large",
+  } satisfies RefusalBody);
   res.writeHead(413, {
     "content-type": "application/json",
     "content-length": Buffer.byteLength(body),

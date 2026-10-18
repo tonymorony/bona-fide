@@ -6,13 +6,6 @@ import type { Network } from "./src/network.ts";
 // bountyFactory, the pages say Bounties aren't available on the network yet. The contract addresses
 // and deploy blocks come from the SDK's deployments.
 
-const ENDPOINTS = {
-  relayDeposit: "/relay/deposit",
-  forfeit: "/forfeit",
-  bindingProof: "/binding-proof",
-  bountyPayout: "/bounty/payout",
-};
-
 export const testnet: Network = {
   ...arcTestnet,
   // The testnet router flushes through CCTP to a test address on Base Sepolia: Protocol Guild's
@@ -28,7 +21,6 @@ export const testnet: Network = {
     url: "https://sepolia.basescan.org/address/0x27fd2C380442C9E0da2Bb56279f4b95d97767656",
     vests: false,
   },
-  endpoints: ENDPOINTS,
   links: {
     getUsdc: "https://faucet.circle.com",
     portal: "",
@@ -51,7 +43,6 @@ export const mainnet: Network = {
     url: "https://basescan.org/address/0xffaaCCFe120f3fC47f42102cF4F28e837cd49A20",
     vests: true,
   },
-  endpoints: ENDPOINTS,
   links: {
     getUsdc: "",
     portal: "https://portal.arc.io",

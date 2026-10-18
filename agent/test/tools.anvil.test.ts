@@ -1,3 +1,4 @@
+import type { RefusalBody } from "@bona-fide/sdk";
 import type { Address, Hex } from "viem";
 import { afterAll, beforeAll, expect, test } from "vitest";
 import { castSign, repoIdOf, startChain, type Chain } from "./support/chain.ts";
@@ -254,7 +255,7 @@ function relayingApp() {
   return { fetch: fetch as typeof globalThis.fetch, requests };
 }
 
-function answeringApp(status: number, body: unknown) {
+function answeringApp(status: number, body: RefusalBody | { txHash: Hex } | object) {
   const requests: string[] = [];
   const fetch = async (input: string | URL | Request) => {
     requests.push(String(input));
@@ -291,7 +292,7 @@ test("submit_signed_deposit passes on the App's refusal, and says to sign again 
   const { fields } = await signedFields(9);
   const error =
     "The Deposit for octo/tools is 2 USDC, but this authorization is for 1 USDC. Sign a new one for 2 USDC.";
-  const app = answeringApp(409, { error, amount: "2000000" });
+  const app = answeringApp(409, { error, code: "amount-changed", amount: "2000000" } satisfies RefusalBody);
   const mcp = await connect({ ...options(), appUrl: APP_URL, fetch: app.fetch });
 
   const result = await mcp.call("submit_signed_deposit", fields);
@@ -343,7 +344,11 @@ test("without APP_URL, submit_signed_deposit points to the two-step path", async
 test("when the App sent the Deposit but couldn't confirm it, submit_signed_deposit confirms it on-chain", async () => {
   const { account, fields } = await signedFields(13);
   const { transactionHash } = await chain.depositWithAuthorization(fields);
-  const app = answeringApp(504, { error: "The Deposit was sent but isn't confirmed yet.", txHash: transactionHash });
+  const app = answeringApp(504, {
+    error: "The Deposit was sent but isn't confirmed yet.",
+    code: "unconfirmed",
+    txHash: transactionHash,
+  } satisfies RefusalBody);
   const mcp = await connect({ ...options(), appUrl: APP_URL, fetch: app.fetch });
 
   const result = await mcp.call("submit_signed_deposit", fields);
@@ -367,8 +372,12 @@ test("submit_signed_deposit refuses an App answer without a transaction", async 
 
 test("when a relayed transaction isn't mined in time, submit_signed_deposit says to check again later", async () => {
   const { fields } = await signedFields(15);
-  const unmined = `0x${"77".repeat(32)}`;
-  const app = answeringApp(504, { error: "The Deposit was sent but isn't confirmed yet.", txHash: unmined });
+  const unmined: Hex = `0x${"77".repeat(32)}`;
+  const app = answeringApp(504, {
+    error: "The Deposit was sent but isn't confirmed yet.",
+    code: "unconfirmed",
+    txHash: unmined,
+  } satisfies RefusalBody);
   const mcp = await connect({ ...options(), appUrl: APP_URL, fetch: app.fetch, receiptTimeoutMs: 300 });
 
   const result = await mcp.call("submit_signed_deposit", fields);

@@ -1,4 +1,4 @@
-import { payoutSignature, repoIdOf } from "@bona-fide/sdk";
+import { payoutSignature, repoIdOf, type SignedPayout } from "@bona-fide/sdk";
 import { hashTypedData, isAddressEqual, type Address, type Hex } from "viem";
 import { ARC_EXPLORER_URL, CONFIG_PATH, parseConfig } from "../config.ts";
 import { markdownSafe, usdc } from "../copy.ts";
@@ -54,14 +54,7 @@ export interface BountyDeps {
   record?(decision: Decision): void;
 }
 
-/** A Payout the Maintainer signed, for the issue `issue` in `repo` (owner/name). */
-export interface SignedPayout {
-  repo: string;
-  issue: number;
-  payee: Address;
-  deadline: bigint;
-  signature: Hex;
-}
+export type { SignedPayout };
 
 export interface Bounties {
   /**
@@ -454,19 +447,23 @@ export function createBounties({
 
     async relayPayout({ repo: name, issue, payee, deadline, signature }) {
       const repo = await github.findRepo(repoIdOf(name));
-      if (!repo) throw new Refusal(404, `Bona Fide isn't installed on ${name}.`);
+      if (!repo) throw new Refusal(404, "not-installed", `Bona Fide isn't installed on ${name}.`);
       const wallet = await walletOf(repo);
-      if (!wallet) throw new Refusal(404, `${name} has no Bounty wallet: its Maintainer hasn't created one.`);
+      if (!wallet) {
+        throw new Refusal(404, "not-found", `${name} has no Bounty wallet: its Maintainer hasn't created one.`);
+      }
       const state = await wallets.stateOf(wallet, issue);
       const { bounty, owner } = state;
-      if (bounty.status === "none") throw new Refusal(404, "There's no Bounty on this issue.");
-      if (bounty.status !== "open") throw new Refusal(409, `This Bounty was already ${bounty.status}.`);
+      if (bounty.status === "none") throw new Refusal(404, "not-found", "There's no Bounty on this issue.");
+      if (bounty.status !== "open") throw new Refusal(409, "resolved", `This Bounty was already ${bounty.status}.`);
       const id = `${wallet}:${issue}`.toLowerCase();
       const wait = Math.max(afterRevert.wait(id), afterRevert.wait(owner.toLowerCase()));
-      if (wait > 0) throw new Refusal(429, `${PAUSED_AFTER_REVERT} Try again in ${wait} s.`, { retryAfter: wait });
+      if (wait > 0) {
+        throw new Refusal(429, "paused", `${PAUSED_AFTER_REVERT} Try again in ${wait} s.`, { retryAfter: wait });
+      }
       const problem = payeeProblem(payee, wallet, wallets.keeper);
-      if (problem) throw new Refusal(400, `This payee can't be paid: ${problem}.`);
-      if ((await wallets.now()) > deadline) throw new Refusal(400, SIGNATURE_EXPIRED);
+      if (problem) throw new Refusal(400, "bad-payee", `This payee can't be paid: ${problem}.`);
+      if ((await wallets.now()) > deadline) throw new Refusal(400, "expired", SIGNATURE_EXPIRED);
       const digest = hashTypedData(
         payoutSignature({
           chainId: await wallets.chainId(),
@@ -489,6 +486,7 @@ export function createBounties({
         afterRevert.hold(owner.toLowerCase());
         throw new Refusal(
           502,
+          "reverted",
           "The Payout was sent but reverted on-chain, so no funds moved. Try again in 10 minutes.",
           {
             txHash: error.txHash,
@@ -747,6 +745,7 @@ const PAUSED_AFTER_REVERT =
 function notTheOwners(owner: Address): Refusal {
   return new Refusal(
     400,
+    "bad-signature",
     `This isn't the Maintainer's signature for this Bounty. Sign it with the Bounty wallet's owner, ${owner}.`,
   );
 }
@@ -755,9 +754,11 @@ function notTheOwners(owner: Address): Refusal {
 // answer the Bounty wallet differently than it answered the Keeper.
 function refusalFor(error: BountyRejection, owner: Address): unknown {
   if (error.reason === "InvalidSignature") return notTheOwners(owner);
-  if (error.reason === "BountyNotOpen") return new Refusal(409, "This Bounty was paid or cancelled in the meantime.");
-  if (error.reason === "SignatureExpired") return new Refusal(400, SIGNATURE_EXPIRED);
-  if (error.reason === "InvalidRecipient") return new Refusal(400, "This payee can't be paid.");
+  if (error.reason === "BountyNotOpen") {
+    return new Refusal(409, "resolved", "This Bounty was paid or cancelled in the meantime.");
+  }
+  if (error.reason === "SignatureExpired") return new Refusal(400, "expired", SIGNATURE_EXPIRED);
+  if (error.reason === "InvalidRecipient") return new Refusal(400, "bad-payee", "This payee can't be paid.");
   return error;
 }
 

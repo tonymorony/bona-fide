@@ -156,12 +156,6 @@ export async function startStack() {
       url: `https://sepolia.basescan.org/address/${RECIPIENT}`,
       vests: false,
     },
-    endpoints: {
-      relayDeposit: "/relay/deposit",
-      forfeit: "/forfeit",
-      bindingProof: "/binding-proof",
-      bountyPayout: "/bounty/payout",
-    },
     links: { getUsdc: "https://faucet.circle.com", portal: "https://portal.arc.io", source: "", installApp: "" },
     walletConnectProjectId: "",
   };

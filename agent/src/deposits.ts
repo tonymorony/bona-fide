@@ -4,10 +4,15 @@ import {
   escrowAbi,
   keyOf,
   kindCode,
+  refusalIn,
+  relayDepositRoute,
   repoIdOf,
   USDC_DECIMALS,
   usdcAbi,
+  type AppRefusal,
   type Kind,
+  type SignedDeposit,
+  type Wire,
 } from "@bona-fide/sdk";
 import {
   encodeFunctionData,
@@ -29,7 +34,8 @@ const STATUS_ACTIVE = DEPOSIT_STATUSES.indexOf("active");
 const DAY_SECONDS = 86_400;
 /** How long a signed authorization stays valid. Anyone holding it can submit it until then. */
 const SIGNATURE_WINDOW_SECONDS = 600n;
-const RELAY_PATH = "relay/deposit";
+// Relative, so an APP_URL with a path keeps it.
+const RELAY_PATH = relayDepositRoute.path.replace(/^\//, "");
 const RECEIPT_TIMEOUT_MS = 60_000;
 const RECEIPT_POLL_MS = 500;
 
@@ -66,14 +72,8 @@ export interface DepositRules extends Target {
   withinLimit: boolean | null;
 }
 
-/** What submit_signed_deposit needs, besides the signature. */
-export interface SignedDepositFields extends Target {
-  from: Address;
-  value: string;
-  validAfter: string;
-  validBefore: string;
-  salt: Hex;
-}
+/** What submit_signed_deposit needs, besides the signature: the relay's body, as the App reads it. */
+export type SignedDepositFields = Omit<Wire<SignedDeposit>, "signature">;
 
 export interface SignedDepositPlan {
   /** USDC's EIP-3009 ReceiveWithAuthorization, as EIP-712 typed data JSON. */
@@ -277,8 +277,10 @@ export function createDeposits({
     };
   }
 
-  async function submitSigned(fields: SignedDepositFields & { signature: Hex }): Promise<MadeDeposit> {
-    const value = BigInt(fields.value);
+  async function submitSigned(fields: Wire<SignedDeposit>): Promise<MadeDeposit> {
+    const decoded = relayDepositRoute.decode(fields);
+    if (!decoded.ok) throw new Refusal(decoded.problem);
+    const { value } = decoded.value;
     if (value > maxDeposit) {
       throw new Refusal(
         `This authorization is for ${usdc6(value)} USDC, above your limit of ${usdc6(maxDeposit)} USDC. Ask the person you work for to raise MAX_DEPOSIT_USDC or to make the Deposit themselves.`,
@@ -295,22 +297,24 @@ export function createDeposits({
       response = await fetch(url.toString(), {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify(fields),
+        body: JSON.stringify(relayDepositRoute.encode(decoded.value)),
       });
     } catch {
       throw new Refusal(
         `The Bona Fide App at ${url.origin} can't be reached. Try again, or use prepare_two_step_deposit.`,
       );
     }
-    const answer = (await response.json().catch(() => ({}))) as { txHash?: Hex; error?: string; amount?: string };
-    const pending = response.status === 504 && answer.txHash;
-    if (!response.ok && !pending) throw new Refusal(relayRefusal(response.status, answer));
-    if (!answer.txHash || !/^0x[0-9a-fA-F]{64}$/.test(answer.txHash)) {
+    const body: unknown = await response.json().catch(() => null);
+    const refusal = refusalIn(body);
+    const txHash = response.ok ? relayDepositRoute.answer(body)?.txHash : refusal.txHash;
+    const pending = response.status === 504 && txHash;
+    if (!response.ok && !pending) throw new Refusal(relayRefusal(response.status, refusal));
+    if (!txHash) {
       throw new Refusal(
         "The Bona Fide App didn't answer with a transaction. Check get_deposit_rules before trying again.",
       );
     }
-    return confirm(answer.txHash, fields);
+    return confirm(txHash, fields);
   }
 
   /** Reads the Deposit from the chain itself, rather than taking the App's word for it. */
@@ -348,13 +352,13 @@ export function createDeposits({
   return { rules, prepareSigned, prepareTwoStep, submitSigned };
 }
 
-function relayRefusal(status: number, answer: { error?: string; amount?: string; txHash?: Hex }): string {
+function relayRefusal(status: number, { code, error, txHash }: AppRefusal): string {
   if (status === 404) {
     return "This Bona Fide App doesn't relay Deposits. Use prepare_two_step_deposit to deposit from your own wallet.";
   }
-  const said = answer.error ?? `The Bona Fide App answered ${status}.`;
-  if (answer.amount) return `${said} Call prepare_signed_deposit again and sign the new typed data.`;
-  if (answer.txHash) return `${said} Transaction: ${answer.txHash}.`;
+  const said = error || `The Bona Fide App answered ${status}.`;
+  if (code === "amount-changed") return `${said} Call prepare_signed_deposit again and sign the new typed data.`;
+  if (txHash) return `${said} Transaction: ${txHash}.`;
   return said;
 }
 

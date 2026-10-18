@@ -73,6 +73,11 @@ const VALID = {
 test.each([
   ["no JSON body", "{", "Send a JSON body with repo, kind, number, sigDeadline and signature."],
   ["a repo without an owner", { ...VALID, repo: "hello" }, "repo must be owner/name, such as octocat/hello-world."],
+  [
+    "an owner GitHub wouldn't allow",
+    { ...VALID, repo: "hello_world/x" },
+    "repo must be owner/name, such as octocat/hello-world.",
+  ],
   ["an unknown kind", { ...VALID, kind: "commit" }, 'kind must be "pr" or "issue".'],
   ["a number that isn't whole", { ...VALID, number: 1.5 }, "number must be a whole number above 0."],
   ["a deadline that isn't a time", { ...VALID, sigDeadline: "soon" }, "sigDeadline must be a time in Unix seconds."],
@@ -88,7 +93,7 @@ test.each([
   );
 
   expect(response?.status).toBe(400);
-  expect(await response?.json()).toEqual({ error });
+  expect(await response?.json()).toEqual({ error, code: "invalid" });
 });
 
 async function keeperSignature(message: { key: `0x${string}`; serial: bigint; sigDeadline: bigint }) {
@@ -134,6 +139,7 @@ test.each([
     expect(response?.status).toBe(400);
     expect(await response?.json()).toEqual({
       error: `This isn't the Maintainer's signature for this Deposit. Sign it with the Maintainer's wallet, ${anvil.maintainer}.`,
+      code: "bad-signature",
     });
     expect((await depositOf("pr", number)).status).toBe(ACTIVE);
     expect(await anvil.client.getTransactionCount({ address: anvil.keeper })).toBe(sent);
@@ -154,7 +160,7 @@ test("a Forfeit for a PR without a Deposit is refused", async () => {
   const response = await post("/forfeit", { ...VALID, number: 205 });
 
   expect(response?.status).toBe(404);
-  expect(await response?.json()).toEqual({ error: "There's no Deposit on this PR." });
+  expect(await response?.json()).toEqual({ error: "There's no Deposit on this PR.", code: "not-found" });
 });
 
 test("a Forfeit sent again after it went through is refused", async () => {
@@ -166,7 +172,7 @@ test("a Forfeit sent again after it went through is refused", async () => {
   const again = await post("/forfeit", request);
 
   expect(again?.status).toBe(409);
-  expect(await again?.json()).toEqual({ error: "This Deposit was already forfeited." });
+  expect(await again?.json()).toEqual({ error: "This Deposit was already forfeited.", code: "resolved" });
 }, 30_000);
 
 test("a Forfeit for a refunded Deposit is refused", async () => {
@@ -178,7 +184,7 @@ test("a Forfeit for a refunded Deposit is refused", async () => {
   const response = await post("/forfeit", request);
 
   expect(response?.status).toBe(409);
-  expect(await response?.json()).toEqual({ error: "This Deposit was already refunded." });
+  expect(await response?.json()).toEqual({ error: "This Deposit was already refunded.", code: "resolved" });
 }, 30_000);
 
 test("a Forfeit signed for an earlier Deposit on the same PR is refused", async () => {
@@ -201,7 +207,10 @@ test("a Forfeit whose signature has expired is refused", async () => {
   const response = await post("/forfeit", await signedRequest(209, { sigDeadline: await secondsFromNow(-1n) }));
 
   expect(response?.status).toBe(400);
-  expect(await response?.json()).toEqual({ error: "This signature has expired. Sign again with a later deadline." });
+  expect(await response?.json()).toEqual({
+    error: "This signature has expired. Sign again with a later deadline.",
+    code: "expired",
+  });
 }, 30_000);
 
 test("a Forfeit after the Timeout is refused", async () => {
@@ -220,6 +229,7 @@ test("a Forfeit after the Timeout is refused", async () => {
     expect(response?.status).toBe(409);
     expect(await response?.json()).toEqual({
       error: "The Timeout has passed, so this Deposit can't be forfeited. Anyone can now refund it in full.",
+      code: "timeout-passed",
     });
   } finally {
     await chain.revert({ id: snapshot });
@@ -241,7 +251,7 @@ test("a Forfeit that loses a race with a refund is refused", async () => {
   const response = await post("/forfeit", await signedRequest(211));
 
   expect(response?.status).toBe(409);
-  expect(await response?.json()).toEqual({ error: "This Deposit was resolved in the meantime." });
+  expect(await response?.json()).toEqual({ error: "This Deposit was resolved in the meantime.", code: "resolved" });
 }, 30_000);
 
 test("a Maintainer's smart-contract wallet (ERC-1271) can sign the Forfeit", async () => {
@@ -414,7 +424,7 @@ test("the Keeper's endpoints take only POST", async () => {
 
   expect(response?.status).toBe(405);
   expect(response?.headers.get("allow")).toBe("POST, OPTIONS");
-  expect(await response?.json()).toEqual({ error: "Send a POST request." });
+  expect(await response?.json()).toEqual({ error: "Send a POST request.", code: "method-not-allowed" });
 });
 
 test("an IP that sends too many requests to the Keeper's endpoints is told when to retry, and other IPs go on", async () => {
@@ -431,6 +441,7 @@ test("an IP that sends too many requests to the Keeper's endpoints is told when 
   expect(limited?.status).toBe(429);
   expect(limited?.headers.get("retry-after")).toBe("15");
   expect(limited?.headers.get("access-control-allow-origin")).toBe("*");
+  expect(await limited?.json()).toEqual({ error: "Too many requests. Try again in 15 s.", code: "rate-limited" });
   expect((await send("/binding-proof", "198.51.100.2"))?.status).toBe(400);
   now = 60_000;
   expect((await send("/forfeit", "198.51.100.1"))?.status).toBe(400);
@@ -464,9 +475,11 @@ test("a Forfeit that reverts on-chain after passing simulation stops the Keeper 
   expect(reverted?.status).toBe(502);
   expect(await reverted?.json()).toEqual({
     error: "The Forfeit was sent but reverted on-chain, so no funds moved. Try again in 10 minutes.",
+    code: "reverted",
     txHash: expect.stringMatching(/^0x[0-9a-f]{64}$/),
   });
   expect(again?.status).toBe(429);
+  expect(await again?.json()).toMatchObject({ code: "paused" });
   expect(Number(again?.headers.get("retry-after"))).toBeGreaterThan(0);
   expect(sameWallet?.status).toBe(429);
   expect(await anvil.client.getTransactionCount({ address: anvil.keeper })).toBe(sent + 1);

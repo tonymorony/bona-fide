@@ -1,6 +1,7 @@
+import { decisionsRoute } from "@bona-fide/sdk";
 import { expect, test } from "vitest";
 import { createDecisionLog, decisionCost, KEPT_PER_REPO } from "../src/decisions/log.ts";
-import { createDecisionRoutes, DECISIONS_ENDPOINT, LATEST } from "../src/decisions/routes.ts";
+import { createDecisionRoutes, LATEST } from "../src/decisions/routes.ts";
 import type { Decision } from "../src/ports.ts";
 
 // The decision log: what the App decided on its own and what it left to the Maintainer, as anyone
@@ -33,7 +34,7 @@ function decision(repo: string, more: Partial<Decision> = {}): Decision {
 }
 
 function get(query: string, init: RequestInit = {}): Request {
-  return new Request(`https://app.example${DECISIONS_ENDPOINT}${query}`, init);
+  return new Request(`https://app.example${decisionsRoute.path}${query}`, init);
 }
 
 test("the log counts a repo's decisions made and left to the Maintainer, and lists the latest first", () => {
@@ -135,7 +136,7 @@ test("GET /decisions answers a public repo's counts and its latest 50 decisions,
   expect(response.status).toBe(200);
   expect(response.headers.get("access-control-allow-origin")).toBe("*");
   expect(response.headers.get("content-type")).toContain("application/json");
-  const body = (await response.json()) as { counts: object; decisions: { id: string }[] };
+  const body = decisionsRoute.answer(await response.json())!;
   expect(body.counts).toEqual({ decided: 44, escalated: 11 });
   expect(body.decisions).toHaveLength(LATEST);
   expect(body.decisions[0]!.id).toBe(all.at(-1)!.id);
@@ -166,7 +167,10 @@ test.each(["", "?repo=", "?repo=acme", "?repo=acme/widgets/extra", "?repo=../etc
 
     expect(response.status).toBe(400);
     expect(response.headers.get("access-control-allow-origin")).toBe("*");
-    expect(await response.json()).toEqual({ error: "repo must be owner/name, such as octocat/hello-world." });
+    expect(await response.json()).toEqual({
+      error: "repo must be owner/name, such as octocat/hello-world.",
+      code: "invalid",
+    });
   },
 );
 
@@ -180,6 +184,7 @@ test("GET /decisions is read-only: a preflight is allowed, and other methods get
   expect(preflight.headers.get("access-control-allow-methods")).toBe("GET, OPTIONS");
   expect(post.status).toBe(405);
   expect(post.headers.get("allow")).toBe("GET, OPTIONS");
+  expect(await post.json()).toEqual({ error: "Send a GET request.", code: "method-not-allowed" });
 });
 
 test("other paths are left to the host", async () => {
@@ -201,7 +206,7 @@ test("each client IP gets its own limit, and past it a 429 with Retry-After", as
 
   expect(statuses).toEqual([200, 200, 429]);
   expect(limited.headers.get("retry-after")).toBe("60");
-  expect(await limited.json()).toEqual({ error: "Too many requests. Try again in 60 s." });
+  expect(await limited.json()).toEqual({ error: "Too many requests. Try again in 60 s.", code: "rate-limited" });
   expect(other.status).toBe(200);
   expect(later.status).toBe(200);
 });

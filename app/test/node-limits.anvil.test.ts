@@ -118,7 +118,10 @@ test.each([
     const answer = await send(head(path, { "content-length": limit + 1 }));
 
     expect(answer.status).toBe(413);
-    expect(JSON.parse(answer.body)).toEqual({ error: expect.stringContaining(limit === MiB ? "1 MiB" : "16 KiB") });
+    expect(JSON.parse(answer.body)).toEqual({
+      error: expect.stringContaining(limit === MiB ? "1 MiB" : "16 KiB"),
+      code: "too-large",
+    });
     expect(answer.closed).toBe(true);
   },
   30_000,
