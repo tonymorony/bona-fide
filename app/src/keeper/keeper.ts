@@ -1,4 +1,12 @@
-import { bindingProof, forfeitVerdict, keyOf, repoIdOf, type Kind } from "@bona-fide/sdk";
+import {
+  bindingProof,
+  forfeitVerdict,
+  keyOf,
+  repoIdOf,
+  type RefusalCode,
+  type SignedBindingProof,
+  type SignedForfeit,
+} from "@bona-fide/sdk";
 import { getAddress, hashTypedData, isAddress, isAddressEqual, type Address, type Hex } from "viem";
 import { parse } from "yaml";
 import { createAcceptance, markedBadFaith, type Act } from "../acceptance.ts";
@@ -43,39 +51,33 @@ export interface KeeperDeps {
   now?: () => Date;
 }
 
-/** Why the Keeper won't do what a request asks, with the HTTP status that says so. */
+/** Why the Keeper won't do what a request asks, with the HTTP status and the code that say so. */
 export class Refusal extends Error {
   readonly status: 400 | 404 | 409 | 429 | 502;
+  readonly code: RefusalCode;
   /** For a 429, the seconds to wait before asking again. */
   readonly retryAfter: number | undefined;
   /** For a 502, the transaction that reverted. */
   readonly txHash: Hex | undefined;
 
-  constructor(status: Refusal["status"], message: string, more: { retryAfter?: number; txHash?: Hex } = {}) {
+  constructor(
+    status: Refusal["status"],
+    code: RefusalCode,
+    message: string,
+    more: { retryAfter?: number; txHash?: Hex } = {},
+  ) {
     super(message);
     this.status = status;
+    this.code = code;
     this.retryAfter = more.retryAfter;
     this.txHash = more.txHash;
   }
 }
 
-/** A Forfeit the Maintainer signed, for the PR or issue `number` in `repo` (owner/name). */
-export interface SignedForfeit {
-  repo: string;
-  kind: Kind;
-  number: number;
-  sigDeadline: bigint;
-  signature: Hex;
-}
+export type { SignedForfeit };
 
 /** A Maintainer's signed proof that they control `maintainer`, for `repo` (owner/name). */
-export interface BindingProof {
-  repo: string;
-  maintainer: Address;
-  nonce: Hex;
-  deadline: bigint;
-  signature: Hex;
-}
+export type BindingProof = SignedBindingProof;
 
 export interface Keeper {
   /** Acts on a verified GitHub delivery. */
@@ -190,14 +192,18 @@ export function createKeeper({
     async relayForfeit({ repo, kind, number, sigDeadline, signature }) {
       const key = keyOf(repoIdOf(repo), kind, number);
       const deposit = await escrow.depositOf(key);
-      if (deposit.status === "none") throw new Refusal(404, `There's no Deposit on this ${NOUNS[kind]}.`);
-      if (deposit.status !== "active") throw new Refusal(409, `This Deposit was already ${deposit.status}.`);
+      if (deposit.status === "none") throw new Refusal(404, "not-found", `There's no Deposit on this ${NOUNS[kind]}.`);
+      if (deposit.status !== "active") {
+        throw new Refusal(409, "resolved", `This Deposit was already ${deposit.status}.`);
+      }
       const wallet = deposit.maintainer.toLowerCase();
       const wait = Math.max(afterRevert.wait(key), afterRevert.wait(wallet));
-      if (wait > 0) throw new Refusal(429, `${PAUSED_AFTER_REVERT} Try again in ${wait} s.`, { retryAfter: wait });
+      if (wait > 0) {
+        throw new Refusal(429, "paused", `${PAUSED_AFTER_REVERT} Try again in ${wait} s.`, { retryAfter: wait });
+      }
       const now = await escrow.now();
-      if (now >= deposit.deadline) throw new Refusal(409, TIMEOUT_PASSED);
-      if (now > sigDeadline) throw new Refusal(400, SIGNATURE_EXPIRED);
+      if (now >= deposit.deadline) throw new Refusal(409, "timeout-passed", TIMEOUT_PASSED);
+      if (now > sigDeadline) throw new Refusal(400, "expired", SIGNATURE_EXPIRED);
       const digest = hashTypedData(
         forfeitVerdict({
           chainId: await escrow.chainId(),
@@ -218,6 +224,7 @@ export function createKeeper({
         afterRevert.hold(wallet);
         throw new Refusal(
           502,
+          "reverted",
           "The Forfeit was sent but reverted on-chain, so no funds moved. Try again in 10 minutes.",
           {
             txHash: error.txHash,
@@ -227,24 +234,30 @@ export function createKeeper({
     },
 
     async bindRepo({ repo, maintainer, nonce, deadline, signature }) {
-      if ((await escrow.now()) > deadline) throw new Refusal(400, "This proof has expired. Sign a new one.");
+      if ((await escrow.now()) > deadline) throw new Refusal(400, "expired", "This proof has expired. Sign a new one.");
       const digest = hashTypedData(
         bindingProof({ chainId: await escrow.chainId(), escrow: escrow.address, repo, maintainer, nonce, deadline }),
       );
       if (!(await escrow.isValidSignature(maintainer, digest, signature))) {
-        throw new Refusal(400, `This proof isn't signed by ${maintainer}. Sign it with that wallet.`);
+        throw new Refusal(400, "bad-signature", `This proof isn't signed by ${maintainer}. Sign it with that wallet.`);
       }
       const repoId = repoIdOf(repo);
       const installed = await github.findRepo(repoId);
-      if (!installed) throw new Refusal(404, `Bona Fide isn't installed on ${repo}.`);
+      if (!installed) throw new Refusal(404, "not-installed", `Bona Fide isn't installed on ${repo}.`);
       const text = await github.readFile(installed, CONFIG_PATH);
-      if (text === null) throw new Refusal(409, `${repo} has no ${CONFIG_PATH} on its default branch.`);
+      if (text === null) throw new Refusal(409, "bad-config", `${repo} has no ${CONFIG_PATH} on its default branch.`);
       const parsed = parseConfig(text);
-      if (!parsed.ok) throw new Refusal(409, `${CONFIG_PATH} needs a fix: ${parsed.problems.join(" ")}`);
+      if (!parsed.ok) throw new Refusal(409, "bad-config", `${CONFIG_PATH} needs a fix: ${parsed.problems.join(" ")}`);
       const named = maintainerIn(text);
-      if (!named) throw new Refusal(409, `${CONFIG_PATH} names no Maintainer wallet. Add \`maintainer: <address>\`.`);
+      if (!named) {
+        throw new Refusal(
+          409,
+          "bad-config",
+          `${CONFIG_PATH} names no Maintainer wallet. Add \`maintainer: <address>\`.`,
+        );
+      }
       if (!isAddressEqual(named, maintainer)) {
-        throw new Refusal(409, `${CONFIG_PATH} names ${named} as the Maintainer, not ${maintainer}.`);
+        throw new Refusal(409, "bad-config", `${CONFIG_PATH} names ${named} as the Maintainer, not ${maintainer}.`);
       }
       const binding: Binding = {
         maintainer,
@@ -256,9 +269,12 @@ export function createKeeper({
       // each change to its bona-fide.yml. A Binding already proposed or active costs nothing.
       const wait = afterProposal.wait(repoId);
       if (wait > 0 && !(await bound(repoId, binding))) {
-        throw new Refusal(429, "The Keeper proposed a Binding for this repo within the hour. Try again later.", {
-          retryAfter: wait,
-        });
+        throw new Refusal(
+          429,
+          "rate-limited",
+          "The Keeper proposed a Binding for this repo within the hour. Try again later.",
+          { retryAfter: wait },
+        );
       }
       const status = await escrow.proposeRepo(repoId, binding);
       if (status.status === "proposed") afterProposal.hold(repoId);
@@ -275,6 +291,7 @@ const PAUSED_AFTER_REVERT =
 function notTheMaintainers(maintainer: Address): Refusal {
   return new Refusal(
     400,
+    "bad-signature",
     `This isn't the Maintainer's signature for this Deposit. Sign it with the Maintainer's wallet, ${maintainer}.`,
   );
 }
@@ -284,9 +301,11 @@ function notTheMaintainers(maintainer: Address): Refusal {
 function refusalFor(error: unknown, maintainer: Address): unknown {
   if (!(error instanceof EscrowRejection)) return error;
   if (error.reason === "InvalidSignature") return notTheMaintainers(maintainer);
-  if (error.reason === "DepositNotActive") return new Refusal(409, "This Deposit was resolved in the meantime.");
-  if (error.reason === "DeadlinePassed") return new Refusal(409, TIMEOUT_PASSED);
-  if (error.reason === "SignatureExpired") return new Refusal(400, SIGNATURE_EXPIRED);
+  if (error.reason === "DepositNotActive") {
+    return new Refusal(409, "resolved", "This Deposit was resolved in the meantime.");
+  }
+  if (error.reason === "DeadlinePassed") return new Refusal(409, "timeout-passed", TIMEOUT_PASSED);
+  if (error.reason === "SignatureExpired") return new Refusal(400, "expired", SIGNATURE_EXPIRED);
   return error;
 }
 

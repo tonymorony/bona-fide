@@ -1,15 +1,12 @@
+import { decisionsRoute, type DecisionsAnswer, type RefusalBody } from "@bona-fide/sdk";
 import type { DecisionLog } from "../ports.ts";
 import { fixedWindow, type RateLimit } from "../relay/rate-limit.ts";
 
-export const DECISIONS_ENDPOINT = "/decisions";
 /** Most decisions GET /decisions answers. */
 export const LATEST = 50;
 
 /** Requests per client IP. Every request counts, well-formed or not. */
 const PER_IP: RateLimit = { max: 30, windowMs: 60_000 };
-
-// As the pages read them: a GitHub owner, and a repo name.
-const REPO_NAME = /^[A-Za-z0-9-]{1,39}\/[A-Za-z0-9._-]{1,100}$/;
 
 // The log is public and read-only, so a page on any origin may read it.
 const CORS = { "access-control-allow-origin": "*" };
@@ -37,22 +34,28 @@ export function createDecisionRoutes(
   const ipWait = fixedWindow(perIp, now);
   return async (request, clientIp) => {
     const url = new URL(request.url);
-    if (url.pathname !== DECISIONS_ENDPOINT) return null;
+    if (url.pathname !== decisionsRoute.path) return null;
     if (request.method === "OPTIONS") return new Response(null, { status: 204, headers: PREFLIGHT });
     if (request.method !== "GET") {
-      return answer({ error: "Send a GET request." }, 405, { allow: "GET, OPTIONS" });
+      return refuse(405, { error: "Send a GET request.", code: "method-not-allowed" }, { allow: "GET, OPTIONS" });
     }
     const wait = ipWait(clientIp);
     if (wait > 0) {
-      return answer({ error: `Too many requests. Try again in ${wait} s.` }, 429, { "retry-after": String(wait) });
+      const error = `Too many requests. Try again in ${wait} s.`;
+      return refuse(429, { error, code: "rate-limited" }, { "retry-after": String(wait) });
     }
-    const repo = url.searchParams.get("repo") ?? "";
-    if (!REPO_NAME.test(repo)) return answer({ error: "repo must be owner/name, such as octocat/hello-world." }, 400);
+    const query = decisionsRoute.decode(url.searchParams);
+    if (!query.ok) return refuse(400, { error: query.problem, code: "invalid" });
+    const { repo } = query.value;
     const decisions = log.latest(repo, LATEST).map(({ private: _, ...published }) => published);
-    return answer({ counts: log.counts(repo), decisions });
+    return answer({ counts: log.counts(repo), decisions } satisfies DecisionsAnswer);
   };
 }
 
 function answer(body: object, status = 200, headers: Record<string, string> = {}): Response {
   return Response.json(body, { status, headers: { ...CORS, "cache-control": "no-store", ...headers } });
+}
+
+function refuse(status: number, body: RefusalBody, headers: Record<string, string> = {}): Response {
+  return answer(body, status, headers);
 }

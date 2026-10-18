@@ -1,3 +1,4 @@
+import type { RefusalBody } from "@bona-fide/sdk";
 import { mkdir, mkdtemp } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -382,20 +383,35 @@ test("too little USDC, a refused signature and a smart wallet that can't sign ye
 
 test("the relay's refusals and outages each get their own message, and a 429 counts down its Retry-After", async () => {
   const { page } = await walletPage(await stack.account());
-  const answer = (status: number, body: object, headers: Record<string, string> = {}) =>
+  const answer = (status: number, body: RefusalBody, headers: Record<string, string> = {}) =>
     new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json", ...headers } });
   const cases: [Response, string, RegExp][] = [
     [
-      answer(429, { error: "Too many requests. Try again in 30 s." }, { "retry-after": "30" }),
+      answer(429, { error: "Too many requests. Try again in 30 s.", code: "rate-limited" }, { "retry-after": "30" }),
       "429",
       /Try again in (29|30) s/,
     ],
-    [answer(503, { error: "The relay can't complete this Deposit right now." }), "503", /couldn't be reached/],
-    [answer(502, { error: "reverted", txHash: `0x${"ab".repeat(32)}` }), "502", /failed on-chain/],
-    [answer(404, { error: "This App doesn't relay Deposits." }), "404", /One-signature Deposits are off here/],
-    [answer(413, { error: "The request body is over the 16 KiB limit." }), "413", /too large to send/],
     [
-      answer(422, { error: "The Deposit would fail on-chain: FiatTokenV2: invalid signature." }),
+      answer(503, { error: "The relay can't complete this Deposit right now.", code: "unavailable" }),
+      "503",
+      /couldn't be reached/,
+    ],
+    [answer(502, { error: "reverted", code: "reverted", txHash: `0x${"ab".repeat(32)}` }), "502", /failed on-chain/],
+    [
+      answer(404, { error: "This App doesn't relay Deposits.", code: "not-served" }),
+      "404",
+      /One-signature Deposits are off here/,
+    ],
+    [
+      answer(413, { error: "The request body is over the 16 KiB limit.", code: "too-large" }),
+      "413",
+      /too large to send/,
+    ],
+    [
+      answer(422, {
+        error: "The Deposit would fail on-chain: FiatTokenV2: invalid signature.",
+        code: "bad-signature",
+      }),
       "422",
       /didn't accept this signature/,
     ],
@@ -431,7 +447,12 @@ test("a relayed Deposit that isn't confirmed yet is watched until it lands, not 
     relayStub = async (body) => {
       await stack.automine(false);
       const txHash = await stack.submitAuthorization(relayerKey, body);
-      return Response.json({ error: "The Deposit was sent but isn't confirmed yet.", txHash }, { status: 504 });
+      const unconfirmed: RefusalBody = {
+        error: "The Deposit was sent but isn't confirmed yet.",
+        code: "unconfirmed",
+        txHash,
+      };
+      return Response.json(unconfirmed, { status: 504 });
     };
     await page.click('[data-action="sign"]');
     await page.waitForState("unconfirmed");

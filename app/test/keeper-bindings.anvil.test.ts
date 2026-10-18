@@ -89,6 +89,7 @@ test("a proof signed by another wallet is refused, and nothing is proposed", asy
   expect(response?.status).toBe(400);
   expect(await response?.json()).toEqual({
     error: `This proof isn't signed by ${anvil.maintainer}. Sign it with that wallet.`,
+    code: "bad-signature",
   });
   expect((await pendingConfig(repo)).maintainer).toBe(NOTHING_PENDING);
 }, 30_000);
@@ -102,6 +103,7 @@ test("a proof for a wallet other than the one in bona-fide.yml is refused", asyn
   expect(response?.status).toBe(409);
   expect(await response?.json()).toEqual({
     error: `.github/bona-fide.yml names ${anvil.maintainer} as the Maintainer, not ${anvil.contributor}.`,
+    code: "bad-config",
   });
   expect((await pendingConfig(repo)).maintainer).toBe(NOTHING_PENDING);
 }, 30_000);
@@ -140,7 +142,7 @@ test("an expired proof is refused", async () => {
   const response = await post("/binding-proof", await proof(repo, anvil.maintainer, { deadline: -1n }));
 
   expect(response?.status).toBe(400);
-  expect(await response?.json()).toEqual({ error: "This proof has expired. Sign a new one." });
+  expect(await response?.json()).toEqual({ error: "This proof has expired. Sign a new one.", code: "expired" });
 }, 30_000);
 
 test("the same proof sent twice proposes once, so the delay doesn't restart", async () => {
@@ -172,6 +174,7 @@ test("within the hour after a proposal, a changed bona-fide.yml isn't proposed, 
 
   expect(changed?.status).toBe(429);
   expect(Number(changed?.headers.get("retry-after"))).toBeGreaterThan(3500);
+  expect(await changed?.json()).toMatchObject({ code: "rate-limited" });
   expect((await pendingConfig(repo)).amount).toBe(2_000_000n);
   expect(same?.status).toBe(200);
   expect(((await same?.json()) as { status: string }).status).toBe("pending");
@@ -195,7 +198,10 @@ test("a proof for a repo without Bona Fide installed is refused", async () => {
   const response = await post("/binding-proof", await proof("octo/not-installed", anvil.maintainer));
 
   expect(response?.status).toBe(404);
-  expect(await response?.json()).toEqual({ error: "Bona Fide isn't installed on octo/not-installed." });
+  expect(await response?.json()).toEqual({
+    error: "Bona Fide isn't installed on octo/not-installed.",
+    code: "not-installed",
+  });
 }, 30_000);
 
 test.each([
@@ -223,7 +229,7 @@ test.each([
     const response = await harness.post("/binding-proof", await proof(repo, anvil.maintainer));
 
     expect(response?.status).toBe(status);
-    expect(await response?.json()).toEqual({ error });
+    expect(await response?.json()).toEqual({ error, code: "bad-config" });
   },
   30_000,
 );
@@ -253,7 +259,7 @@ test.each([
     const response = await routes(new Request("https://app.example/binding-proof", { method: "POST", body }));
 
     expect(response?.status).toBe(400);
-    expect(await response?.json()).toEqual({ error });
+    expect(await response?.json()).toEqual({ error, code: "invalid" });
   },
   30_000,
 );

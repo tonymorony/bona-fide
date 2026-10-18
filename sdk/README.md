@@ -31,6 +31,8 @@ import its TypeScript source directly.
 | `escrowDomain`, `usdcDomain`, `bountyDomain` and the `*_TYPES` | Their EIP-712 domains and types, for other signers |
 | `isValidSignatureNow` | The contracts' own signature check: ECDSA for a plain wallet, ERC-1271 for a smart account |
 | `DEPOSIT_STATUSES`, `BOUNTY_STATUSES`, `PAYOUT_METHODS` | The contracts' enums, in order |
+| `relayDepositRoute`, `forfeitRoute`, `bindingProofRoute`, `bountyPayoutRoute`, `decisionsRoute`, `APP_PATHS` | The Bona Fide App's HTTP routes: each one's path, its request body encoded and decoded, and its answer |
+| `refusalIn`, `REFUSAL_CODES` | Why the App refused a request, read by its `code` rather than its text |
 
 ## Read a PR's Deposit
 

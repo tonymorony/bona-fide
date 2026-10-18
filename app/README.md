@@ -673,9 +673,13 @@ reach it.
 
 With the Keeper on, the host serves `POST /forfeit` and `POST /binding-proof` next to the
 webhook, with Bounties on also [`POST /bounty/payout`](#post-bountypayout), and it always serves
-[`GET /decisions`](#get-decisions). They take and return JSON. A refusal is `{"error": "…"}` with status 400 (the request is
-wrong), 404 (nothing to act on), 409 (the on-chain state doesn't allow it) or 429 (try again after
-`Retry-After` seconds; see [Limits](#limits)).
+[`GET /decisions`](#get-decisions). They take and return JSON, with amounts and Unix times as decimal
+strings, and a `repo` as GitHub's owner/name. A refusal is `{"error": "…", "code": "…"}` with status
+400 (the request is wrong), 404 (nothing to act on), 409 (the on-chain state doesn't allow it) or 429
+(try again after `Retry-After` seconds; see [Limits](#limits)). `error` is written for a person;
+`code` says why for a program, such as `expired`, `bad-signature`, `resolved` or `paused`. Each
+route's path, body, answer and codes are in the sdk's
+[`src/app-routes.ts`](../sdk/src/app-routes.ts), which the App, the pages and the agent all use.
 
 None of them takes credentials: the signature in the body authorizes the action. So each answers a
 CORS preflight and allows any origin, and a sign page on another origin can call them. Any method
@@ -690,21 +694,21 @@ Relays a Forfeit the Maintainer signed.
   "repo": "octocat/hello-world",
   "kind": "pr",
   "number": 7,
-  "sigDeadline": 1790000000,
+  "sigDeadline": "1790000000",
   "signature": "0x…"
 }
 ```
 
-- `kind` is `"pr"` or `"issue"`. `sigDeadline` is Unix seconds, as a number or a decimal string.
+- `kind` is `"pr"` or `"issue"`. `sigDeadline` is Unix seconds, as a decimal string or a number.
 - The signature is EIP-712 over `Forfeit(bytes32 key,uint256 serial,uint256 sigDeadline)` in the
   domain `{name: "BonaFide", version: "1", chainId, verifyingContract: <escrow>}`, where `key` and
   `serial` are the Deposit's. The Keeper checks it off-chain against the Deposit's own Maintainer
   and serial, as the escrow does: an ERC-1271 wallet, or a 65-byte signature with `v` 27 or 28 and
   a low `s`. Then it simulates the Forfeit and sends it.
 - `200 {"txHash": "0x…"}` once the transaction is mined.
-- `502 {"error": "…", "txHash": "0x…"}` if the transaction passed simulation but reverted on-chain,
-  so no funds moved. The Keeper then relays no Forfeit for that Deposit, or signed by its
-  Maintainer's wallet, for 10 minutes (see [Limits](#limits)).
+- `502 {"error": "…", "code": "reverted", "txHash": "0x…"}` if the transaction passed simulation but
+  reverted on-chain, so no funds moved. The Keeper then relays no Forfeit for that Deposit, or
+  signed by its Maintainer's wallet, for 10 minutes (see [Limits](#limits)).
 
 ### `POST /binding-proof`
 
@@ -792,13 +796,13 @@ Relays a Payout the Maintainer signed, so the Bounty page needn't make them pay 
   "repo": "octocat/hello-world",
   "issue": 42,
   "payee": "0x5aAeb6053F3E94C9b9A09f33669435E7Ef1BeAed",
-  "deadline": 1790000000,
+  "deadline": "1790000000",
   "signature": "0x…"
 }
 ```
 
 - `issue` is the issue's number. `payee` is an address, in any case.
-  `deadline` is Unix seconds, as a number or a decimal string.
+  `deadline` is Unix seconds, as a decimal string or a number.
 - The signature is EIP-712 over
   `Payout(uint256 issueNumber,uint256 serial,address payee,uint256 amount,uint256 deadline)` in the
   domain `{name: "BonaFide Bounty", version: "1", chainId, verifyingContract: <the repo's Bounty
@@ -814,9 +818,9 @@ Relays a Payout the Maintainer signed, so the Bounty page needn't make them pay 
 - `404` if Bona Fide isn't installed on the repo, the repo has no Bounty wallet, or the issue no
   Bounty; `409` if the Bounty was already paid or cancelled; `400` for an expired signature, a
   payee the wallet can't pay, or a signature that isn't the owner's.
-- `502 {"error": "…", "txHash": "0x…"}` if the transaction passed simulation but reverted on-chain,
-  so no funds moved. The Keeper then relays no Payout for that Bounty, or signed by that owner, for
-  10 minutes.
+- `502 {"error": "…", "code": "reverted", "txHash": "0x…"}` if the transaction passed simulation but
+  reverted on-chain, so no funds moved. The Keeper then relays no Payout for that Bounty, or signed
+  by that owner, for 10 minutes.
 
 ### `GET /decisions`
 
@@ -867,7 +871,7 @@ request and every answer are in [../agent/README.md](../agent/README.md#the-rela
 
 The host reads at most 16 KiB of a request's body on these endpoints, and at most 1 MiB of a webhook
 delivery: `MAX_JSON_BODY_BYTES` and `MAX_WEBHOOK_BODY_BYTES` in `src/config.ts`. A request over its
-limit gets `413 {"error": "…"}` as soon as it passes it, or at once if its `Content-Length` says so,
+limit gets `413 {"error": "…", "code": "too-large"}` as soon as it passes it, or at once if its `Content-Length` says so,
 and the host closes the connection without reading the rest. GitHub's deliveries for the events the
 App acts on are far smaller.
 

@@ -40,13 +40,6 @@ export interface Network {
     /** Protocol Guild vests what it receives over a year. */
     vests: boolean;
   };
-  /** The App's endpoints on the pages' origin. */
-  endpoints: {
-    relayDeposit: string;
-    forfeit: string;
-    bindingProof: string;
-    bountyPayout: string;
-  };
   /** Optional links; an empty one isn't shown. */
   links: {
     /** Where to get USDC on this network. */

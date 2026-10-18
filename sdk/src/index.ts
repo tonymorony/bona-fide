@@ -1,4 +1,28 @@
 export { bountyFactoryAbi, bountyWalletAbi, escrowAbi, routerAbi } from "./abi.ts";
+export {
+  APP_PATHS,
+  bindingProofRoute,
+  bountyPayoutRoute,
+  decisionsRoute,
+  forfeitRoute,
+  REFUSAL_CODES,
+  refusalIn,
+  relayDepositRoute,
+  REPO_NAME,
+  type AppRefusal,
+  type BindingAnswer,
+  type DecisionsAnswer,
+  type Decoded,
+  type PostRoute,
+  type PublishedDecision,
+  type RefusalBody,
+  type RefusalCode,
+  type SignedBindingProof,
+  type SignedDeposit,
+  type SignedForfeit,
+  type SignedPayout,
+  type Wire,
+} from "./app-routes.ts";
 export { arcMainnet, arcTestnet, chainOf, type Deployment } from "./deployments.ts";
 export {
   BOUNTY_STATUSES,

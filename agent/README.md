@@ -157,20 +157,29 @@ more than it needs.
 The signature is over USDC's `ReceiveWithAuthorization` with `to` = the escrow and
 `nonce = authorizationNonce(key, salt)`; `prepare_signed_deposit` builds it.
 
-| Status | Meaning |
-|---|---|
-| 200 | The Deposit is on-chain: `{"txHash"}` |
-| 400 | The body is malformed; `error` says which fields |
-| 404 | This App doesn't relay Deposits |
-| 409 | The repo isn't active, the amount is now `amount`, the item already has a Deposit from `depositor`, or one is being relayed |
-| 413 | The body is over 16 KiB |
-| 422 | The Deposit would fail on-chain, for example a bad or expired signature; `error` gives the reason |
-| 429 | Too many requests, or a relayed Deposit for this item or from this wallet reverted on-chain in the last 10 minutes; retry after `Retry-After` seconds |
-| 502 | The transaction `txHash` reverted, so no Deposit was made. The relay then sends none for this item or from this wallet for 10 minutes |
-| 503 | The relay can't reach the chain; try again shortly |
-| 504 | The transaction `txHash` was sent but isn't confirmed yet |
+| Status | `code` | Meaning |
+|---|---|---|
+| 200 | | The Deposit is on-chain: `{"txHash"}` |
+| 400 | `invalid` | The body is malformed; `error` says which fields |
+| 404 | `not-served` | This App doesn't relay Deposits |
+| 409 | `inactive` | The repo isn't active |
+| 409 | `amount-changed` | The amount is now `amount`: sign again for it |
+| 409 | `already-deposited` | The item already has a Deposit, from `depositor` |
+| 409 | `in-flight` | A Deposit for the item is being relayed right now |
+| 413 | `too-large` | The body is over 16 KiB |
+| 422 | `expired` | The authorization has expired, or has under two minutes left |
+| 422 | `bad-signature` | USDC refused the signature |
+| 422 | `low-balance` | The wallet holds less USDC than the Deposit |
+| 422 | `would-fail` | The Deposit would fail on-chain for another reason; `error` gives it |
+| 429 | `rate-limited` | Too many requests, or Deposits from this wallet or for this item today; retry after `Retry-After` seconds |
+| 429 | `paused` | A relayed Deposit for this item or from this wallet reverted on-chain in the last 10 minutes; retry after `Retry-After` seconds |
+| 502 | `reverted` | The transaction `txHash` reverted, so no Deposit was made. The relay then sends none for this item or from this wallet for 10 minutes |
+| 503 | `unavailable` | The relay can't reach the chain; try again shortly |
+| 504 | `unconfirmed` | The transaction `txHash` was sent but isn't confirmed yet |
 
-Every error body has an `error` message.
+Every error body has an `error` message, for a person, and a `code`, for a program. The codes, and
+the body and answer of every route, are in `@bona-fide/sdk`: `relayDepositRoute` encodes this body
+and `refusalIn` reads a refusal.
 
 ## Tests
 

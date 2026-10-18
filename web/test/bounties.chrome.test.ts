@@ -307,7 +307,7 @@ test("a Payout above the limits is signed on the Bounty page and relayed by the 
       repo,
       issue: 12,
       payee,
-      deadline: expect.any(Number),
+      deadline: expect.stringMatching(/^\d+$/),
       signature: expect.stringMatching(/^0x[0-9a-f]{130}$/),
     });
     expect(await stack.usdcBalance(payee)).toBe(80_000_000n);
