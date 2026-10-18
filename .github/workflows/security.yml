@@ -1,0 +1,166 @@
+# The security check. One job, named `security`, so the required status check keeps one stable name.
+#
+#   workflows          zizmor (hash-pinned actions) + actionlint with shellcheck, the unpinned-install lint
+#                      and the suppression lint
+#   secrets            gitleaks over the pull request's commits, or the whole history on main, develop and
+#                      the weekly run
+#   scrub              no word from the SCRUB_WORDS secret in the tree or the new commit messages
+#   vulnerabilities    OSV-Scanner over every lockfile in the repo
+#   dependency-policy  scripts/dependency-policy.ts: exact pins, justified and acknowledged dependencies,
+#                      npm owners, registry signatures, install scripts, submodules on release tags
+#   contracts          Slither over contracts/src; every finding is new unless contracts/slither.db.json
+#                      triages it
+#
+# Every step runs scripts/security.sh, so `npm run security` runs the same checks locally
+# (docs/security/dependency-policy.md). The scanners are release binaries pinned by version and SHA-256 in
+# .github/pinned-tools.txt. Each step is continue-on-error so one failure doesn't hide the others; the
+# verdict step fails the job and writes the table. The weekly run is there because advisories appear without
+# a code change.
+name: Security
+
+on:
+  pull_request:
+  push:
+    branches: [main, develop]
+  schedule:
+    - cron: "41 4 * * 1" # Mondays 04:41 UTC
+  workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  security:
+    name: security
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    steps:
+      # On a pull request the clone holds exactly its commits, so gitleaks and the scrub read only those.
+      # Everywhere else it holds the whole history.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: ${{ github.event_name == 'pull_request' && github.event.pull_request.commits || 0 }}
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24.21.0
+          package-manager-cache: false
+
+      - name: "workflows: zizmor, actionlint, lints"
+        id: workflows
+        continue-on-error: true
+        # The read-only job token turns on zizmor's online audits: impostor commits, known-vulnerable actions.
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: scripts/security.sh workflows
+
+      - name: "secrets: gitleaks"
+        id: secrets
+        continue-on-error: true
+        run: scripts/security.sh secrets
+
+      - name: "secrets: scrub"
+        id: scrub
+        continue-on-error: true
+        # With no SCRUB_WORDS (a fork's pull request gets no secrets) the step checks nothing and warns, and the
+        # verdict shows "skipped", not "pass". A push whose previous tip isn't in the clone (a force push) checks
+        # the last commit's message, with a warning.
+        env:
+          SCRUB_WORDS: ${{ secrets.SCRUB_WORDS }}
+          EVENT: ${{ github.event_name }}
+          BEFORE: ${{ github.event.before }}
+          AFTER: ${{ github.sha }}
+        run: |
+          case "$EVENT" in
+            pull_request) export SCRUB_RANGE=HEAD ;;
+            push)
+              if [ "${BEFORE//0/}" = "" ]; then
+                export SCRUB_RANGE="-1 $AFTER"
+              elif git cat-file -e "$BEFORE^{commit}" 2> /dev/null; then
+                export SCRUB_RANGE="$BEFORE..$AFTER"
+              else
+                echo "::warning::scrub: the push's previous tip $BEFORE isn't in the clone (a force push?), so only the last commit's message is checked"
+                export SCRUB_RANGE="-1 $AFTER"
+              fi
+              ;;
+            *) export SCRUB_RANGE=none ;;
+          esac
+          scripts/security.sh scrub
+
+      - name: "vulnerabilities: osv-scanner"
+        id: vulnerabilities
+        continue-on-error: true
+        run: scripts/security.sh vulnerabilities
+
+      - name: "dependency-policy: npm ci"
+        id: npm-ci
+        continue-on-error: true
+        # No install scripts run here; the policy lists which packages have one (rule 6).
+        run: npm ci --ignore-scripts --no-audit --no-fund
+
+      - name: "dependency-policy: scripts/dependency-policy.ts"
+        id: dependency-policy
+        if: steps.npm-ci.outcome == 'success'
+        continue-on-error: true
+        # Online on purpose: the npm owner check is how a package that changed hands fails here.
+        run: scripts/security.sh dependency-policy
+
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: 3.13.16
+
+      - name: "contracts: slither"
+        id: contracts
+        continue-on-error: true
+        run: scripts/security.sh contracts
+
+      - name: Verdict
+        if: always()
+        env:
+          WORKFLOWS: ${{ steps.workflows.outcome }}
+          SECRETS: ${{ steps.secrets.outcome }}
+          SCRUB: ${{ steps.scrub.outcome }}
+          SCRUB_RESULT: ${{ steps.scrub.outputs.scrub }}
+          VULNERABILITIES: ${{ steps.vulnerabilities.outcome }}
+          NPM_CI: ${{ steps.npm-ci.outcome }}
+          DEPENDENCY_POLICY: ${{ steps.dependency-policy.outcome }}
+          CONTRACTS: ${{ steps.contracts.outcome }}
+        run: |
+          failed=0
+          {
+            echo '### Security'
+            echo
+            echo '| check | result |'
+            echo '| --- | --- |'
+          } >> "$GITHUB_STEP_SUMMARY"
+          record() { # $1 = check, $2 = step outcome, $3 = what scripts/security.sh reported, if anything
+            if [ "$2" = success ] && [ "${3:-}" = skipped ]; then
+              # Skipped is green but never "pass": nothing was checked.
+              echo "| $1 | skipped |" >> "$GITHUB_STEP_SUMMARY"
+              echo "::warning::$1: skipped, nothing was checked. Its step above says why."
+            elif [ "$2" = success ]; then
+              echo "| $1 | pass |" >> "$GITHUB_STEP_SUMMARY"
+            else
+              echo "| $1 | **${2:-not run}** |" >> "$GITHUB_STEP_SUMMARY"
+              echo "::error::$1: ${2:-not run}. Its step above has the findings."
+              failed=1
+            fi
+          }
+          record workflows "$WORKFLOWS"
+          record secrets "$SECRETS"
+          record scrub "$SCRUB" "$SCRUB_RESULT"
+          record vulnerabilities "$VULNERABILITIES"
+          if [ "$NPM_CI" = success ]; then
+            record dependency-policy "$DEPENDENCY_POLICY"
+          else
+            record "dependency-policy (npm ci)" "$NPM_CI"
+          fi
+          record contracts "$CONTRACTS"
+          exit "$failed"

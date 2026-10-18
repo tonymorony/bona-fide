@@ -5,7 +5,7 @@ import { createApp } from "../src/app.ts";
 import { createEscrowChain } from "../src/escrow.ts";
 import { createDepositWatcher } from "../src/watcher.ts";
 import { createWebhookHandler } from "../src/webhook.ts";
-import { startAnvil, type Anvil } from "./support/anvil.ts";
+import { POLLING_INTERVAL, startAnvil, type Anvil } from "./support/anvil.ts";
 import { FakeGitHub } from "./support/fake-github.ts";
 import { DEPOSIT_PAGE, SETUP_PAGE } from "./support/harness.ts";
 import { HEAD_SHA, NEWCOMER, payload, PR, SECRET, signed } from "./support/webhooks.ts";
@@ -118,7 +118,7 @@ test("once anyone activates the Binding, the watcher checks the repo's open PRs 
   const before = github.checkOn(repo, HEAD_SHA);
 
   await anvil.mine(1, anvil.bindingDelaySeconds);
-  const wallet = createWalletClient({ transport: http(anvil.url) });
+  const wallet = createWalletClient({ transport: http(anvil.url), pollingInterval: POLLING_INTERVAL });
   const hash = await wallet.writeContract({
     account: anvil.contributor,
     chain: null,

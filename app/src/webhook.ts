@@ -1,3 +1,6 @@
+/* eslint-disable @typescript-eslint/no-unsafe-argument, @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access --
+   GitHub's webhook JSON is read untyped here, and only the fields read are relied on. Finding: give
+   it types, such as @octokit/webhooks-types, and drop this; review-by: 2027-04-18 */
 import type { App } from "./app.ts";
 import type { Bounties } from "./bounties/bounties.ts";
 import { CHECK_NAME } from "./github.ts";
@@ -41,8 +44,10 @@ export function createWebhookHandler({
   };
 }
 
-// GitHub's webhook JSON; only the fields read below are relied on.
-type Payload = any;
+/** GitHub's webhook JSON; only the fields read from it are relied on. */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any -- untyped on purpose, as above; review-by: 2027-04-18
+export type WebhookPayload = any;
+type Payload = WebhookPayload;
 
 function itemFrom(event: string | null, payload: Payload): Item | null {
   const pr = payload.pull_request;

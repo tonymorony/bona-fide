@@ -9,7 +9,14 @@ import { join } from "node:path";
 const CHROME = process.env.CHROME ?? "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome";
 const STEP_TIMEOUT_MS = 20_000;
 
-type Message = { id?: number; method?: string; params?: any; sessionId?: string; result?: any; error?: any };
+interface Message {
+  id?: number;
+  method?: string;
+  params?: any;
+  sessionId?: string;
+  result?: any;
+  error?: any;
+}
 
 /**
  * Wraps an expression that reads `innerText`, so it returns the text as written. The pages set
@@ -64,7 +71,7 @@ export async function startChrome() {
   const endpoint = await withTimeout(
     new Promise<string>((resolve, reject) => {
       let output = "";
-      chrome.stderr!.on("data", (chunk) => {
+      chrome.stderr.on("data", (chunk) => {
         output += chunk;
         const match = /DevTools listening on (ws:\/\/\S+)/.exec(output);
         if (match) resolve(match[1]!);

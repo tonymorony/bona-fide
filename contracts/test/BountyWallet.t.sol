@@ -34,8 +34,9 @@ contract BountyWalletTest is BountyFixture {
     function test_fundWithAuthorization_takesOneSignatureAnyoneRelays() public {
         (address sponsor, uint256 sponsorPk) = makeAddrAndKey("sponsor");
         usdc.mint(sponsor, 10e6);
-        bytes memory sig =
-            _signReceive(sponsorPk, sponsor, address(wallet), 10e6, block.timestamp - 1, block.timestamp + 1 hours, "n");
+        bytes memory sig = _signReceive(
+            sponsorPk, sponsor, address(wallet), 10e6, block.timestamp - 1, block.timestamp + 1 hours, "n"
+        );
 
         vm.expectEmit(address(wallet));
         emit BountyWallet.Funded(sponsor, 10e6);
@@ -49,8 +50,9 @@ contract BountyWalletTest is BountyFixture {
     function test_fundWithAuthorization_revertsWhenReplayed() public {
         (address sponsor, uint256 sponsorPk) = makeAddrAndKey("sponsor");
         usdc.mint(sponsor, 20e6);
-        bytes memory sig =
-            _signReceive(sponsorPk, sponsor, address(wallet), 10e6, block.timestamp - 1, block.timestamp + 1 hours, "n");
+        bytes memory sig = _signReceive(
+            sponsorPk, sponsor, address(wallet), 10e6, block.timestamp - 1, block.timestamp + 1 hours, "n"
+        );
         wallet.fundWithAuthorization(sponsor, 10e6, block.timestamp - 1, block.timestamp + 1 hours, "n", sig);
 
         vm.expectRevert("FiatTokenV2: authorization is used or canceled");
@@ -61,8 +63,9 @@ contract BountyWalletTest is BountyFixture {
         (address sponsor, uint256 sponsorPk) = makeAddrAndKey("sponsor");
         usdc.mint(sponsor, 10e6);
         BountyWallet other = _create(maintainer, keccak256("github:tonymorony/other"));
-        bytes memory sig =
-            _signReceive(sponsorPk, sponsor, address(wallet), 10e6, block.timestamp - 1, block.timestamp + 1 hours, "n");
+        bytes memory sig = _signReceive(
+            sponsorPk, sponsor, address(wallet), 10e6, block.timestamp - 1, block.timestamp + 1 hours, "n"
+        );
 
         vm.expectRevert("FiatTokenV2: invalid signature");
         other.fundWithAuthorization(sponsor, 10e6, block.timestamp - 1, block.timestamp + 1 hours, "n", sig);
@@ -523,7 +526,7 @@ contract BountyWalletTest is BountyFixture {
 
     function test_payWithSignature_worksAtTheDeadlineAndRevertsAfter() public {
         _post(42, 30e6);
-        uint256 deadline = block.timestamp + 1 hours;
+        uint256 deadline = vm.getBlockTimestamp() + 1 hours;
         bytes memory sig = _signPayout(maintainerPk, 42, 1, contributor, 30e6, deadline);
         vm.warp(deadline + 1);
         vm.expectRevert(BountyWallet.SignatureExpired.selector);

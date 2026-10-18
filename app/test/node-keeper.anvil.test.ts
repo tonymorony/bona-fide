@@ -4,7 +4,7 @@ import { createPublicClient, createTestClient, http, type Address } from "viem";
 import { nonceManager, privateKeyToAccount } from "viem/accounts";
 import { afterAll, beforeAll, expect, test } from "vitest";
 import { createKeeperEscrow, keeperAccount } from "../src/keeper/escrow.ts";
-import { freePort, type Anvil } from "./support/anvil.ts";
+import { freePort, POLLING_INTERVAL, type Anvil } from "./support/anvil.ts";
 import { DEPOSIT_PAGE, scratchDecisionsPath, SETUP_PAGE } from "./support/harness.ts";
 import { SIGN_PAGE, startKeeperAnvil } from "./support/keeper.ts";
 import { REPO, SECRET } from "./support/webhooks.ts";
@@ -121,7 +121,7 @@ test.each([
 test("the Node host activates a due Binding on its own", async () => {
   const repo = "octo/host-activates";
   const escrow = createKeeperEscrow({
-    client: createPublicClient({ transport: http(anvil.url) }),
+    client: createPublicClient({ transport: http(anvil.url), pollingInterval: POLLING_INTERVAL }),
     account: privateKeyToAccount(keeperKey),
     escrow: anvil.escrow,
   });
@@ -131,7 +131,7 @@ test("the Node host activates a due Binding on its own", async () => {
     timeoutSeconds: 7 * 86_400,
     amount: 1_000_000n,
   });
-  const chain = createTestClient({ mode: "anvil", transport: http(anvil.url) });
+  const chain = createTestClient({ mode: "anvil", transport: http(anvil.url), pollingInterval: POLLING_INTERVAL });
   await chain.increaseTime({ seconds: Number(anvil.bindingDelay) });
   await chain.mine({ blocks: 1 });
   const active = async () =>
@@ -164,7 +164,7 @@ test("the Node host refunds a Deposit on its own once its Timeout passes", async
       functionName: "depositOf",
       args: [key],
     })) as { status: number; deadline: bigint };
-  const chain = createTestClient({ mode: "anvil", transport: http(anvil.url) });
+  const chain = createTestClient({ mode: "anvil", transport: http(anvil.url), pollingInterval: POLLING_INTERVAL });
   await chain.setNextBlockTimestamp({ timestamp: (await depositOf()).deadline });
   await chain.mine({ blocks: 1 });
   const refunded = async () => (await depositOf()).status === 2;
@@ -191,11 +191,12 @@ test("a malformed KEEPER_PRIVATE_KEY stops the host without printing it", async 
 }, 30_000);
 
 test("two senders with the Keeper's key in one process never take the same nonce", async () => {
-  const client = createPublicClient({ transport: http(anvil.url) });
+  const client = createPublicClient({ transport: http(anvil.url), pollingInterval: POLLING_INTERVAL });
   const chainId = await client.getChainId();
   const [first, second] = [keeperAccount(keeperKey), keeperAccount(keeperKey)];
   try {
     const nonces = await Promise.all(
+      // eslint-disable-next-line @typescript-eslint/await-thenable -- an account without a nonce manager gives undefined, which the test then refuses; review-by: 2027-04-18
       [first, second].map((account) => account.nonceManager?.consume({ address: account.address, chainId, client })),
     );
 

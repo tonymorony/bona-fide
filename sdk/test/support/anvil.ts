@@ -23,14 +23,23 @@ function freePort(): Promise<number> {
   });
 }
 
+// anvil can answer eth_sendTransaction just before the receipt is ready (1.8 does after
+// evm_increaseTime). viem then looks again one polling interval later, 4 s by default: poll fast.
+export const POLLING_INTERVAL = 50;
+
 // A local anvil chain. Transactions and signatures come from anvil's unlocked dev accounts: no keys here.
 export async function startAnvil() {
   const port = await freePort();
   const child = spawn("anvil", ["--port", String(port)], { stdio: "ignore" });
   const url = `http://127.0.0.1:${port}`;
-  const client = createPublicClient({ chain: foundry, transport: http(url) });
-  const test = createTestClient({ chain: foundry, mode: "anvil", transport: http(url) });
-  const wallet = createWalletClient({ chain: foundry, transport: http(url) });
+  const client = createPublicClient({ chain: foundry, transport: http(url), pollingInterval: POLLING_INTERVAL });
+  const test = createTestClient({
+    chain: foundry,
+    mode: "anvil",
+    transport: http(url),
+    pollingInterval: POLLING_INTERVAL,
+  });
+  const wallet = createWalletClient({ chain: foundry, transport: http(url), pollingInterval: POLLING_INTERVAL });
   for (let attempt = 0; ; attempt++) {
     try {
       await client.getChainId();

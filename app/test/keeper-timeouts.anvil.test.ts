@@ -2,7 +2,7 @@ import { keyOf, repoIdOf, type Kind } from "@bona-fide/sdk";
 import { createTestClient, createWalletClient, http, type Hex } from "viem";
 import { afterAll, beforeAll, expect, test, vi } from "vitest";
 import { createTimeoutRefunder } from "../src/keeper/timeouts.ts";
-import type { Anvil } from "./support/anvil.ts";
+import { POLLING_INTERVAL, type Anvil } from "./support/anvil.ts";
 import { keeperHarness, startKeeperAnvil } from "./support/keeper.ts";
 import { REPO } from "./support/webhooks.ts";
 
@@ -37,14 +37,17 @@ async function depositOf(kind: Kind, number: number, repo = REPO) {
 
 /** Mines the next block at `time`, in Unix seconds. */
 async function mineAt(time: bigint): Promise<void> {
-  const chain = createTestClient({ mode: "anvil", transport: http(anvil.url) });
+  const chain = createTestClient({ mode: "anvil", transport: http(anvil.url), pollingInterval: POLLING_INTERVAL });
   await chain.setNextBlockTimestamp({ timestamp: time });
   await chain.mine({ blocks: 1 });
 }
 
 /** Refunds a Deposit after its Timeout from an account that isn't the Keeper, as anyone may. */
 async function refundAsAnyone(key: Hex): Promise<void> {
-  const hash = await createWalletClient({ transport: http(anvil.url) }).writeContract({
+  const hash = await createWalletClient({
+    transport: http(anvil.url),
+    pollingInterval: POLLING_INTERVAL,
+  }).writeContract({
     account: anvil.contributor,
     chain: null,
     address: anvil.escrow,

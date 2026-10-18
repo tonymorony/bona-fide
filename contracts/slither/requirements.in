@@ -1,0 +1,6 @@
+# Slither, the static analyser the security check runs over contracts/src. requirements.txt is compiled from
+# this file with a hash for every package, and installed with pip --require-hashes --only-binary :all:.
+# To bump: change the pin, then from this directory, with --exclude-newer a week back (the same cooldown as
+# Dependabot):
+#   uv pip compile --universal --python-version 3.13 --generate-hashes --exclude-newer <YYYY-MM-DD> requirements.in -o requirements.txt
+slither-analyzer==0.11.6

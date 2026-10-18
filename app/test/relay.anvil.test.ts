@@ -3,7 +3,7 @@ import { createPublicClient, http, type Hex } from "viem";
 import { generatePrivateKey, privateKeyToAccount } from "viem/accounts";
 import { afterAll, beforeAll, expect, test, vi } from "vitest";
 import { createDepositRelay, type DepositRelayOptions } from "../src/relay/deposit.ts";
-import { freePort, startAnvil, type Anvil } from "./support/anvil.ts";
+import { freePort, POLLING_INTERVAL, startAnvil, type Anvil } from "./support/anvil.ts";
 import { post, RELAY_URL, relayKit, type RelayKit } from "./support/relay.ts";
 
 // The real escrow and EIP-3009 mock USDC on anvil. Each test deposits for its own PR number.
@@ -261,7 +261,7 @@ test("when the chain can't be reached, the caller is told to retry and sees no i
   const signer = await kit.fundedSigner();
   const wallet = await kit.relayer();
   const handle = createDepositRelay({
-    client: createPublicClient({ transport: http(rpc, { retryCount: 0 }) }),
+    client: createPublicClient({ transport: http(rpc, { retryCount: 0 }), pollingInterval: POLLING_INTERVAL }),
     wallet,
     escrow: anvil.escrow,
   });

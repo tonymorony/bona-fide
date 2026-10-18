@@ -29,6 +29,10 @@ const RECIPIENT = "0x000000000000000000000000000000000000bEEF";
 /** anvil with Arc testnet's chain id, so what the pages sign reads as it would on Arc. */
 export const LOCAL_CHAIN_ID = 5042002;
 
+// anvil can answer eth_sendTransaction just before the receipt is ready (1.8 does after
+// evm_increaseTime). viem then looks again one polling interval later, 4 s by default: poll fast.
+const POLLING_INTERVAL = 50;
+
 export function artifact(name: string): { abi: Abi; bytecode: Hex } {
   const json = JSON.parse(readFileSync(`${CONTRACTS}out/${name}.sol/${name}.json`, "utf8"));
   return { abi: json.abi, bytecode: json.bytecode.object };
@@ -84,9 +88,9 @@ export async function startStack() {
     nativeCurrency: { name: "USDC", symbol: "USDC", decimals: 18 },
     rpcUrls: { default: { http: [url] } },
   });
-  const client = createPublicClient({ chain, transport: http(url) });
-  const test = createTestClient({ chain, mode: "anvil", transport: http(url) });
-  const dev = createWalletClient({ chain, transport: http(url) });
+  const client = createPublicClient({ chain, transport: http(url), pollingInterval: POLLING_INTERVAL });
+  const test = createTestClient({ chain, mode: "anvil", transport: http(url), pollingInterval: POLLING_INTERVAL });
+  const dev = createWalletClient({ chain, transport: http(url), pollingInterval: POLLING_INTERVAL });
   await until(async () => (await client.getChainId()) === LOCAL_CHAIN_ID, "anvil");
 
   const [deployer] = await dev.getAddresses();
@@ -165,8 +169,8 @@ export async function startStack() {
     account: LocalAccount,
     call: { address: Address; abi: Abi; functionName: string; args: readonly unknown[] },
   ) {
-    const own = createWalletClient({ account, chain, transport: http(url) });
-    const hash = await own.writeContract({ ...call, args: [...call.args] } as any);
+    const own = createWalletClient({ account, chain, transport: http(url), pollingInterval: POLLING_INTERVAL });
+    const hash = await own.writeContract({ ...call, args: [...call.args] });
     const receipt = await client.waitForTransactionReceipt({ hash });
     if (receipt.status !== "success") throw new Error(`${call.functionName} reverted`);
     return receipt;
@@ -237,7 +241,7 @@ export async function startStack() {
 
     /** Deposits from `account` with its own two transactions. */
     async deposit(account: LocalAccount, repo: string, kind: Kind, number: number, amount = 1_000_000n) {
-      const own = createWalletClient({ account, chain, transport: http(url) });
+      const own = createWalletClient({ account, chain, transport: http(url), pollingInterval: POLLING_INTERVAL });
       for (const [address, abi, functionName, args] of [
         [usdc, usdcArtifact.abi, "approve", [escrow, amount]],
         [escrow, escrowArtifact.abi, "deposit", [repoIdOf(repo), kindCode(kind), BigInt(number)]],
@@ -340,7 +344,12 @@ export async function startStack() {
         signature: Hex;
       },
     ): Promise<Hex> {
-      const relayer = createWalletClient({ account: privateKeyToAccount(relayerKey), chain, transport: http(url) });
+      const relayer = createWalletClient({
+        account: privateKeyToAccount(relayerKey),
+        chain,
+        transport: http(url),
+        pollingInterval: POLLING_INTERVAL,
+      });
       return relayer.writeContract({
         address: escrow,
         abi: escrowArtifact.abi,

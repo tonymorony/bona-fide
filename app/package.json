@@ -11,22 +11,23 @@
     "test": "vitest run",
     "typecheck": "tsc --noEmit",
     "format": "prettier --write src test vitest.config.ts",
+    "format:check": "prettier --check src test vitest.config.ts",
     "start": "node src/node.ts"
   },
   "dependencies": {
-    "@anthropic-ai/sdk": "^0.129.0",
-    "@bona-fide/sdk": "^0.1.0",
-    "@octokit/auth-app": "^8.3.1",
-    "@octokit/rest": "^22.0.1",
-    "viem": "^2.56.9",
-    "yaml": "^2.9.1",
-    "zod": "^4.6.5"
+    "@anthropic-ai/sdk": "0.129.0",
+    "@bona-fide/sdk": "0.1.0",
+    "@octokit/auth-app": "8.3.1",
+    "@octokit/rest": "22.0.1",
+    "viem": "2.56.9",
+    "yaml": "2.9.1",
+    "zod": "4.6.5"
   },
   "devDependencies": {
-    "@types/node": "^24.19.0",
-    "prettier": "^3.9.9",
-    "rolldown": "^1.2.11",
-    "typescript": "^7.0.2",
-    "vitest": "^5.0.2"
+    "@types/node": "24.19.0",
+    "prettier": "3.9.9",
+    "rolldown": "1.2.11",
+    "typescript": "7.0.2",
+    "vitest": "5.0.2"
   }
 }

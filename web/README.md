@@ -21,7 +21,8 @@ npm run build -- mainnet      # Arc mainnet
 
 The build writes `dist/`: the five pages and `dist/assets/`, which holds their scripts (viem bundled
 in), the stylesheet, and the fonts and drawings the stylesheet names, each under a hashed name.
-[`deploy/deploy.sh`](../deploy/README.md) publishes `web/dist` as it finds it.
+[`deploy/deploy.sh`](../deploy/README.md) builds it again before each deploy, for the network the
+landing page's `config.js` names.
 
 One build serves one network, set in [`networks.ts`](networks.ts): its chain id and RPC, the escrow,
 the forfeit router, USDC and the explorer, from the SDK's

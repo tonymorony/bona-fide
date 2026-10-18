@@ -135,8 +135,10 @@ export function createGitHub({ appId, app, installation }: GitHubOptions): GitHu
       if (isNotFound(error)) return null;
       throw error;
     }
+    /* eslint-disable @typescript-eslint/no-unnecessary-condition -- GitHub sends null for a deleted label or account though its types don't say so; review-by: 2027-04-18 */
     const added = events.filter((e) => e.event === "labeled" && "label" in e && e.label?.name === label).at(-1);
     return added?.actor?.login ?? null;
+    /* eslint-enable @typescript-eslint/no-unnecessary-condition */
   }
 
   return {
@@ -231,6 +233,7 @@ export function createGitHub({ appId, app, installation }: GitHubOptions): GitHu
         filter: "latest",
         per_page: 100,
       });
+      // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- a fork's runs list no pull_requests at all; review-by: 2027-04-18
       const numbers = data.check_runs.map((run) => Number(run.external_id || run.pull_requests?.[0]?.number));
       return [...new Set(numbers.filter((number) => Number.isSafeInteger(number) && number > 0))];
     },
@@ -348,13 +351,13 @@ export function createGitHub({ appId, app, installation }: GitHubOptions): GitHu
       try {
         if (kind === "pr") {
           const { data } = await api(repo).rest.pulls.get({ ...repoParams(repo), pull_number: number });
+          // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- GitHub sends a deleted account's user as null though its types don't say so; review-by: 2027-04-18
           if (!data.user) return null;
-          const closing: Closing | null =
-            data.merged === true
-              ? { type: "merged", by: data.merged_by?.login ?? null }
-              : data.state === "closed"
-                ? { type: "closed", reason: null, by: null }
-                : null;
+          const closing: Closing | null = data.merged
+            ? { type: "merged", by: data.merged_by?.login ?? null }
+            : data.state === "closed"
+              ? { type: "closed", reason: null, by: null }
+              : null;
           return factsOf(data.user, data, closing);
         }
         const { data } = await api(repo).rest.issues.get({ ...repoParams(repo), issue_number: number });

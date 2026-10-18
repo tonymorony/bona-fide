@@ -19,7 +19,10 @@ interface Sent {
   accept: string;
 }
 
-type Reply = { status: number; body?: unknown };
+interface Reply {
+  status: number;
+  body?: unknown;
+}
 
 /** Whether the request asked for a diff, as Octokit does with its Accept header. */
 function isDiff(sent: Sent): boolean {

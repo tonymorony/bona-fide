@@ -110,7 +110,11 @@ afterAll(async () => {
 
 async function walletPage(account: Parameters<typeof createTestWallet>[0]["account"], startChainId?: number) {
   const wallet = createTestWallet({ account, chain: stack.chain, rpcUrl: stack.url, startChainId });
-  const page = await chrome.newPage({ binding: BINDING, onBinding: wallet.onBinding, injected: INJECTED });
+  const page = await chrome.newPage({
+    binding: BINDING,
+    onBinding: (payload, reply) => wallet.onBinding(payload, reply),
+    injected: INJECTED,
+  });
   return { wallet, page };
 }
 
@@ -268,7 +272,7 @@ async function postedBounty(repo: string, issue: number, amount: bigint) {
   await stack.bind(repo, { maintainer: maintainer.address });
   const wallet = await stack.createBountyWallet(maintainer, repo);
   await stack.fundAndPost(maintainer, wallet, 200_000_000n, [[issue, amount]]);
-  const payee = (await stack.account(0n)).address as Address;
+  const payee = (await stack.account(0n)).address;
   return { maintainer, wallet, payee };
 }
 
@@ -406,7 +410,7 @@ test("without a payee in the link, the Maintainer pastes the Contributor's walle
 
 test("the repo page shows the Bounties from chain, links the Maintainer to manage them, and words Payout decisions", async () => {
   const repo = "Acme/Bounties";
-  const payee = (await stack.account(0n)).address as Address;
+  const payee = (await stack.account(0n)).address;
   await stack.keeperPay(acmeWallet, 7, payee);
   const page = await chrome.newPage();
 

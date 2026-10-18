@@ -57,6 +57,7 @@ async function fillTemplate(template: string, network: Network, assets: Record<s
   html = html.replace(/\{\{([\w.:-]+)\}\}/g, (match, name: string) => {
     if (name in assets) return assets[name]!;
     if (name.startsWith("capital:")) {
+      // eslint-disable-next-line @typescript-eslint/no-base-to-string -- hardening follow-up, unreachable today: a {{capital:path}} naming an object would render "[object Object]" instead of failing the build, and every one in the templates names a string; review-by: 2027-04-18
       const value = String(valueAt(context, name.slice("capital:".length)) ?? "");
       if (!value) throw new Error(`Unknown placeholder ${match}.`);
       return escapeHtml(value.charAt(0).toUpperCase() + value.slice(1));
@@ -65,7 +66,7 @@ async function fillTemplate(template: string, network: Network, assets: Record<s
     if (typeof value !== "string" && typeof value !== "number") throw new Error(`Unknown placeholder ${match}.`);
     return escapeHtml(String(value));
   });
-  const leftover = html.match(/\{\{[^}]*\}\}/);
+  const leftover = /\{\{[^}]*\}\}/.exec(html);
   if (leftover) throw new Error(`Unfilled placeholder ${leftover[0]}.`);
   return html;
 }
@@ -86,7 +87,10 @@ export async function buildPages({
     throw new Error(`Can't build the pages for ${network.name}:\n- ${problems.join("\n- ")}`);
   }
   const landingDir = join(HERE, "landing");
-  const { CONFIG, NETWORKS } = await import(pathToFileURL(join(landingDir, "config.js")).href);
+  const { CONFIG, NETWORKS } = (await import(pathToFileURL(join(landingDir, "config.js")).href)) as {
+    CONFIG: { network: string };
+    NETWORKS: Partial<Record<string, { chainId: number }>>;
+  };
   if (landing && NETWORKS[CONFIG.network]?.chainId !== network.chainId) {
     throw new Error(
       `The landing page shows "${CONFIG.network}" but the pages are built for ${network.name}. ` +
@@ -186,7 +190,7 @@ export async function buildPages({
 
 if (import.meta.main) {
   const name = process.argv[2] ?? "testnet";
-  const network = networks[name as keyof typeof networks];
+  const network = (networks as Partial<Record<string, Network>>)[name];
   if (!network) {
     console.error(`Unknown network "${name}". Build with testnet or mainnet.`);
     process.exit(1);

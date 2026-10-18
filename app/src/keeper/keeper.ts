@@ -25,7 +25,7 @@ import {
   type Witness,
 } from "../ports.ts";
 import { cooldown, REVERT_COOLDOWN_MS } from "../relay/rate-limit.ts";
-import { itemFields } from "../webhook.ts";
+import { itemFields, type WebhookPayload } from "../webhook.ts";
 import { badFaithNote, NOUNS } from "./copy.ts";
 import {
   EscrowRejection,
@@ -81,7 +81,7 @@ export type BindingProof = SignedBindingProof;
 
 export interface Keeper {
   /** Acts on a verified GitHub delivery. */
-  onWebhook(event: string | null, payload: any): Promise<void>;
+  onWebhook(event: string | null, payload: WebhookPayload): Promise<void>;
   /** Refunds an active Deposit that the check's verdict doesn't count. */
   afterVerdict(item: Item, verdict: Verdict): Promise<void>;
   /** Relays a signed Forfeit and returns its transaction. */
@@ -170,8 +170,10 @@ export function createKeeper({
       if (!item) return;
       const act = actOf(payload);
       const accepted = act && (await acceptance.ofAct(item, act));
+      /* eslint-disable @typescript-eslint/no-unsafe-member-access -- GitHub's webhook JSON is untyped, as in webhook.ts; review-by: 2027-04-18 */
       if (accepted) await refundAccepted(item, `webhook ${event} ${payload.action}`, accepted.witnesses);
       if (payload.action === "labeled" && payload.label?.name === BAD_FAITH) await askForSignature(item);
+      /* eslint-enable @typescript-eslint/no-unsafe-member-access */
     },
 
     async afterVerdict(item, verdict) {
@@ -321,7 +323,8 @@ function countsFrom(item: Item): Date {
   return new Date(item.createdAt.getTime() - CLOCK_SKEW_SECONDS * 1000);
 }
 
-function itemOf(event: string | null, payload: any): Item | null {
+/* eslint-disable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access -- GitHub's webhook JSON is untyped, as in webhook.ts; review-by: 2027-04-18 */
+function itemOf(event: string | null, payload: WebhookPayload): Item | null {
   const pr = payload.pull_request;
   if (event === "pull_request") return { ...itemFields(payload, pr), kind: "pr", headSha: pr.head.sha };
   if (event === "issues") return { ...itemFields(payload, payload.issue), kind: "issue" };
@@ -329,7 +332,7 @@ function itemOf(event: string | null, payload: any): Item | null {
 }
 
 /** What a delivery says someone did that can accept its PR or issue: closed it, or added a label. */
-function actOf(payload: any): Act | null {
+function actOf(payload: WebhookPayload): Act | null {
   const by: string | null = payload.sender?.login ?? null;
   if (payload.action === "labeled" && payload.label?.name) return { type: "labelled", label: payload.label.name, by };
   if (payload.action !== "closed") return null;
@@ -337,3 +340,4 @@ function actOf(payload: any): Act | null {
   if (!pr) return { type: "closed", reason: payload.issue.state_reason ?? null, by };
   return pr.merged === true ? { type: "merged", by: pr.merged_by?.login ?? by } : { type: "closed", reason: null, by };
 }
+/* eslint-enable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access */

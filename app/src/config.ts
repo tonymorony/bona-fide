@@ -104,7 +104,9 @@ function isSet(value: unknown): boolean {
 const LOGIN = /^[\w-]+(\[bot\])?$/;
 
 function parseLogins(value: unknown, problems: string[]): string[] {
-  if (Array.isArray(value) && value.every((login) => typeof login === "string" && LOGIN.test(login))) return value;
+  if (Array.isArray(value) && value.every((login): login is string => typeof login === "string" && LOGIN.test(login))) {
+    return value;
+  }
   problems.push("`exempt_bots` must be a list of GitHub logins.");
   return [];
 }

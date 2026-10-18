@@ -131,7 +131,7 @@ test("a network without a Bounty wallet factory still builds, and its pages say 
 test("a network's Bounty wallet factory must be an address, with its deploy block", async () => {
   await expect(
     buildPages({
-      network: { ...testnet, bountyFactory: "0x123" as never },
+      network: { ...testnet, bountyFactory: "0x123" },
       outDir: await mkdtemp(join(tmpdir(), "x-")),
     }),
   ).rejects.toThrow(/bountyFactory address isn't an address/);

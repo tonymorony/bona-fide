@@ -140,7 +140,7 @@ test("the Keeper proposes the Binding for a proof signed from the setup page's t
   harness.github.setFile(repo, ".github/bona-fide.yml", `maintainer: ${maintainer.address}\namount: 2\n`);
   const proof = {
     repo,
-    maintainer: maintainer.address as Address,
+    maintainer: maintainer.address,
     nonce: randomBytes32(),
     deadline: (await chainTime(chain)) + BigInt(WINDOWS.bindingProof),
   };

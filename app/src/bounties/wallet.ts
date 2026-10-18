@@ -238,7 +238,7 @@ export function createBountyWallets({ client, account, factory, fromBlock = 0n }
         }
       }
       found.sort((a, b) => (a.block === b.block ? a.index - b.index : a.block < b.block ? -1 : 1));
-      return found.map(({ block: _, index: __, ...event }) => event as WalletEvent);
+      return found.map(({ block: _, index: __, ...event }) => event);
     },
   };
 }

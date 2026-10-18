@@ -116,7 +116,7 @@ export function createBountyReader(client: PublicClient, network: BountyNetwork)
         onProgress,
         read: (fromBlock, toBlock) => client.getLogs({ address, events: EVENTS, fromBlock, toBlock, strict: true }),
       });
-      return bountiesFrom(events as BountyEvent[]);
+      return bountiesFrom(events);
     },
   };
 }

@@ -1,0 +1,8 @@
+# gitleaks, the secret scan the security check runs over the history (scripts/security.sh secrets).
+# It extends gitleaks' own rules. An [[allowlists]] entry says in its description what the match is, why it
+# isn't a secret, and `review-by: YYYY-MM-DD`, since gitleaks has no expiry field
+# (docs/security/suppressions.md). A real leak is never allowlisted: rotate the key, then rewrite the history.
+title = "bona-fide"
+
+[extend]
+useDefault = true
