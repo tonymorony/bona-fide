@@ -249,6 +249,40 @@ export interface Chain {
   startedAt(repoId: Hex): Promise<Date | null>;
 }
 
+/**
+ * A model that suggests: it reads what a feature shows it, and answers with a verdict and reasons for
+ * the Maintainer to check. Its answer is untrusted text and only a suggestion: it can change what a
+ * note says, or hold a Record Exemption or a Payout back, never grant one alone.
+ */
+export interface Model {
+  /** Asks once, and settles the answer. It never rejects for the model: a failure is an answer too. */
+  ask<V extends string, R>(question: Question<V, R>, request: R): Promise<Answer<V>>;
+}
+
+/** What a feature asks the model: its instructions, its message about each request, and the verdicts it allows. */
+export interface Question<V extends string, R> {
+  system: string;
+  /** The user message, with the request's untrusted text between tags that end in `tag`, a token it can't guess. */
+  prompt(request: R, tag: string): string;
+  verdicts: readonly [V, ...V[]];
+  /** Most reasons kept, and so most a note shows. */
+  maxReasons: number;
+}
+
+/**
+ * The model's answer, settled, with what asking it cost.
+ * - "suggested": a verdict with reasons for the Maintainer to check, as plain lines with no links, at
+ *   most the question's `maxReasons`. A note shows them made markdownSafe.
+ * - "silent": no suggestion, such as when the model declined, answered out of shape, or gave a verdict
+ *   with no reasons left. That verdict is kept for the decision log.
+ * - "failed": the model couldn't be asked, or erred. Nothing was paid for.
+ * `why` names the silence or failure, such as "refusal", "no reasons" or "rate limited": never an error's text.
+ */
+export type Answer<V extends string> =
+  | { status: "suggested"; verdict: V; reasons: string[]; cost: DecisionCost }
+  | { status: "silent"; verdict: V | null; reasons: string[]; why: string; cost: DecisionCost }
+  | { status: "failed"; verdict: null; reasons: string[]; why: string; cost: null };
+
 export type Suggestion = "accept" | "bad-faith" | "unsure";
 
 /** What triage shows the model: an item's text, cut to fixed budgets, with how much was left out. */
@@ -263,26 +297,6 @@ export interface ReviewRequest {
   files?: { listed: ChangedFile[]; leftOut: number };
   /** Null when GitHub made no diff. */
   diff?: { text: string; leftOut: number } | null;
-}
-
-export interface Review {
-  /** The model's suggestion, or null when it gave none, such as when it declined. */
-  suggestion: { verdict: Suggestion; reasons: string[] } | null;
-  /** Why there is no suggestion, such as "refusal". */
-  silence?: string;
-  /** The model that answered, which may be a fallback. */
-  model: string;
-  inputTokens: number;
-  outputTokens: number;
-}
-
-/**
- * A model that reads a PR or issue and suggests whether it is good-faith work. Its answer is
- * untrusted text: it only changes what triage's note says.
- */
-export interface Reviewer {
-  /** Rejects with ReviewFailed when the model can't be reached or errs. */
-  review(request: ReviewRequest): Promise<Review>;
 }
 
 /**
@@ -325,26 +339,6 @@ export interface AdviceRequest {
   profile: { accountAgeDays: number; publicRepos: number; followers: number; mergedElsewhere: number };
 }
 
-export interface AdviceAnswer {
-  /** The model's suggestion, or null when it gave none, such as when it declined. */
-  suggestion: { verdict: Advice; reasons: string[] } | null;
-  /** Why there is no suggestion, such as "refusal". */
-  silence?: string;
-  /** The model that answered, which may be a fallback. */
-  model: string;
-  inputTokens: number;
-  outputTokens: number;
-}
-
-/**
- * A model that reads a Contributor's record and suggests whether their item needs a Deposit. It can
- * hold a Record Exemption back, never grant one alone: the App's own witnesses must hold too.
- */
-export interface Advisor {
-  /** Rejects with ReviewFailed when the model can't be reached or errs. */
-  advise(request: AdviceRequest): Promise<AdviceAnswer>;
-}
-
 /** A suggestion on whether a merged PR resolves the issue it closes, which a Bounty is on. */
 export type Resolution = "resolves" | "partial" | "unrelated";
 
@@ -362,26 +356,6 @@ export interface ResolutionRequest {
     /** Null when GitHub made no diff. */
     diff?: { text: string; leftOut: number } | null;
   };
-}
-
-export interface ResolutionAnswer {
-  /** The model's suggestion, or null when it gave none, such as when it declined. */
-  suggestion: { verdict: Resolution; reasons: string[] } | null;
-  /** Why there is no suggestion, such as "refusal". */
-  silence?: string;
-  /** The model that answered, which may be a fallback. */
-  model: string;
-  inputTokens: number;
-  outputTokens: number;
-}
-
-/**
- * A model that reads an issue and the merged PR that closes it, and suggests whether the PR resolves
- * it. It can hold a Payout back, never make one alone: the App's own witnesses must hold too.
- */
-export interface Resolver {
-  /** Rejects with ReviewFailed when the model can't be reached or errs. */
-  resolve(request: ResolutionRequest): Promise<ResolutionAnswer>;
 }
 
 /**

@@ -3,11 +3,18 @@ import { createApp } from "../../src/app.ts";
 import { createBounties } from "../../src/bounties/bounties.ts";
 import type { BountyWallets } from "../../src/bounties/wallet.ts";
 import { createDecisionLog } from "../../src/decisions/log.ts";
-import type { AuthoredText, CommitCheck, Decision, PullRequestFacts, Resolver } from "../../src/ports.ts";
+import type {
+  AuthoredText,
+  CommitCheck,
+  Decision,
+  Model,
+  PullRequestFacts,
+  ResolutionRequest,
+} from "../../src/ports.ts";
 import { createWebhookHandler } from "../../src/webhook.ts";
 import { FakeChain } from "./fake-chain.ts";
 import { FakeGitHub } from "./fake-github.ts";
-import { FakeResolver } from "./fake-resolver.ts";
+import { FakeModel } from "./fake-model.ts";
 import { FakeBountyWallets, type Limits } from "./fake-wallets.ts";
 import { DEPOSIT_PAGE, SETUP_PAGE } from "./harness.ts";
 import { fixture, NEWCOMER, payload, REPO, SECRET, signed } from "./webhooks.ts";
@@ -50,7 +57,7 @@ export interface BountyHarnessOptions {
   /** The text of .github/bona-fide.yml. */
   config?: string;
   /** The model; `null` runs without one, as a host without ANTHROPIC_API_KEY. */
-  resolver?: Resolver | null;
+  model?: Model | null;
   /** The wallet's limits. */
   limits?: Limits;
   /** The Bounty's amount, 10 USDC unless told otherwise. `null` posts none. */
@@ -73,7 +80,7 @@ export function bountyHarness(options: BountyHarnessOptions = {}) {
   const fake = new FakeBountyWallets();
   const wallet = fake.create(REPO, OWNER, limits);
   const serial = amount === null ? 0n : fake.post(wallet, BOUNTY_ISSUE, amount);
-  const resolver = options.resolver === undefined ? new FakeResolver() : options.resolver;
+  const model = options.model === undefined ? new FakeModel<ResolutionRequest>() : options.model;
   /** Every decision appended to the log, private repos' included. */
   const logged: Decision[] = [];
   const log = createDecisionLog({ write: (decision) => logged.push(decision) });
@@ -81,7 +88,7 @@ export function bountyHarness(options: BountyHarnessOptions = {}) {
     github,
     chain,
     wallets: options.wallets ?? fake,
-    resolver: resolver ?? undefined,
+    model: model ?? undefined,
     bountyPageUrl: BOUNTY_PAGE,
     decisions: log,
     now: () => NOW,
@@ -115,7 +122,7 @@ export function bountyHarness(options: BountyHarnessOptions = {}) {
     wallets: fake,
     wallet,
     serial,
-    resolver: resolver as FakeResolver,
+    model: model as FakeModel<ResolutionRequest>,
     bounties,
     log,
     logged,

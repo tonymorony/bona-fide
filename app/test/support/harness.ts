@@ -3,7 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createApp } from "../../src/app.ts";
 import { createDecisionLog } from "../../src/decisions/log.ts";
-import type { Advisor, Binding, Decision, DecisionLog, Reviewer } from "../../src/ports.ts";
+import type { Binding, Decision, DecisionLog, Model } from "../../src/ports.ts";
 import { createRecordExemptions } from "../../src/records/exemption.ts";
 import { createRecordIndex } from "../../src/records/records.ts";
 import { createTriage, type TriageDecision } from "../../src/triage/triage.ts";
@@ -33,15 +33,15 @@ export interface HarnessOptions {
   /** The block explorer the App links Deposits to, if not Arc mainnet's. */
   explorerUrl?: string;
   /** The model triage asks; without it, triage is off. */
-  reviewer?: Reviewer;
+  triageModel?: Model;
   /** The model that weighs Contributors' records; without it, there are no Record Exemptions. */
-  advisor?: Advisor;
+  recordModel?: Model;
   /** The decision log, such as one kept in a file; by default one in memory that `logged` sees. */
   log?: DecisionLog;
 }
 
 export function harness(options: HarnessOptions = {}) {
-  const { config, binding = {}, startedAt, explorerUrl, reviewer, advisor } = options;
+  const { config, binding = {}, startedAt, explorerUrl, triageModel, recordModel } = options;
   const now = typeof options.now === "function" ? options.now : options.now && (() => options.now as Date);
   const github = new FakeGitHub();
   const chain = new FakeChain();
@@ -53,10 +53,10 @@ export function harness(options: HarnessOptions = {}) {
   const logged: Decision[] = [];
   const log = options.log ?? createDecisionLog({ write: (decision) => logged.push(decision) });
   const triage =
-    reviewer &&
+    triageModel &&
     createTriage({
       github,
-      reviewer,
+      model: triageModel,
       signPageUrl: SIGN_PAGE,
       record: (decision) => decisions.push(decision),
       decisions: log,
@@ -64,7 +64,8 @@ export function harness(options: HarnessOptions = {}) {
   // The record index reads the escrow from its first block, as the host reads it from ESCROW_FROM_BLOCK.
   const records = createRecordIndex({ chain, github, fromBlock: 0n });
   const recordExemptions =
-    advisor && createRecordExemptions({ github, records, advisor, decisions: log, ...(now ? { now } : {}) });
+    recordModel &&
+    createRecordExemptions({ github, records, model: recordModel, decisions: log, ...(now ? { now } : {}) });
   const app = createApp({
     github,
     chain,

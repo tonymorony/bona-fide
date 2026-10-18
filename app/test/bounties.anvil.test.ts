@@ -9,12 +9,12 @@ import { createBountyWallets } from "../src/bounties/wallet.ts";
 import { createDecisionLog } from "../src/decisions/log.ts";
 import { createEscrowChain } from "../src/escrow.ts";
 import { createKeeperRoutes } from "../src/keeper/routes.ts";
-import type { Decision } from "../src/ports.ts";
+import type { Decision, ResolutionRequest } from "../src/ports.ts";
 import { createWebhookHandler } from "../src/webhook.ts";
 import { artifact, type Anvil } from "./support/anvil.ts";
 import { BOUNTY_PAGE, closedPr, mergedPr, PAYEE, text } from "./support/bounties.ts";
 import { FakeGitHub } from "./support/fake-github.ts";
-import { FakeResolver, resolution } from "./support/fake-resolver.ts";
+import { FakeModel, resolution } from "./support/fake-model.ts";
 import { DEPOSIT_PAGE, SETUP_PAGE } from "./support/harness.ts";
 import { CLIENT_IP, startKeeperAnvil } from "./support/keeper.ts";
 import { HELLO_WORLD, NEWCOMER, REPO, SECRET, signed } from "./support/webhooks.ts";
@@ -98,14 +98,14 @@ function harness() {
     factory,
     fromBlock: anvil.deployBlock,
   });
-  const resolver = new FakeResolver();
+  const model = new FakeModel<ResolutionRequest>();
   /** Every decision appended to the log. */
   const logged: Decision[] = [];
   const bounties = createBounties({
     github,
     chain,
     wallets,
-    resolver,
+    model,
     bountyPageUrl: BOUNTY_PAGE,
     decisions: createDecisionLog({ write: (decision) => logged.push(decision) }),
   });
@@ -131,7 +131,7 @@ function harness() {
   const post = (body: unknown) =>
     routes(new Request("https://app.example/bounty/payout", { method: "POST", body: JSON.stringify(body) }), CLIENT_IP);
 
-  return { github, chain, wallets, resolver, logged, merge, post, handle, bounties };
+  return { github, chain, wallets, model, logged, merge, post, handle, bounties };
 }
 
 /** The Maintainer's EIP-712 Payout, signed by one of anvil's unlocked accounts. */
@@ -158,8 +158,8 @@ async function inAnHour(): Promise<bigint> {
 }
 
 test("a merged PR that closes an issue with a Bounty within the limits is paid by the Keeper on-chain, and its notes link the Payout", async () => {
-  const { github, resolver, logged, merge } = harness();
-  resolver.answers = [resolution("resolves")];
+  const { github, model, logged, merge } = harness();
+  model.answers = [resolution("resolves")];
   const serial = await postBounty(101, 5_000_000n);
   const before = await anvil.usdcBalance(PAYEE);
 
@@ -180,30 +180,30 @@ test("a merged PR that closes an issue with a Bounty within the limits is paid b
 }, 30_000);
 
 test("a redelivered merge reads the Bounty as paid on-chain and sends nothing", async () => {
-  const { resolver, merge } = harness();
-  resolver.answers = [resolution("resolves")];
+  const { model, merge } = harness();
+  model.answers = [resolution("resolves")];
   await postBounty(103, 1_000_000n);
   await merge(203, 103);
   const restarted = harness();
-  restarted.resolver.answers = [resolution("resolves")];
+  restarted.model.answers = [resolution("resolves")];
   const sent = await anvil.client.getTransactionCount({ address: anvil.keeper });
 
   await restarted.merge(203, 103);
 
   expect(await anvil.client.getTransactionCount({ address: anvil.keeper })).toBe(sent);
-  expect(restarted.resolver.requests).toEqual([]);
+  expect(restarted.model.requests).toEqual([]);
   expect(await paidEvents(103)).toHaveLength(1);
 }, 30_000);
 
 test("a Bounty above the per-payout limit waits for the Maintainer, whose signed Payout the App relays", async () => {
-  const { github, resolver, logged, merge, post } = harness();
-  resolver.answers = [resolution("resolves")];
+  const { github, model, logged, merge, post } = harness();
+  model.answers = [resolution("resolves")];
   const serial = await postBounty(102, 25_000_000n);
 
   await merge(202, 102);
 
   expect((await bountyOf(102)).status).not.toBe(PAID);
-  expect(resolver.requests).toEqual([]);
+  expect(model.requests).toEqual([]);
   const held = github.markedNotesOn(REPO, 202)[0];
   expect(held).toContain("25 USDC is above the wallet's per-payout limit of 10 USDC.");
   expect(held).toContain(`[signs the Payout](${BOUNTY_PAGE}?repo=Codertocat%2FHello-World&issue=102&payee=${PAYEE})`);

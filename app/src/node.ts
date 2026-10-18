@@ -20,7 +20,6 @@ import { Octokit } from "@octokit/rest";
 import { createPublicClient, createWalletClient, http, type Address } from "viem";
 import { createApp } from "./app.ts";
 import { createBounties } from "./bounties/bounties.ts";
-import { createClaudeResolver } from "./bounties/claude.ts";
 import { BOUNTY_NOTE_MS, createBountyNotices } from "./bounties/posted.ts";
 import { createBountyWallets } from "./bounties/wallet.ts";
 import { clientIpOf } from "./client-ip.ts";
@@ -34,13 +33,12 @@ import { createKeeperEscrow, keeperAccount } from "./keeper/escrow.ts";
 import { createKeeper } from "./keeper/keeper.ts";
 import { BINDING_PROOF_PATH, BOUNTY_PAYOUT_PATH, createKeeperRoutes, FORFEIT_PATH } from "./keeper/routes.ts";
 import { createTimeoutRefunder } from "./keeper/timeouts.ts";
-import { createClaudeAdvisor } from "./records/claude.ts";
+import { createClaudeModel, DEFAULT_MODEL } from "./model/claude.ts";
 import { createRecordExemptions } from "./records/exemption.ts";
 import { DEFAULT_RECORDS_PATH, openRecordFile } from "./records/file.ts";
 import { createRecordIndex } from "./records/records.ts";
 import { createDepositRelay, RELAY_DEPOSIT_PATH, relayerAccount } from "./relay/deposit.ts";
 import { createRateLimiter, DEFAULT_RPC_RPS, rateLimited } from "./rpc.ts";
-import { createClaudeReviewer, DEFAULT_TRIAGE_MODEL } from "./triage/claude.ts";
 import { createTriage, decisionLine } from "./triage/triage.ts";
 import { createDepositWatcher, pollDeposits } from "./watcher.ts";
 import { createWebhookHandler } from "./webhook.ts";
@@ -123,25 +121,27 @@ console.log(
 // Triage's notes promise Refunds on acceptance and link the sign page, which only the Keeper serves.
 const anthropicKey = process.env.ANTHROPIC_API_KEY;
 const anthropic = anthropicKey ? new Anthropic({ apiKey: anthropicKey }) : null;
-const triageModel = process.env.TRIAGE_MODEL || DEFAULT_TRIAGE_MODEL;
+const modelName = process.env.TRIAGE_MODEL || DEFAULT_MODEL;
+// Triage, Record Exemptions and Bounties ask the same model.
+const model = anthropic ? createClaudeModel({ client: anthropic, model: modelName }) : null;
 const triage =
-  keeper && anthropic
+  keeper && model
     ? createTriage({
         github,
-        reviewer: createClaudeReviewer({ client: anthropic, model: triageModel }),
+        model,
         signPageUrl: env("SIGN_PAGE_URL"),
         record: (decision) => console.log(decisionLine(decision)),
         decisions,
       })
     : undefined;
-if (triage) console.log(`Triage asks ${triageModel} about each PR and issue that holds a Deposit.`);
+if (triage) console.log(`Triage asks ${modelName} about each PR and issue that holds a Deposit.`);
 else if (anthropicKey) console.log("Triage off: it needs the Keeper. Set KEEPER_PRIVATE_KEY too.");
 else console.log("Triage off: set ANTHROPIC_API_KEY to have Claude suggest verdicts to Maintainers.");
 
 // A Record Exemption needs only the model: the check passes on its own, and a Deposit made meanwhile
 // is refunded by the Keeper, if there is one, as for any Exemption.
 const recordsPath = process.env.RECORDS_PATH || DEFAULT_RECORDS_PATH;
-const recordFile = anthropic && (await openRecordFile(recordsPath));
+const recordFile = model && (await openRecordFile(recordsPath));
 const recordIndex =
   recordFile &&
   createRecordIndex({
@@ -152,12 +152,12 @@ const recordIndex =
     save: recordFile.save,
   });
 const recordExemptions =
-  anthropic &&
+  model &&
   recordIndex &&
   createRecordExemptions({
     github,
     records: recordIndex,
-    advisor: createClaudeAdvisor({ client: anthropic, model: triageModel }),
+    model,
     decisions,
     record: (decision) => console.log(JSON.stringify({ event: "waive", ...decision })),
   });
@@ -165,7 +165,7 @@ if (recordFile) {
   const notLinks =
     recordFile.skipped === 1 ? "1 line that isn't a link" : `${recordFile.skipped} lines that aren't links`;
   console.log(
-    `Record Exemptions ask ${triageModel} about Contributors whose Bona Fide record reaches a repo's threshold. ` +
+    `Record Exemptions ask ${modelName} about Contributors whose Bona Fide record reaches a repo's threshold. ` +
       `${count(recordFile.links.length, "link")} read from ${recordsPath}.` +
       (recordFile.skipped > 0 ? ` Skipped ${notLinks}.` : ""),
   );
@@ -190,15 +190,14 @@ const bounties = bountyWallets
       github,
       chain,
       wallets: bountyWallets,
-      resolver: anthropic ? createClaudeResolver({ client: anthropic, model: triageModel }) : undefined,
+      model: model ?? undefined,
       bountyPageUrl: env("BOUNTY_PAGE_URL"),
       explorerUrl: process.env.EXPLORER_URL || undefined,
       decisions,
       record: (decision) => console.log(JSON.stringify({ event: decision.type, ...decision })),
     })
   : undefined;
-if (bounties && anthropic)
-  console.log(`Bounties: the Keeper pays them once ${triageModel} agrees a PR resolves its issue.`);
+if (bounties && model) console.log(`Bounties: the Keeper pays them once ${modelName} agrees a PR resolves its issue.`);
 else if (bounties) console.log("Bounties wait for the Maintainer: set ANTHROPIC_API_KEY to let the Keeper pay them.");
 else if (bountyFactory) console.log("Bounties off: they need the Keeper. Set KEEPER_PRIVATE_KEY too.");
 else console.log("Bounties off: set BOUNTY_FACTORY_ADDRESS to pay Bounties from Maintainers' Bounty wallets.");
@@ -370,7 +369,7 @@ const stopNoting = bountyWallets
           github,
           chain,
           wallets: bountyWallets,
-          withModel: anthropic !== null,
+          withModel: model !== null,
           bountyPageUrl: env("BOUNTY_PAGE_URL"),
           fromBlock: bountyFromBlock,
         }),

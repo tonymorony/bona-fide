@@ -1,13 +1,11 @@
 import type { Verdict } from "../app.ts";
 import { FORFEIT_REPOS, type Config } from "../config.ts";
-import { recordFlagNote } from "../copy.ts";
-import { decisionCost, newDecision } from "../decisions/log.ts";
+import { markdownSafe, recordFlagNote } from "../copy.ts";
+import { newDecision } from "../decisions/log.ts";
 import {
   fullName,
   type Advice,
-  type AdviceAnswer,
   type AdviceRequest,
-  type Advisor,
   type ContributorRecord,
   type ContributorRecords,
   type Decision,
@@ -15,9 +13,10 @@ import {
   type GitHub,
   type GitHubProfile,
   type Item,
+  type Model,
   type Repo,
 } from "../ports.ts";
-import { markdownSafe, plainReasons, ReviewFailed } from "../triage/triage.ts";
+import { ADVICE_QUESTION } from "./question.ts";
 
 /**
  * Most merged PRs in other people's repos the score counts. It is below the default threshold, so
@@ -30,8 +29,6 @@ export const PROFILE_TTL_MS = 60 * 60 * 1000;
 const MAX_PROFILES = 10_000;
 /** How long after the model was asked about an item a reopen or a re-run asks it again. */
 export const ASK_AGAIN_MS = 10 * 60_000;
-/** Most reasons a flag note shows. */
-const MAX_REASONS = 3;
 const DAY_MS = 86_400_000;
 
 /** The hidden marker a flag note starts with, so a re-run doesn't post it twice. */
@@ -49,7 +46,7 @@ export type RecordAction = "waived" | "required" | "flagged" | "silent" | `faile
 export interface RecordExemptionDeps {
   github: GitHub;
   records: ContributorRecords;
-  advisor: Advisor;
+  model: Model;
   /** Keeps each decision the model was asked about, and remembers the Record Exemptions granted. */
   decisions: DecisionLog;
   now?: () => Date;
@@ -93,7 +90,7 @@ export function scoreOf(record: Pick<ContributorRecord, "refunds">, mergedElsewh
 export function createRecordExemptions({
   github,
   records,
-  advisor,
+  model,
   decisions,
   now = () => new Date(),
   record,
@@ -148,17 +145,12 @@ export function createRecordExemptions({
         mergedElsewhere: profile.mergedElsewhere,
       },
     };
-    let answer: AdviceAnswer | null = null;
-    let action: RecordAction;
-    try {
-      answer = await advisor.advise(request);
-      action = ACTIONS[answer.suggestion?.verdict ?? "none"];
-    } catch (error) {
-      action = `failed: ${error instanceof ReviewFailed ? error.reason : "unexpected error"}`;
-    }
-    const reasons = plainReasons(answer?.suggestion?.reasons ?? [], MAX_REASONS);
-    // As for triage: a suggestion with nothing for the Maintainer to check is no suggestion.
-    if (answer?.suggestion && reasons.length === 0) action = "silent";
+    const answer = await model.ask(ADVICE_QUESTION, request);
+    const { reasons } = answer;
+    const action: RecordAction =
+      answer.status === "failed"
+        ? `failed: ${answer.why}`
+        : ACTIONS[answer.status === "suggested" ? answer.verdict : "none"];
     const decision = newDecision(
       {
         repo: fullName(item.repo),
@@ -167,7 +159,7 @@ export function createRecordExemptions({
         serial: null,
         type: "waive",
         inputs: { login: item.author, ...request.record, ...request.profile },
-        suggestion: answer?.suggestion ? { verdict: answer.suggestion.verdict, reasons } : null,
+        suggestion: answer.verdict ? { verdict: answer.verdict, reasons } : null,
         witnesses: [
           {
             name: "Score",
@@ -182,7 +174,7 @@ export function createRecordExemptions({
         // Only a waiver is the App acting on its own. Asking for the Deposit leaves the Maintainer
         // their Waiver label, and a flag asks them to look.
         outcome: action === "waived" ? "decided" : "escalated",
-        cost: answer ? decisionCost(answer.model, answer.inputTokens, answer.outputTokens) : null,
+        cost: answer.cost,
       },
       now(),
     );

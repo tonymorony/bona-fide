@@ -215,7 +215,7 @@ API.
 **What the model reads.** The repo's name and description, and the item's kind, number, author,
 title and body. For a PR, also the first 100 changed files with their added and deleted lines, and
 the unified diff. The body is cut at 20,000 characters and the diff at 60,000 (`BODY_BUDGET` and
-`DIFF_BUDGET` in `src/triage/triage.ts`), and the model is told where each was cut and how much was
+`DIFF_BUDGET` in `src/model/model.ts`), and the model is told where each was cut and how much was
 left out. GitHub makes no diff for a very large PR; the model is told so and reads the rest.
 
 **What it posts.** A new comment, separate from the App's comment on issues and the Keeper's note:
@@ -626,9 +626,10 @@ npm start
 [Bounties](#bounties) and notes each one posted on its issue. With `ANTHROPIC_API_KEY` set, it also follows Contributors' records for
 [Record Exemptions](#record-exemption), on the watcher's timer. It and the files it opens,
 `src/decisions/file.ts` and `src/records/file.ts`, are the only files that use Node: everything
-`src/index.ts` exports also bundles for a Workers-style runtime. The Claude reviewer, advisor and
-resolver, `src/triage/claude.ts`, `src/records/claude.ts` and `src/bounties/claude.ts`, aren't among those exports: Anthropic's SDK looks for Node's globals when they exist, and the bundle check allows
-none, so a host imports it directly.
+`src/index.ts` exports also bundles for a Workers-style runtime. The Claude model that triage,
+Record Exemptions and Bounties ask, `src/model/claude.ts`, isn't among those exports: Anthropic's SDK
+looks for Node's globals when they exist, and the bundle check allows none, so a host imports it
+directly.
 
 The host reads these environment variables:
 

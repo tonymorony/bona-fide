@@ -2,7 +2,7 @@ import { expect, test } from "vitest";
 import { bountyMarkers, createBounties } from "../src/bounties/bounties.ts";
 import { createDecisionLog } from "../src/decisions/log.ts";
 import type { CommitCheck, PullRequestFacts } from "../src/ports.ts";
-import { ReviewFailed } from "../src/triage/triage.ts";
+import { ModelFailed } from "../src/model/model.ts";
 import {
   BOUNTY_ISSUE,
   BOUNTY_PAGE,
@@ -19,7 +19,7 @@ import {
   text,
   type BountyHarnessOptions,
 } from "./support/bounties.ts";
-import { resolution } from "./support/fake-resolver.ts";
+import { resolution } from "./support/fake-model.ts";
 import { KEEPER } from "./support/fake-wallets.ts";
 import { NEWCOMER, REPO } from "./support/webhooks.ts";
 
@@ -33,7 +33,7 @@ const TX_LINK = `https://explorer.arc.io/tx/0x${"0".repeat(63)}1`;
 /** A harness whose model says the PR resolves the issue. */
 function resolving(options: BountyHarnessOptions = {}) {
   const setup = bountyHarness(options);
-  setup.resolver.answers = [resolution("resolves")];
+  setup.model.answers = [resolution("resolves")];
   return setup;
 }
 
@@ -79,7 +79,7 @@ test("the model reads the issue and the PR, cut to triage's budgets, and nothing
 
   await setup.merge();
 
-  expect(setup.resolver.requests).toEqual([
+  expect(setup.model.requests).toEqual([
     {
       repo: REPO,
       repoDescription: "My first repo",
@@ -210,7 +210,7 @@ test.each([
     await setup.merge(mergedPr(), more().checks);
 
     expect(setup.wallets.sent).toEqual([]);
-    expect(setup.resolver.requests).toEqual([]);
+    expect(setup.model.requests).toEqual([]);
     expect(heldNote(setup)).toBe(
       [
         bountyMarkers(BOUNTY_ISSUE, setup.serial).held,
@@ -252,7 +252,7 @@ test("a merge that finds the issue still open waits, and the issue's close pays"
   setup.github.setClosing(REPO, BOUNTY_ISSUE, { open: true, closedBy: null });
 
   await setup.merge();
-  const waited = { sent: [...setup.wallets.sent], asked: setup.resolver.requests.length, logged: setup.logged.length };
+  const waited = { sent: [...setup.wallets.sent], asked: setup.model.requests.length, logged: setup.logged.length };
   setup.github.setClosing(REPO, BOUNTY_ISSUE, { open: false, closedBy: BOUNTY_PR });
   await setup.deliver("issues", closedIssue());
 
@@ -271,7 +271,7 @@ test("a merged PR linked to an issue its merge left open isn't paid, whatever it
   await setup.deliver("issue_comment", prComment(pr, `Bounty wallet: ${PAYEE}`));
 
   expect(setup.wallets.sent).toEqual([]);
-  expect(setup.resolver.requests).toEqual([]);
+  expect(setup.model.requests).toEqual([]);
 });
 
 test.each([
@@ -351,13 +351,13 @@ test.each([
   ],
   [
     "a failure",
-    new ReviewFailed("rate limited"),
+    new ModelFailed("rate limited"),
     "the automated reviewer couldn't be asked whether the PR resolves the issue",
     "failed: rate limited",
   ],
 ] as const)("a model that answers %s holds the Bounty for the Maintainer", async (_, answer, why, action) => {
   const setup = bountyHarness();
-  setup.resolver.answers = [answer];
+  setup.model.answers = [answer];
 
   await setup.merge();
 
@@ -369,7 +369,7 @@ test.each([
 
 test("the model's reasons in a held note are made plain and safe, as triage's are", async () => {
   const setup = bountyHarness();
-  setup.resolver.answers = [
+  setup.model.answers = [
     resolution("partial", ["It skips the [docs](https://evil.example), says @octocat.", "<b>Two</b>", "3", "4"]),
   ];
 
@@ -387,7 +387,7 @@ test("the model's reasons in a held note are made plain and safe, as triage's ar
 });
 
 test("without a model, every Bounty waits for the Maintainer", async () => {
-  const setup = bountyHarness({ resolver: null });
+  const setup = bountyHarness({ model: null });
 
   await setup.merge();
 
@@ -400,13 +400,13 @@ test("without a model, every Bounty waits for the Maintainer", async () => {
 
 test("a held Bounty stays with the Maintainer: a redelivery asks the model again for nothing", async () => {
   const setup = bountyHarness();
-  setup.resolver.answers = [resolution("partial"), resolution("resolves")];
+  setup.model.answers = [resolution("partial"), resolution("resolves")];
   await setup.merge();
 
   await setup.deliver("pull_request", closedPr(mergedPr()));
   await setup.deliver("issue_comment", prComment(mergedPr(), `Bounty wallet: ${PAYEE}`));
 
-  expect(setup.resolver.requests).toHaveLength(1);
+  expect(setup.model.requests).toHaveLength(1);
   expect(setup.wallets.sent).toEqual([]);
   expect(setup.github.markedNotesOn(REPO, BOUNTY_PR)).toHaveLength(1);
   expect(setup.logged).toHaveLength(1);
@@ -415,14 +415,14 @@ test("a held Bounty stays with the Maintainer: a redelivery asks the model again
 // The note is a comment, which a repo admin can delete, and each answer is paid for.
 test("a held Bounty stays with the Maintainer after its note is deleted: the model isn't asked again", async () => {
   const setup = bountyHarness();
-  setup.resolver.answers = [resolution("partial"), resolution("partial")];
+  setup.model.answers = [resolution("partial"), resolution("partial")];
   const pr = setup.addPr(mergedPr());
 
   await setup.deliver("pull_request", closedPr(pr));
   setup.github.deleteMarkedNotes(REPO, BOUNTY_PR);
   await setup.deliver("pull_request", closedPr(pr));
 
-  expect(setup.resolver.requests).toHaveLength(1);
+  expect(setup.model.requests).toHaveLength(1);
   expect(setup.wallets.sent).toEqual([]);
 });
 
@@ -433,7 +433,7 @@ test("without a named wallet, the author is asked for one, and the Payout runs o
   await setup.merge(pr);
 
   expect(setup.wallets.sent).toEqual([]);
-  expect(setup.resolver.requests).toEqual([]);
+  expect(setup.model.requests).toEqual([]);
   expect(setup.github.markedNotesOn(REPO, BOUNTY_PR)).toEqual([
     [
       bountyMarkers(BOUNTY_ISSUE, setup.serial).payee,
@@ -511,13 +511,13 @@ test("an issue closed by a merge whose PR delivery was missed pays the first mer
 test("a redelivered merge never pays twice, and posts each note once", async () => {
   const setup = resolving();
   await setup.merge();
-  setup.resolver.answers = [resolution("resolves")];
+  setup.model.answers = [resolution("resolves")];
 
   await setup.deliver("pull_request", closedPr(mergedPr()));
   await setup.deliver("issues", closedIssue());
 
   expect(setup.wallets.sent).toHaveLength(1);
-  expect(setup.resolver.requests).toHaveLength(1);
+  expect(setup.model.requests).toHaveLength(1);
   expect(setup.github.markedNotesOn(REPO, BOUNTY_PR)).toHaveLength(1);
   expect(setup.github.markedNotesOn(REPO, BOUNTY_ISSUE)).toHaveLength(1);
   expect(setup.logged).toHaveLength(1);
@@ -530,7 +530,7 @@ test("the merge's pull_request and issues deliveries at once pay once", async ()
   await Promise.all([setup.deliver("pull_request", closedPr(mergedPr())), setup.deliver("issues", closedIssue())]);
 
   expect(setup.wallets.sent).toHaveLength(1);
-  expect(setup.resolver.requests).toHaveLength(1);
+  expect(setup.model.requests).toHaveLength(1);
 });
 
 test("after a restart, a Bounty paid on-chain isn't paid again, and its missing notes link the Payout", async () => {
@@ -542,7 +542,7 @@ test("after a restart, a Bounty paid on-chain isn't paid again, and its missing 
     github: setup.github,
     chain: setup.chain,
     wallets: setup.wallets,
-    resolver: setup.resolver,
+    model: setup.model,
     bountyPageUrl: BOUNTY_PAGE,
     decisions: createDecisionLog(),
   });
@@ -551,7 +551,7 @@ test("after a restart, a Bounty paid on-chain isn't paid again, and its missing 
   await restarted.idle();
 
   expect(setup.wallets.sent).toHaveLength(1);
-  expect(setup.resolver.requests).toEqual([]);
+  expect(setup.model.requests).toEqual([]);
   expect(setup.github.markedNotesOn(REPO, BOUNTY_ISSUE)).toEqual([
     expect.stringContaining(`This issue's Bounty, **10 USDC**, was paid in full for #7 to ${PAYEE}.\n`),
   ]);
@@ -605,7 +605,7 @@ test.each([
     await setup.merge();
 
     expect(setup.wallets.sent).toEqual([]);
-    expect(setup.resolver.requests).toEqual([]);
+    expect(setup.model.requests).toEqual([]);
     expect(setup.github.markedNotesOn(REPO, BOUNTY_PR)).toEqual([]);
     expect(setup.logged).toEqual([]);
   },
@@ -629,7 +629,7 @@ test("a PR closed without merging pays nothing", async () => {
   await setup.deliver("pull_request", closedPr(pr, false));
 
   expect(setup.wallets.sent).toEqual([]);
-  expect(setup.resolver.requests).toEqual([]);
+  expect(setup.model.requests).toEqual([]);
 });
 
 test("a private repo's Payout is recorded as private", async () => {

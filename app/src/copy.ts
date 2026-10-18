@@ -79,7 +79,20 @@ export function acceptedText(kind: Kind, approver?: string): Wording {
   };
 }
 
-// Triage's notes. The reasons come from a model, already made plain text by triage.
+/** A line of untrusted text, such as a model's reason, that GitHub shows as written: no HTML, markdown links or mentions. */
+export function markdownSafe(line: string): string {
+  return (
+    line
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/([[\]])/g, "\\$1")
+      // A zero-width space after @ keeps GitHub from turning it into a mention.
+      .replace(/@/g, "@​")
+  );
+}
+
+// Triage's notes. The reasons come from a model, already made plain lines and markdownSafe.
 
 const AUTOMATED = "An automated reviewer read this";
 const MAINTAINER_DECIDES = "This is only a suggestion: the Maintainer decides.";
