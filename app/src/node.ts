@@ -118,7 +118,7 @@ console.log(
     : "Keeper off: set KEEPER_PRIVATE_KEY to refund Deposits, relay Forfeits and bind repos.",
 );
 
-// Triage's notes promise Refunds on acceptance and link the sign page, which only the Keeper serves.
+// Triage's notes promise Refunds on Acceptance and link the sign page, which only the Keeper serves.
 const anthropicKey = process.env.ANTHROPIC_API_KEY;
 const anthropic = anthropicKey ? new Anthropic({ apiKey: anthropicKey }) : null;
 const modelName = process.env.TRIAGE_MODEL || DEFAULT_MODEL;

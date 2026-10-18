@@ -14,7 +14,8 @@ closes the issue is merged.
 | **Depositor** | The address that paid a Deposit, and the only address a Refund can reach | — |
 | **Maintainer** | The repo's decision-maker, bound on-chain by address, who signs Forfeits | owner, admin |
 | **Keeper** | The App's signer: proposes Bindings, triggers early Refunds and Refunds at the Timeout, relays signed Forfeits. It can never take funds | operator, admin, oracle |
-| **Refund** | 100% of a Deposit back to its Depositor: on merge or acceptance (Keeper), or after the Timeout (the Keeper, or anyone) | return, release |
+| **Refund** | 100% of a Deposit back to its Depositor: on merge or Acceptance (Keeper), or after the Timeout (the Keeper, or anyone) | return, release |
+| **Acceptance** | A Maintainer's word on GitHub that a PR or issue is good work, given by someone who can push: a merge, an issue closed as completed by someone other than its author, the `bona-fide:ok` label, or an approving review. The Keeper refunds on it, though while the item is marked bad faith only a merge refunds. A Contributor's record counts it only when someone other than the author merged, closed or labelled it, and the author can't push | approval (one way to give it), sign-off, verdict |
 | **Forfeit** | The Maintainer's signed bad-faith verdict: up to 50% goes to the Forfeit sink, the rest is refunded | slash, penalty, confiscation |
 | **Forfeit sink** | The escrow's single immutable address for forfeited USDC. At launch it is the Charity router | treasury, pool |
 | **Charity router** | An immutable contract with one fixed recipient, an open-source sustainability fund. Anyone can flush its balance to that fund through CCTP | donation wallet, burn |

@@ -1,12 +1,12 @@
 import { bindingProof, forfeitVerdict, keyOf, repoIdOf, type Kind } from "@bona-fide/sdk";
 import { getAddress, hashTypedData, isAddress, isAddressEqual, type Address, type Hex } from "viem";
 import { parse } from "yaml";
-import { canPush } from "../access.ts";
+import { createAcceptance, markedBadFaith, type Act } from "../acceptance.ts";
 import type { Verdict } from "../app.ts";
 import { CLOCK_SKEW_SECONDS, CONFIG_PATH, parseConfig } from "../config.ts";
 import { depositLink, usdc } from "../copy.ts";
 import { newDecision } from "../decisions/log.ts";
-import { ACCEPTED, BAD_FAITH } from "../labels.ts";
+import { BAD_FAITH } from "../labels.ts";
 import {
   fullName,
   type Binding,
@@ -96,6 +96,7 @@ export function createKeeper({
   decisions,
   now = () => new Date(),
 }: KeeperDeps): Keeper {
+  const acceptance = createAcceptance(github);
   const keyFor = (item: Item) => keyOf(repoIdOf(fullName(item.repo)), item.kind, item.number);
   const afterRevert = cooldown(REVERT_COOLDOWN_MS, Date.now);
   const afterProposal = cooldown(PROPOSAL_COOLDOWN_MS, Date.now);
@@ -146,22 +147,6 @@ export function createKeeper({
     }
   }
 
-  // Only someone with write access can merge. Closing an issue as completed counts only when someone
-  // else did it: anyone can close their own issue.
-  async function accepted(item: Item, closed: any): Promise<boolean> {
-    if (closed.pull_request) return closed.pull_request.merged === true;
-    const byAuthor = closed.sender?.login?.toLowerCase() === closed.issue.user.login.toLowerCase();
-    return closed.issue.state_reason === "completed" && !byAuthor && byMaintainer(item, closed.sender);
-  }
-
-  // Triage access is enough to close an issue or add a label, so either counts only when someone who
-  // can push did it. And neither refunds a Deposit marked bad faith: closing as completed is GitHub's
-  // default, and that Deposit waits for the Maintainer's signature or the Timeout.
-  async function byMaintainer(item: Item, sender: { login?: string } | undefined): Promise<boolean> {
-    if (!sender?.login || item.labels.includes(BAD_FAITH)) return false;
-    return canPush(await github.permissionOf(item.repo, sender.login));
-  }
-
   // The label is only a request: the Deposit moves when the Maintainer signs.
   async function askForSignature(item: Item): Promise<void> {
     const deposit = await escrow.depositOf(keyFor(item));
@@ -181,31 +166,20 @@ export function createKeeper({
     async onWebhook(event, payload) {
       const item = itemOf(event, payload);
       if (!item) return;
-      const source = `webhook ${event} ${payload.action}`;
-      if (payload.action === "closed" && (await accepted(item, payload))) {
-        await refundAccepted(item, source, closeWitnesses(payload));
-      }
-      if (
-        payload.action === "labeled" &&
-        payload.label?.name === ACCEPTED &&
-        (await byMaintainer(item, payload.sender))
-      ) {
-        await refundAccepted(item, source, [
-          { name: "Label", value: ACCEPTED },
-          { name: "Labelled by", value: `@${payload.sender?.login}` },
-        ]);
-      }
+      const act = actOf(payload);
+      const accepted = act && (await acceptance.ofAct(item, act));
+      if (accepted) await refundAccepted(item, `webhook ${event} ${payload.action}`, accepted.witnesses);
       if (payload.action === "labeled" && payload.label?.name === BAD_FAITH) await askForSignature(item);
     },
 
     async afterVerdict(item, verdict) {
       // A Deposit marked bad faith waits for the Maintainer's signature or the Timeout, whatever
       // the Contributor's standing turns into meanwhile.
-      if (verdict.kind === "deposited" || item.labels.includes(BAD_FAITH)) return;
+      if (verdict.kind === "deposited" || markedBadFaith(item)) return;
       const key = keyFor(item);
       const deposit = await escrow.depositOf(key);
       if (deposit.status !== "active") return;
-      if (verdict.kind === "accepted") return refundAndLog(item, key, deposit, "check", acceptanceWitnesses(verdict));
+      if (verdict.kind === "accepted") return refundAndLog(item, key, deposit, "check", verdict.witnesses);
       // Not a decision: the Deposit wasn't needed, so it goes back.
       if (verdict.kind === "exempt" || verdict.kind === "denounced") return void (await escrow.refund(key));
       // Made before the item was opened: the check ignores it, and it keeps the Contributor from
@@ -335,24 +309,12 @@ function itemOf(event: string | null, payload: any): Item | null {
   return null;
 }
 
-/** The facts behind an acceptance the check found: the label, or an approval. */
-function acceptanceWitnesses(verdict: Extract<Verdict, { kind: "accepted" }>): Witness[] {
-  const accepted = verdict.approver
-    ? { name: "Approved by", value: `@${verdict.approver}, with ${verdict.access ?? "write"} access` }
-    : { name: "Label", value: ACCEPTED };
-  return [accepted, { name: "Marked bad faith", value: "no" }];
-}
-
-function closeWitnesses(closed: any): Witness[] {
-  if (closed.pull_request) {
-    const by = closed.pull_request.merged_by?.login ?? closed.sender?.login;
-    return [
-      { name: "Merged", value: "yes" },
-      { name: "Merged by", value: `@${by}` },
-    ];
-  }
-  return [
-    { name: "Closed as", value: "completed" },
-    { name: "Closed by", value: `@${closed.sender.login}, not the author` },
-  ];
+/** What a delivery says someone did that can accept its PR or issue: closed it, or added a label. */
+function actOf(payload: any): Act | null {
+  const by: string | null = payload.sender?.login ?? null;
+  if (payload.action === "labeled" && payload.label?.name) return { type: "labelled", label: payload.label.name, by };
+  if (payload.action !== "closed") return null;
+  const pr = payload.pull_request;
+  if (!pr) return { type: "closed", reason: payload.issue.state_reason ?? null, by };
+  return pr.merged === true ? { type: "merged", by: pr.merged_by?.login ?? by } : { type: "closed", reason: null, by };
 }

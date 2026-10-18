@@ -3,6 +3,7 @@ import type { Hex } from "viem";
 import { userIdOf } from "./webhooks.ts";
 import type {
   CheckRun,
+  Closing,
   ClosingPullRequest,
   CommitCheck,
   GitHub,
@@ -10,7 +11,7 @@ import type {
   IssueClosing,
   Item,
   ItemContent,
-  ItemOutcome,
+  ItemFacts,
   Permission,
   PullRequestFacts,
   Repo,
@@ -32,8 +33,8 @@ interface RepoState {
   contents: Map<string, ItemContent>;
   /** The commit of each of the App's check suites. */
   suites: Map<number, string>;
-  /** Items merged, or closed as completed by someone other than their author. */
-  accepted: Set<string>;
+  /** How items were merged or closed, as itemFacts shows it, by "kind#number". */
+  ends: Map<string, Closing>;
   /** What pullRequestFacts answers for each PR. */
   pullRequests: Map<number, PullRequestFacts>;
   /** The check runs and statuses on each commit. */
@@ -81,7 +82,7 @@ export class FakeGitHub implements GitHub {
       approvals: new Map(),
       contents: new Map(),
       suites: new Map(),
-      accepted: new Set(),
+      ends: new Map(),
       pullRequests: new Map(),
       commitChecks: new Map(),
       closingLinks: new Map(),
@@ -173,9 +174,10 @@ export class FakeGitHub implements GitHub {
     this.state(fullName).contents.set(`${kind}#${number}`, content);
   }
 
-  /** Marks the item merged, or closed as completed by someone else, as its outcome shows it. */
-  accept(fullName: string, kind: Kind, number: number): void {
-    this.state(fullName).accepted.add(`${kind}#${number}`);
+  /** Merges the PR, or closes the issue as completed, as `by` did: by default the repo's owner, its admin. */
+  accept(fullName: string, kind: Kind, number: number, by = this.state(fullName).repo.owner): void {
+    const closing: Closing = kind === "pr" ? { type: "merged", by } : { type: "closed", reason: "completed", by };
+    this.state(fullName).ends.set(`${kind}#${number}`, closing);
   }
 
   /** The public profile profileOf answers for `login`. Without one, the account doesn't exist. */
@@ -350,15 +352,15 @@ export class FakeGitHub implements GitHub {
     return Number.isSafeInteger(number) && number > 0 ? [number] : [];
   }
 
-  async outcomeOf(repo: Repo, kind: Kind, number: number): Promise<ItemOutcome | null> {
+  async itemFacts(repo: Repo, kind: Kind, number: number): Promise<ItemFacts | null> {
     const item = await this.getItem(repo, kind, number);
     if (!item) return null;
     const state = this.state(fullNameOf(repo));
-    const accepted = state.accepted.has(`${kind}#${number}`);
     return {
       author: item.author,
       authorId: item.authorId ?? this.idOf(item.author),
-      accepted: accepted || item.labels.includes("bona-fide:ok"),
+      labels: item.labels,
+      closing: state.ends.get(`${kind}#${number}`) ?? null,
       closedAt: state.closedAt.get(number) ?? null,
     };
   }

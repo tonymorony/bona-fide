@@ -78,7 +78,7 @@ export interface Triage {
 }
 
 // Triage only writes a note. Whatever the model answers, it never adds a label, refunds or
-// forfeits: a Refund needs a Maintainer's acceptance, and a Forfeit the Maintainer's signature.
+// forfeits: a Refund needs a Maintainer's Acceptance, and a Forfeit the Maintainer's signature.
 export function createTriage({
   github,
   model,
@@ -183,7 +183,7 @@ interface Seen {
   labelsAfter: string[] | null | undefined;
 }
 
-// A note suggesting acceptance is the App acting on its own. Everything else was left to the
+// A note suggesting Acceptance is the App acting on its own. Everything else was left to the
 // Maintainer: a draft verdict, a model unsure, declining or failing, or a Maintainer deciding first.
 function logged(item: Item, deposit: Deposit, decision: TriageDecision, seen: Seen): Decision {
   const witnesses = [

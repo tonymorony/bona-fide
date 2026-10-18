@@ -618,93 +618,60 @@ test("a label was added by whoever added it last", async () => {
   expect(await github.labeledBy(REPO, 404, "bona-fide:ok")).toBeNull();
 });
 
-test("an item's outcome is its author and whether it was merged, or completed or labelled ok by someone else who can push", async () => {
+// Acceptance judges the facts (test/acceptance.test.ts): the adapter only reads them, in one request.
+test("an item's facts are its author, its labels, and how and by whom it was merged or closed", async () => {
   const pr = fixture("pull_request.opened").pull_request;
   const issue = fixture("issues.opened").issue;
-  const closedBy = (login: string) => ({ state: "closed", state_reason: "completed", closed_by: { login } });
-  const ok = [{ name: "bona-fide:ok" }];
-  const labeledBy = (login: string) => ({
-    status: 200,
-    body: [{ event: "labeled", label: { name: "bona-fide:ok", color: "ededed" }, actor: { login } }],
-  });
-  const { github } = fakeApi({
-    [`GET ${API}/collaborators/mo/permission`]: { status: 200, body: { permission: "write" } },
-    [`GET ${API}/collaborators/triager/permission`]: { status: 200, body: { permission: "read", role_name: "triage" } },
-    [`GET ${API}/issues/4/events`]: labeledBy("mo"),
-    [`GET ${API}/issues/8/events`]: labeledBy("mo"),
-    [`GET ${API}/pulls/10`]: { status: 200, body: { ...pr, number: 10, merged: false, labels: ok } },
-    [`GET ${API}/issues/10/events`]: labeledBy("triager"),
-    [`GET ${API}/issues/11`]: { status: 200, body: { ...issue, number: 11, ...closedBy("triager") } },
-    [`GET ${API}/issues/12`]: { status: 200, body: { ...issue, number: 12, labels: ok } },
-    [`GET ${API}/issues/12/events`]: labeledBy("triager"),
-    [`GET ${API}/pulls/2`]: { status: 200, body: { ...pr, merged: true } },
-    [`GET ${API}/pulls/3`]: { status: 200, body: { ...pr, number: 3, merged: false } },
-    [`GET ${API}/pulls/4`]: { status: 200, body: { ...pr, number: 4, merged: false, labels: ok } },
-    [`GET ${API}/pulls/5`]: { status: 200, body: { ...pr, number: 5, user: null } },
-    [`GET ${API}/issues/1`]: { status: 200, body: { ...issue, ...closedBy("mo") } },
-    [`GET ${API}/issues/6`]: { status: 200, body: { ...issue, number: 6, ...closedBy("Codertocat") } },
-    [`GET ${API}/issues/7`]: { status: 200, body: { ...issue, number: 7, state_reason: "not_planned" } },
-    [`GET ${API}/issues/8`]: { status: 200, body: { ...issue, number: 8, labels: ok } },
+  const closed = { state: "closed", closed_at: "2026-09-30T12:00:00Z" };
+  const { github, sent } = fakeApi({
+    [`GET ${API}/pulls/2`]: {
+      status: 200,
+      body: { ...pr, ...closed, merged: true, merged_by: { login: "mo", id: 7 }, labels: [{ name: "bona-fide:ok" }] },
+    },
+    [`GET ${API}/pulls/3`]: { status: 200, body: { ...pr, number: 3, ...closed, merged: true, merged_by: null } },
+    [`GET ${API}/pulls/4`]: { status: 200, body: { ...pr, number: 4, ...closed, merged: false } },
+    [`GET ${API}/pulls/5`]: { status: 200, body: { ...pr, number: 5 } },
+    [`GET ${API}/pulls/6`]: { status: 200, body: { ...pr, number: 6, user: null } },
+    [`GET ${API}/issues/1`]: {
+      status: 200,
+      body: { ...issue, ...closed, state_reason: "completed", closed_by: { login: "mo", id: 7 } },
+    },
+    [`GET ${API}/issues/7`]: { status: 200, body: { ...issue, number: 7, ...closed, state_reason: "not_planned" } },
+    [`GET ${API}/issues/8`]: { status: 200, body: { ...issue, number: 8, state_reason: "reopened" } },
     [`GET ${API}/issues/9`]: { status: 200, body: { ...issue, number: 9, pull_request: { url: pr.url } } },
   });
 
-  const outcomes = await Promise.all([
-    github.outcomeOf(REPO, "pr", 2),
-    github.outcomeOf(REPO, "pr", 3),
-    github.outcomeOf(REPO, "pr", 4),
-    github.outcomeOf(REPO, "pr", 5),
-    github.outcomeOf(REPO, "issue", 1),
-    github.outcomeOf(REPO, "issue", 6),
-    github.outcomeOf(REPO, "issue", 7),
-    github.outcomeOf(REPO, "issue", 8),
-    github.outcomeOf(REPO, "issue", 9),
-    github.outcomeOf(REPO, "issue", 404),
-    github.outcomeOf(REPO, "pr", 10),
-    github.outcomeOf(REPO, "issue", 11),
-    github.outcomeOf(REPO, "issue", 12),
+  const facts = await Promise.all([
+    github.itemFacts(REPO, "pr", 2),
+    github.itemFacts(REPO, "pr", 3),
+    github.itemFacts(REPO, "pr", 4),
+    github.itemFacts(REPO, "pr", 5),
+    github.itemFacts(REPO, "pr", 6),
+    github.itemFacts(REPO, "issue", 1),
+    github.itemFacts(REPO, "issue", 7),
+    github.itemFacts(REPO, "issue", 8),
+    github.itemFacts(REPO, "issue", 9),
+    github.itemFacts(REPO, "issue", 404),
   ]);
 
-  const by = (accepted: boolean) => ({ author: "Codertocat", authorId: 21031067, accepted, closedAt: null });
-  expect(outcomes).toEqual([
-    by(true),
-    by(false),
-    by(true),
+  const author = { author: "Codertocat", authorId: 21031067 };
+  const at = new Date("2026-09-30T12:00:00Z");
+  const bug = ["bug"];
+  expect(facts).toEqual([
+    { ...author, labels: ["bona-fide:ok"], closing: { type: "merged", by: "mo" }, closedAt: at },
+    { ...author, labels: bug, closing: { type: "merged", by: null }, closedAt: at },
+    { ...author, labels: bug, closing: { type: "closed", reason: null, by: null }, closedAt: at },
+    { ...author, labels: bug, closing: null, closedAt: null },
     null,
-    by(true),
-    by(false),
-    by(false),
-    by(true),
+    { ...author, labels: bug, closing: { type: "closed", reason: "completed", by: "mo" }, closedAt: at },
+    { ...author, labels: bug, closing: { type: "closed", reason: "not_planned", by: null }, closedAt: at },
+    { ...author, labels: bug, closing: null, closedAt: null },
     null,
     null,
-    by(false),
-    by(false),
-    by(false),
   ]);
-});
-
-// A record counts only work someone else accepted.
-test("work its author merged, or could push to the repo, isn't accepted for their record, and an outcome says when it closed", async () => {
-  const pr = fixture("pull_request.opened").pull_request;
-  const merged = { merged: true, closed_at: "2026-09-30T12:00:00Z" };
-  const { github } = fakeApi({
-    [`GET ${API}/pulls/2`]: { status: 200, body: { ...pr, ...merged, merged_by: { login: "mo", id: 7 } } },
-    [`GET ${API}/pulls/3`]: { status: 200, body: { ...pr, number: 3, ...merged, merged_by: pr.user } },
-    [`GET ${API}/pulls/4`]: {
-      status: 200,
-      body: { ...pr, number: 4, ...merged, user: { login: "mo", id: 7 }, merged_by: pr.user },
-    },
-    [`GET ${API}/collaborators/mo/permission`]: { status: 200, body: { permission: "write" } },
-  });
-
-  const outcomes = await Promise.all([2, 3, 4].map((n) => github.outcomeOf(REPO, "pr", n)));
-
-  expect(outcomes.map((o) => o?.accepted)).toEqual([true, false, false]);
-  expect(outcomes[0]).toEqual({
-    author: "Codertocat",
-    authorId: 21031067,
-    accepted: true,
-    closedAt: new Date("2026-09-30T12:00:00Z"),
-  });
+  expect(sent.map((s) => s.path).filter((path) => !/^\/repos\/[^/]+\/[^/]+\/(pulls|issues)\/\d+$/.test(path))).toEqual(
+    [],
+  );
 });
 
 test("a profile is the account's public numbers and a search count of merged PRs in other people's repos", async () => {
