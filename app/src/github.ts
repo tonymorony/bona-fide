@@ -1,6 +1,6 @@
+import { repoIdOf } from "@bona-fide/sdk";
 import type { Octokit } from "@octokit/rest";
 import type { Hex } from "viem";
-import { repoIdOf } from "./keys.ts";
 import { ACCEPTED } from "./labels.ts";
 import {
   fullName,

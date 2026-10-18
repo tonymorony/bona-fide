@@ -1,8 +1,9 @@
+import { chainOf } from "@bona-fide/sdk";
 import { BaseError, ContractFunctionRevertedError, type Address, type Hex } from "viem";
 import { createChainReader, publicClientFor } from "../chain.ts";
 import type { Fetch } from "../endpoints.ts";
 import { shortAddress, usdc } from "../format.ts";
-import { chainOf, type LiveNetwork } from "../network.ts";
+import type { LiveNetwork } from "../network.ts";
 import { chainName, createSession, type WalletSession } from "../ui/session.ts";
 import type { View } from "../ui/dom.ts";
 import { isUserRejection } from "../wallet.ts";

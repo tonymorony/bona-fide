@@ -1,6 +1,6 @@
+import { repoIdOf } from "@bona-fide/sdk";
 import { getAddress, keccak256, stringToBytes, type Address, type Hex } from "viem";
 import { afterAll, beforeAll, expect, test } from "vitest";
-import { repoIdOf } from "../src/keys.ts";
 import type { Anvil } from "./support/anvil.ts";
 import { keeperHarness, signBinding, startKeeperAnvil } from "./support/keeper.ts";
 

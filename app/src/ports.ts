@@ -1,5 +1,5 @@
+import type { Kind } from "@bona-fide/sdk";
 import type { Address, Hex } from "viem";
-import type { Kind } from "./keys.ts";
 
 export interface Repo {
   owner: string;

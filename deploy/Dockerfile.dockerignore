@@ -1,5 +1,8 @@
-# Send the build only the App's package files and source: never .env, node_modules or anything else.
+# Send the build only the workspace's package files and the SDK's and App's: never .env, node_modules or anything else.
 *
+!package.json
+!package-lock.json
+!sdk/package.json
+!sdk/src
 !app/package.json
-!app/package-lock.json
 !app/src

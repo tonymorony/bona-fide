@@ -1,8 +1,9 @@
+import { DEPOSIT_STATUSES, escrowAbi, isValidSignatureNow, type DepositStatus } from "@bona-fide/sdk";
 import {
   BaseError,
   ContractFunctionRevertedError,
+  getAbiItem,
   isAddressEqual,
-  parseAbi,
   parseEventLogs,
   type Address,
   type Hex,
@@ -14,29 +15,9 @@ import { nonceManager, privateKeyToAccount } from "viem/accounts";
 import { writeContract } from "viem/actions";
 import { createEscrowChain } from "../escrow.ts";
 import type { Binding } from "../ports.ts";
-import { isValidSignatureNow } from "./signatures.ts";
-
-export const keeperAbi = parseAbi([
-  "function depositOf(bytes32 key) view returns ((address depositor, uint64 deadline, uint8 status, address maintainer, uint16 forfeitBps, uint64 serial, uint256 amount))",
-  "function refund(bytes32 key)",
-  "function forfeit(bytes32 key, uint256 sigDeadline, bytes signature)",
-  "function proposeRepo(bytes32 repoId, address maintainer, uint16 forfeitBps, uint32 timeout, uint256 amount)",
-  "function activateRepo(bytes32 repoId)",
-  "event RepoProposed(bytes32 indexed repoId, address indexed maintainer, uint16 forfeitBps, uint32 timeout, uint256 amount, uint64 effectiveAt)",
-  "event Deposited(bytes32 indexed key, uint64 serial, bytes32 indexed repoId, uint8 kind, uint64 number, address indexed depositor, uint256 amount, uint64 deadline)",
-  "event Refunded(bytes32 indexed key, uint64 serial, address indexed depositor, uint256 amount, bool byKeeper)",
-  "event Forfeited(bytes32 indexed key, uint64 serial, uint256 forfeited, uint256 refunded)",
-  "error NotKeeper()",
-  "error DepositNotActive()",
-  "error DeadlinePassed()",
-  "error SignatureExpired()",
-  "error InvalidSignature()",
-  "error NoPendingConfig()",
-  "error NotYetEffective()",
-]);
 
 /** One of the escrow's custom errors, such as "DepositNotActive". */
-export type EscrowError = Extract<(typeof keeperAbi)[number], { type: "error" }>["name"];
+export type EscrowError = Extract<(typeof escrowAbi)[number], { type: "error" }>["name"];
 
 /** A transaction that passed simulation but reverted on-chain, which costs its gas. */
 export class TransactionReverted extends Error {
@@ -58,17 +39,12 @@ export class EscrowRejection extends Error {
   }
 }
 
-const REPO_PROPOSED = keeperAbi.find((item) => item.type === "event" && item.name === "RepoProposed")!;
-const DEPOSIT_CHANGES = [eventNamed("Deposited"), eventNamed("Refunded"), eventNamed("Forfeited")];
-
-function eventNamed<const N extends string>(name: N) {
-  type Named = Extract<(typeof keeperAbi)[number], { type: "event"; name: N }>;
-  return keeperAbi.find((item): item is Named => item.type === "event" && item.name === name)!;
-}
-
-/** The escrow's Status enum in order. */
-const STATUSES = ["none", "active", "refunded", "forfeited"] as const;
-export type DepositStatus = (typeof STATUSES)[number];
+const REPO_PROPOSED = getAbiItem({ abi: escrowAbi, name: "RepoProposed" });
+const DEPOSIT_CHANGES = [
+  getAbiItem({ abi: escrowAbi, name: "Deposited" }),
+  getAbiItem({ abi: escrowAbi, name: "Refunded" }),
+  getAbiItem({ abi: escrowAbi, name: "Forfeited" }),
+];
 
 export interface EscrowDeposit {
   status: DepositStatus;
@@ -168,8 +144,8 @@ export function createKeeperEscrow({ client, account, escrow }: KeeperEscrowOpti
   }
 
   async function depositOf(key: Hex): Promise<EscrowDeposit> {
-    const d = await client.readContract({ address: escrow, abi: keeperAbi, functionName: "depositOf", args: [key] });
-    return { ...d, status: STATUSES[d.status] ?? "none" };
+    const d = await client.readContract({ address: escrow, abi: escrowAbi, functionName: "depositOf", args: [key] });
+    return { ...d, status: DEPOSIT_STATUSES[d.status] ?? "none" };
   }
 
   const sent = (request: WriteContractParameters) => sendAndWait(client, request);
@@ -198,7 +174,7 @@ export function createKeeperEscrow({ client, account, escrow }: KeeperEscrowOpti
         if (deposit.status !== "active" || (serial !== undefined && deposit.serial !== serial)) return null;
         try {
           const { request } = await rejecting(
-            client.simulateContract({ account, address: escrow, abi: keeperAbi, functionName: "refund", args: [key] }),
+            client.simulateContract({ account, address: escrow, abi: escrowAbi, functionName: "refund", args: [key] }),
           );
           return (await sent(request)).transactionHash;
         } catch (error) {
@@ -214,7 +190,7 @@ export function createKeeperEscrow({ client, account, escrow }: KeeperEscrowOpti
           client.simulateContract({
             account,
             address: escrow,
-            abi: keeperAbi,
+            abi: escrowAbi,
             functionName: "forfeit",
             args: [key, sigDeadline, signature],
           }),
@@ -237,13 +213,13 @@ export function createKeeperEscrow({ client, account, escrow }: KeeperEscrowOpti
           client.simulateContract({
             account,
             address: escrow,
-            abi: keeperAbi,
+            abi: escrowAbi,
             functionName: "proposeRepo",
             args: [repoId, maintainer, forfeitBps, timeoutSeconds, amount],
           }),
         );
         const receipt = await sent(request);
-        const [proposed] = parseEventLogs({ abi: keeperAbi, eventName: "RepoProposed", logs: receipt.logs });
+        const [proposed] = parseEventLogs({ abi: escrowAbi, eventName: "RepoProposed", logs: receipt.logs });
         if (!proposed) throw new Error(`No RepoProposed event in ${receipt.transactionHash}.`);
         return { status: "proposed", txHash: receipt.transactionHash, effectiveAt: proposed.args.effectiveAt };
       });
@@ -280,7 +256,7 @@ export function createKeeperEscrow({ client, account, escrow }: KeeperEscrowOpti
           client.simulateContract({
             account,
             address: escrow,
-            abi: keeperAbi,
+            abi: escrowAbi,
             functionName: "activateRepo",
             args: [repoId],
           }),
@@ -328,7 +304,7 @@ export async function sendAndWait(client: PublicClient, request: WriteContractPa
 }
 
 function isEscrowError(name: string | undefined): name is EscrowError {
-  return keeperAbi.some((item) => item.type === "error" && item.name === name);
+  return escrowAbi.some((item) => item.type === "error" && item.name === name);
 }
 
 // The Keeper sends one transaction at a time, whether to the escrow or to a Bounty wallet: its

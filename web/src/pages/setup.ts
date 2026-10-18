@@ -1,11 +1,11 @@
+import { bindingProof, repoIdOf } from "@bona-fide/sdk";
 import type { Address, Hex } from "viem";
 import { fetchBonaFideYml, readBonaFideYml, type FetchedFile, type FileTerms } from "../bona-fide-yml.ts";
 import type { RepoTerms, Terms } from "../chain.ts";
 import { askKeeperToBind, bindingProofBody } from "../endpoints.ts";
 import { delay, percent, shortAddress, timeout, usdc } from "../format.ts";
-import { repoIdOf } from "../keys.ts";
 import { bountiesPageUrl, explorerTx, readRepoLink, repoPageUrl } from "../link.ts";
-import { bindingProof, WINDOWS } from "../typed-data.ts";
+import { WINDOWS } from "../windows.ts";
 import { focusState, newView, onAction, render } from "../ui/dom.ts";
 import { isUndeployedSmartWalletSignature, isUserRejection, signTypedData } from "../wallet.ts";
 import {

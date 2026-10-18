@@ -326,6 +326,47 @@ FOUNDRY_INVARIANT_RUNS=10000 forge test --match-path 'test/invariant/*'   # deep
 
 Both escrows take Deposits of at most 50 USDC. The mainnet pair was deployed in blocks 24,583,717 and 24,583,718.
 
+The Bounty wallet factory is on Arc at
+[`0xEda45D2931B1A36D5920edefA621Ff5533c98C42`](https://explorer.arc.io/address/0xEda45D2931B1A36D5920edefA621Ff5533c98C42),
+deployed in block 26,294,417. The escrow, the router, the factory and the first Bounty wallet it created are
+verified on [Sourcify](https://sourcify.dev) with an exact match. The SDK's
+[`deployments.ts`](../sdk/src/deployments.ts) holds the same addresses for code.
+
+## Build on these contracts
+
+Each contract is a small, immutable primitive that works without Bona Fide's App:
+
+- **The escrow** holds a refundable USDC deposit for anything an off-chain id names: here a PR or an issue. The
+  keeper proposes each repo's terms, in public and behind a delay, and can refund a deposit in full; only the
+  maintainer's signature can forfeit, at most half and before the deadline; after the deadline, anyone can refund.
+  USDC reaches only the depositor or one fixed forfeit sink. Key it by a listing, a bug report or a forum thread
+  instead, and it asks for good faith there the same way.
+- **The Charity router** forwards whatever USDC it holds through CCTP to one recipient on another chain, fixed at
+  deploy. It has no owner and anyone can flush it, so it can take any contract's forfeits or fees without a
+  custodian.
+- **The Bounty wallet** holds an owner's budget, at an address its factory gives in advance. The owner posts and pays
+  Bounties; anyone can relay a payout the owner signed (EIP-712, or ERC-1271 for a smart account); and an automated
+  payer, the keeper, pays only within a per-payout and a per-period limit, and only while the owner allows it.
+
+To use them from Solidity in a Foundry project:
+
+```shell
+forge install tonymorony/bona-fide
+cat >> remappings.txt <<'EOF'
+bona-fide/=lib/bona-fide/contracts/src/
+@openzeppelin/contracts/=lib/bona-fide/contracts/lib/openzeppelin-contracts/contracts/
+EOF
+```
+
+```solidity
+import {BonaFideEscrow} from "bona-fide/BonaFideEscrow.sol";
+import {BountyWalletFactory} from "bona-fide/BountyWalletFactory.sol";
+```
+
+The second line maps OpenZeppelin to the version these contracts are tested with, which `forge install` brings
+along as a submodule. If your project already maps `@openzeppelin/contracts/`, keep yours. From TypeScript,
+[`@bona-fide/sdk`](../sdk/README.md) has their ABIs, ids and typed data.
+
 ## Deploy (dry run only)
 
 `script/Deploy.s.sol` deploys the Charity router, then the escrow with `forfeitSink` = the router. It reads these

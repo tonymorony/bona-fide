@@ -1,3 +1,4 @@
+import { keyOf, kindCode, repoIdOf, type Kind } from "@bona-fide/sdk";
 import { execFileSync, spawn } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { createServer, type AddressInfo } from "node:net";
@@ -13,7 +14,6 @@ import {
   type Hex,
 } from "viem";
 import { foundry } from "viem/chains";
-import { keyOf, kindCode, repoIdOf, type Kind } from "../../src/keys.ts";
 
 const CONTRACTS = fileURLToPath(new URL("../../../contracts/", import.meta.url));
 const FORFEIT_SINK = "0x000000000000000000000000000000000000dEaD";

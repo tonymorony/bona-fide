@@ -1,7 +1,7 @@
+import { forfeitVerdict } from "@bona-fide/sdk";
 import { privateKeyToAccount, generatePrivateKey } from "viem/accounts";
 import { recoverTypedDataAddress, type Hex } from "viem";
 import { expect, test } from "vitest";
-import { forfeitVerdict } from "../src/typed-data.ts";
 import {
   connect,
   discoverWallets,

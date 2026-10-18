@@ -1,7 +1,7 @@
+import { repoIdOf } from "@bona-fide/sdk";
 import { Octokit } from "@octokit/rest";
 import { expect, test, vi } from "vitest";
 import { createGitHub, quietLog } from "../src/github.ts";
-import { repoIdOf } from "../src/keys.ts";
 import type { Item } from "../src/ports.ts";
 import { fixture } from "./support/webhooks.ts";
 

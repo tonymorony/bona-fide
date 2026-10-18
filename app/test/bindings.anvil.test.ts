@@ -1,8 +1,8 @@
+import { repoIdOf } from "@bona-fide/sdk";
 import { createWalletClient, http } from "viem";
 import { afterAll, beforeAll, expect, test } from "vitest";
 import { createApp } from "../src/app.ts";
 import { createEscrowChain } from "../src/escrow.ts";
-import { repoIdOf } from "../src/keys.ts";
 import { createDepositWatcher } from "../src/watcher.ts";
 import { createWebhookHandler } from "../src/webhook.ts";
 import { startAnvil, type Anvil } from "./support/anvil.ts";

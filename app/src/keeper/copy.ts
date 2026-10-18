@@ -1,6 +1,6 @@
+import type { Kind } from "@bona-fide/sdk";
 import type { Address } from "viem";
 import { usdc } from "../copy.ts";
-import type { Kind } from "../keys.ts";
 
 export const NOUNS: Record<Kind, string> = { pr: "PR", issue: "issue" };
 

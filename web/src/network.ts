@@ -1,4 +1,4 @@
-import { defineChain, isAddress, type Address } from "viem";
+import { isAddress, type Address } from "viem";
 
 /** Everything a build of the pages needs to know about one network. */
 export interface Network {
@@ -87,16 +87,4 @@ export function problemsWith(network: Network): string[] {
     );
   }
   return problems;
-}
-
-/** The network as viem's chain: USDC is Arc's gas token, with 18 decimals. */
-export function chainOf(network: Network) {
-  return defineChain({
-    id: network.chainId,
-    name: network.name,
-    nativeCurrency: { name: "USDC", symbol: "USDC", decimals: 18 },
-    rpcUrls: { default: { http: [network.rpcUrl] } },
-    blockExplorers: { default: { name: "Arc explorer", url: network.explorerUrl } },
-    testnet: network.testnet,
-  });
 }

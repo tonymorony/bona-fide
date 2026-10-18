@@ -1,8 +1,8 @@
+import { keyOf, repoIdOf, type Kind } from "@bona-fide/sdk";
 import { createPublicClient, http } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
 import { afterAll, beforeAll, expect, test } from "vitest";
 import { createKeeperEscrow } from "../src/keeper/escrow.ts";
-import { keyOf, repoIdOf, type Kind } from "../src/keys.ts";
 import type { Anvil } from "./support/anvil.ts";
 import type { FakeGitHub } from "./support/fake-github.ts";
 import { keeperHarness, startKeeperAnvil } from "./support/keeper.ts";

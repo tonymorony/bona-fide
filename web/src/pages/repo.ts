@@ -1,12 +1,11 @@
+import { escrowAbi, repoIdOf, routerAbi } from "@bona-fide/sdk";
 import { parseEventLogs, type Hex } from "viem";
-import { escrowAbi, routerAbi } from "../abi.ts";
 import { createBountyReader, hasBounties, type BountyRow, type BountyWalletState } from "../bounty.ts";
 import type { RepoTerms, Terms } from "../chain.ts";
 import { decisionWords } from "../decisions.ts";
 import { readDecisions, type Decision, type DecisionsOutcome } from "../endpoints.ts";
 import { delay, localTime, percent, shortAddress, shortDate, timeLeft, timeout, usdc, utcTime } from "../format.ts";
 import { readRepoHistory, type DepositRow, type RepoHistory } from "../history.ts";
-import { repoIdOf } from "../keys.ts";
 import { bountiesPageUrl, explorerAddress, explorerTx, itemName, itemUrl, readRepoLink } from "../link.ts";
 import { drawBountyRows } from "../ui/bounty-rows.ts";
 import { newView, onAction, render } from "../ui/dom.ts";

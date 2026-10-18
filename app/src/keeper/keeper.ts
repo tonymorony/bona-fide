@@ -1,10 +1,10 @@
-import { getAddress, isAddress, isAddressEqual, type Address, type Hex } from "viem";
+import { bindingProof, forfeitVerdict, keyOf, repoIdOf, type Kind } from "@bona-fide/sdk";
+import { getAddress, hashTypedData, isAddress, isAddressEqual, type Address, type Hex } from "viem";
 import { parse } from "yaml";
 import type { Verdict } from "../app.ts";
 import { CLOCK_SKEW_SECONDS, CONFIG_PATH, parseConfig } from "../config.ts";
 import { depositLink, usdc } from "../copy.ts";
 import { newDecision } from "../decisions/log.ts";
-import { keyOf, repoIdOf, type Kind } from "../keys.ts";
 import { ACCEPTED, BAD_FAITH } from "../labels.ts";
 import {
   fullName,
@@ -25,7 +25,6 @@ import {
   type EscrowDeposit,
   type KeeperEscrow,
 } from "./escrow.ts";
-import { bindingDigest, forfeitDigest } from "./signatures.ts";
 
 export interface KeeperDeps {
   escrow: KeeperEscrow;
@@ -190,11 +189,15 @@ export function createKeeper({
       const now = await escrow.now();
       if (now >= deposit.deadline) throw new Refusal(409, TIMEOUT_PASSED);
       if (now > sigDeadline) throw new Refusal(400, SIGNATURE_EXPIRED);
-      const digest = forfeitDigest(await escrow.chainId(), escrow.address, {
-        key,
-        serial: deposit.serial,
-        sigDeadline,
-      });
+      const digest = hashTypedData(
+        forfeitVerdict({
+          chainId: await escrow.chainId(),
+          escrow: escrow.address,
+          key,
+          serial: deposit.serial,
+          sigDeadline,
+        }),
+      );
       if (!(await escrow.isValidSignature(deposit.maintainer, digest, signature))) {
         throw notTheMaintainers(deposit.maintainer);
       }
@@ -216,8 +219,9 @@ export function createKeeper({
 
     async bindRepo({ repo, maintainer, nonce, deadline, signature }) {
       if ((await escrow.now()) > deadline) throw new Refusal(400, "This proof has expired. Sign a new one.");
-      const message = { repo: `github:${repo.toLowerCase()}`, maintainer, nonce, deadline };
-      const digest = bindingDigest(await escrow.chainId(), escrow.address, message);
+      const digest = hashTypedData(
+        bindingProof({ chainId: await escrow.chainId(), escrow: escrow.address, repo, maintainer, nonce, deadline }),
+      );
       if (!(await escrow.isValidSignature(maintainer, digest, signature))) {
         throw new Refusal(400, `This proof isn't signed by ${maintainer}. Sign it with that wallet.`);
       }

@@ -1,6 +1,5 @@
+import { escrowAbi, KINDS, routerAbi, type Kind } from "@bona-fide/sdk";
 import type { Address, Hex, PublicClient } from "viem";
-import { escrowAbi, routerAbi } from "./abi.ts";
-import { KINDS, type Kind } from "./keys.ts";
 import type { LiveNetwork } from "./network.ts";
 
 /** Arc's public RPC answers getLogs for at most 10,000 blocks at a time. */

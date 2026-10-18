@@ -1,5 +1,5 @@
+import { KINDS, type Kind } from "@bona-fide/sdk";
 import { getAddress, isAddress, type Address, type Hex } from "viem";
-import { KINDS, type Kind } from "./keys.ts";
 
 export interface Item {
   /** owner/name, in GitHub's case. */

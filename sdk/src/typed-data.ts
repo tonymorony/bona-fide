@@ -1,19 +1,9 @@
-import { encodeAbiParameters, keccak256, type Address, type Hex } from "viem";
-import { keyOf, repoIdOf, type Kind } from "./keys.ts";
+import type { Address, Hex } from "viem";
+import { authorizationNonce, keyOf, repoIdOf, type Kind } from "./keys.ts";
 
-/** How long each signature stays valid, in seconds. */
-export const WINDOWS = {
-  /** The Contributor's one-signature Deposit. An unused one can be submitted until then. */
-  deposit: 600,
-  /** The Maintainer's proof of wallet control. The Keeper keeps no nonces, so it works until then. */
-  bindingProof: 1800,
-  /** The Maintainer's Forfeit. */
-  verdict: 3600,
-  /** The Maintainer's one-signature funding of their Bounty wallet. Their own wallet sends it at once. */
-  bountyFund: 600,
-  /** The Maintainer's signed Payout, which the Keeper or anyone relays. */
-  payout: 3600,
-} as const;
+// Every message a Bona Fide contract checks a signature on, as EIP-712 typed data. Each builder
+// returns { domain, types, primaryType, message }: pass it to viem's signTypedData to sign, or to
+// hashTypedData for the digest the contract recovers.
 
 /** The escrow's EIP-712 domain, for Forfeits and Binding proofs. */
 export function escrowDomain(chainId: number, escrow: Address) {
@@ -25,10 +15,48 @@ export function usdcDomain(chainId: number, usdc: Address) {
   return { name: "USDC", version: "2", chainId, verifyingContract: usdc } as const;
 }
 
-/** The EIP-3009 nonce the escrow requires: it ties an authorization to one PR or issue. */
-export function authorizationNonce(key: Hex, salt: Hex): Hex {
-  return keccak256(encodeAbiParameters([{ type: "bytes32" }, { type: "bytes32" }], [key, salt]));
+/** A Bounty wallet's EIP-712 domain, for Payout signatures: it names the wallet, so one can't pay from another. */
+export function bountyDomain(chainId: number, wallet: Address) {
+  return { name: "BonaFide Bounty", version: "1", chainId, verifyingContract: wallet } as const;
 }
+
+export const RECEIVE_WITH_AUTHORIZATION_TYPES = {
+  ReceiveWithAuthorization: [
+    { name: "from", type: "address" },
+    { name: "to", type: "address" },
+    { name: "value", type: "uint256" },
+    { name: "validAfter", type: "uint256" },
+    { name: "validBefore", type: "uint256" },
+    { name: "nonce", type: "bytes32" },
+  ],
+} as const;
+
+export const FORFEIT_TYPES = {
+  Forfeit: [
+    { name: "key", type: "bytes32" },
+    { name: "serial", type: "uint256" },
+    { name: "sigDeadline", type: "uint256" },
+  ],
+} as const;
+
+export const BINDING_TYPES = {
+  Binding: [
+    { name: "repo", type: "string" },
+    { name: "maintainer", type: "address" },
+    { name: "nonce", type: "bytes32" },
+    { name: "deadline", type: "uint256" },
+  ],
+} as const;
+
+export const PAYOUT_TYPES = {
+  Payout: [
+    { name: "issueNumber", type: "uint256" },
+    { name: "serial", type: "uint256" },
+    { name: "payee", type: "address" },
+    { name: "amount", type: "uint256" },
+    { name: "deadline", type: "uint256" },
+  ],
+} as const;
 
 export interface SignedDepositTerms {
   chainId: number;
@@ -47,21 +75,15 @@ export interface SignedDepositTerms {
   validBefore: bigint;
 }
 
-/** USDC's ReceiveWithAuthorization letting the escrow take exactly `value` from `from`, once, for one item. */
+/**
+ * USDC's ReceiveWithAuthorization letting the escrow take exactly `value` from `from`, once, for one
+ * item: the Contributor's one-signature Deposit, which anyone can submit with depositWithAuthorization.
+ */
 export function depositAuthorization(terms: SignedDepositTerms) {
   const key = keyOf(repoIdOf(terms.repo), terms.kind, terms.number);
   return {
     domain: usdcDomain(terms.chainId, terms.usdc),
-    types: {
-      ReceiveWithAuthorization: [
-        { name: "from", type: "address" },
-        { name: "to", type: "address" },
-        { name: "value", type: "uint256" },
-        { name: "validAfter", type: "uint256" },
-        { name: "validBefore", type: "uint256" },
-        { name: "nonce", type: "bytes32" },
-      ],
-    },
+    types: RECEIVE_WITH_AUTHORIZATION_TYPES,
     primaryType: "ReceiveWithAuthorization",
     message: {
       from: terms.from,
@@ -88,13 +110,7 @@ export interface VerdictTerms {
 export function forfeitVerdict({ chainId, escrow, key, serial, sigDeadline }: VerdictTerms) {
   return {
     domain: escrowDomain(chainId, escrow),
-    types: {
-      Forfeit: [
-        { name: "key", type: "bytes32" },
-        { name: "serial", type: "uint256" },
-        { name: "sigDeadline", type: "uint256" },
-      ],
-    },
+    types: FORFEIT_TYPES,
     primaryType: "Forfeit",
     message: { key, serial, sigDeadline },
   } as const;
@@ -117,22 +133,10 @@ export interface BindingProofTerms {
 export function bindingProof({ chainId, escrow, repo, maintainer, nonce, deadline }: BindingProofTerms) {
   return {
     domain: escrowDomain(chainId, escrow),
-    types: {
-      Binding: [
-        { name: "repo", type: "string" },
-        { name: "maintainer", type: "address" },
-        { name: "nonce", type: "bytes32" },
-        { name: "deadline", type: "uint256" },
-      ],
-    },
+    types: BINDING_TYPES,
     primaryType: "Binding",
     message: { repo: `github:${repo.toLowerCase()}`, maintainer, nonce, deadline },
   } as const;
-}
-
-/** A Bounty wallet's EIP-712 domain, for Payout signatures: it names the wallet, so one can't pay from another. */
-export function bountyDomain(chainId: number, wallet: Address) {
-  return { name: "BonaFide Bounty", version: "1", chainId, verifyingContract: wallet } as const;
 }
 
 export interface PayoutTerms {
@@ -153,15 +157,7 @@ export interface PayoutTerms {
 export function payoutSignature({ chainId, wallet, issueNumber, serial, payee, amount, deadline }: PayoutTerms) {
   return {
     domain: bountyDomain(chainId, wallet),
-    types: {
-      Payout: [
-        { name: "issueNumber", type: "uint256" },
-        { name: "serial", type: "uint256" },
-        { name: "payee", type: "address" },
-        { name: "amount", type: "uint256" },
-        { name: "deadline", type: "uint256" },
-      ],
-    },
+    types: PAYOUT_TYPES,
     primaryType: "Payout",
     message: { issueNumber: BigInt(issueNumber), serial, payee, amount, deadline },
   } as const;
@@ -184,16 +180,7 @@ export interface BountyFundTerms {
 export function bountyFundAuthorization({ chainId, usdc, wallet, from, value, nonce, validBefore }: BountyFundTerms) {
   return {
     domain: usdcDomain(chainId, usdc),
-    types: {
-      ReceiveWithAuthorization: [
-        { name: "from", type: "address" },
-        { name: "to", type: "address" },
-        { name: "value", type: "uint256" },
-        { name: "validAfter", type: "uint256" },
-        { name: "validBefore", type: "uint256" },
-        { name: "nonce", type: "bytes32" },
-      ],
-    },
+    types: RECEIVE_WITH_AUTHORIZATION_TYPES,
     primaryType: "ReceiveWithAuthorization",
     message: { from, to: wallet, value, validAfter: 0n, validBefore, nonce },
   } as const;

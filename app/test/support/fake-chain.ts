@@ -1,5 +1,5 @@
+import { keyOf, repoIdOf, type Kind } from "@bona-fide/sdk";
 import { pad, toHex, type Address, type Hex } from "viem";
-import { keyOf, repoIdOf, type Kind } from "../../src/keys.ts";
 import type { Binding, Chain, Deposit, DepositedEvent, EscrowEvent, RepoBinding } from "../../src/ports.ts";
 
 /** The terms `bind` and `propose` use unless told otherwise: 1 USDC, 50% and 7 days. */

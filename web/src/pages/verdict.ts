@@ -1,11 +1,10 @@
+import { escrowAbi, forfeitVerdict, keyOf, repoIdOf } from "@bona-fide/sdk";
 import { parseEventLogs, type Hex } from "viem";
-import { escrowAbi } from "../abi.ts";
 import type { DepositState } from "../chain.ts";
 import { forfeitBody, sendVerdict } from "../endpoints.ts";
 import { forfeitSplit, percent, shortAddress, timeLeft, usdc } from "../format.ts";
-import { keyOf, repoIdOf } from "../keys.ts";
 import { explorerTx, itemName, itemUrl, readItemLink, repoPageUrl } from "../link.ts";
-import { forfeitVerdict, WINDOWS } from "../typed-data.ts";
+import { WINDOWS } from "../windows.ts";
 import { focusState, newView, onAction, render } from "../ui/dom.ts";
 import { isUndeployedSmartWalletSignature, isUserRejection, sendContractCall, signTypedData } from "../wallet.ts";
 import {

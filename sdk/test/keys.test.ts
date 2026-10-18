@@ -1,5 +1,5 @@
 import { expect, test } from "vitest";
-import { keyOf, repoIdOf } from "../src/keys.ts";
+import { keyOf, repoIdOf } from "../src/index.ts";
 
 // Expected values come from Foundry's cast, not from this code:
 //   cast keccak "github:codertocat/hello-world"

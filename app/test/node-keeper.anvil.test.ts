@@ -1,9 +1,9 @@
+import { keyOf, repoIdOf } from "@bona-fide/sdk";
 import { spawn } from "node:child_process";
 import { createPublicClient, createTestClient, http, type Address } from "viem";
 import { nonceManager, privateKeyToAccount } from "viem/accounts";
 import { afterAll, beforeAll, expect, test } from "vitest";
 import { createKeeperEscrow, keeperAccount } from "../src/keeper/escrow.ts";
-import { keyOf, repoIdOf } from "../src/keys.ts";
 import { freePort, type Anvil } from "./support/anvil.ts";
 import { DEPOSIT_PAGE, scratchDecisionsPath, SETUP_PAGE } from "./support/harness.ts";
 import { SIGN_PAGE, startKeeperAnvil } from "./support/keeper.ts";

@@ -1,5 +1,5 @@
+import { bountyFundAuthorization, payoutSignature, repoIdOf, usdcAbi } from "@bona-fide/sdk";
 import type { Address, Hex } from "viem";
-import { usdcAbi } from "../abi.ts";
 import {
   bountyCalls,
   createBountyReader,
@@ -16,9 +16,8 @@ import {
 import type { RepoTerms } from "../chain.ts";
 import { payoutBody, relayPayout, type PayoutOutcome } from "../endpoints.ts";
 import { parseUsdc, shortAddress, timeLeft, usdc, usdcAmount } from "../format.ts";
-import { repoIdOf } from "../keys.ts";
 import { explorerAddress, explorerTx, itemUrl, readPayee, readPayoutLink, readRepoLink, repoPageUrl } from "../link.ts";
-import { bountyFundAuthorization, payoutSignature, WINDOWS } from "../typed-data.ts";
+import { WINDOWS } from "../windows.ts";
 import { drawBountyRows } from "../ui/bounty-rows.ts";
 import { focusState, newView, onAction, render } from "../ui/dom.ts";
 import { isUndeployedSmartWalletSignature, isUserRejection, sendContractCall, signTypedData } from "../wallet.ts";

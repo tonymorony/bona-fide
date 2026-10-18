@@ -1,5 +1,5 @@
+import { USDC_DECIMALS } from "@bona-fide/sdk";
 import { getAddress, isAddress, type Address } from "viem";
-import { USDC_DECIMALS } from "./deposits.ts";
 
 export interface Config {
   rpcUrl: string;

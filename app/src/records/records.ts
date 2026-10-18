@@ -1,6 +1,6 @@
+import type { Kind } from "@bona-fide/sdk";
 import type { Hex } from "viem";
 import { createBlockScanner } from "../blocks.ts";
-import type { Kind } from "../keys.ts";
 import { fullName, type Chain, type ContributorRecord, type ContributorRecords, type GitHub } from "../ports.ts";
 
 /** Most Deposits looked up on GitHub per tick, so catching up on a long history stays under GitHub's rate limit. */

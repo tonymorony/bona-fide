@@ -1,31 +1,20 @@
+import { DEPOSIT_STATUSES, escrowAbi, KINDS } from "@bona-fide/sdk";
 import {
   BaseError,
   ContractFunctionZeroDataError,
-  parseAbi,
+  getAbiItem,
   zeroAddress,
   type Address,
   type Hex,
   type PublicClient,
 } from "viem";
-import { KINDS } from "./keys.ts";
 import type { Binding, Chain, DepositedEvent, EscrowEvent } from "./ports.ts";
 
-export const escrowAbi = parseAbi([
-  "event Deposited(bytes32 indexed key, uint64 serial, bytes32 indexed repoId, uint8 kind, uint64 number, address indexed depositor, uint256 amount, uint64 deadline)",
-  "event RepoActivated(bytes32 indexed repoId, address indexed maintainer, uint16 forfeitBps, uint32 timeout, uint256 amount)",
-  "event Refunded(bytes32 indexed key, uint64 serial, address indexed depositor, uint256 amount, bool byKeeper)",
-  "event Forfeited(bytes32 indexed key, uint64 serial, uint256 forfeited, uint256 refunded)",
-  "function depositOf(bytes32 key) view returns ((address depositor, uint64 deadline, uint8 status, address maintainer, uint16 forfeitBps, uint64 serial, uint256 amount))",
-  "function keyOf(bytes32 repoId, uint8 kind, uint64 number) pure returns (bytes32)",
-  "function activeConfig(bytes32 repoId) view returns ((address maintainer, uint16 forfeitBps, uint32 timeout, uint256 amount))",
-  "function pendingConfig(bytes32 repoId) view returns ((address maintainer, uint16 forfeitBps, uint32 timeout, uint256 amount) config, uint64 effectiveAt)",
-]);
-
-const DEPOSITED = escrowAbi[0];
-const REPO_ACTIVATED = escrowAbi[1];
-const REFUNDED = escrowAbi[2];
-const FORFEITED = escrowAbi[3];
-const STATUS_ACTIVE = 1;
+const DEPOSITED = getAbiItem({ abi: escrowAbi, name: "Deposited" });
+const REPO_ACTIVATED = getAbiItem({ abi: escrowAbi, name: "RepoActivated" });
+const REFUNDED = getAbiItem({ abi: escrowAbi, name: "Refunded" });
+const FORFEITED = getAbiItem({ abi: escrowAbi, name: "Forfeited" });
+const STATUS_ACTIVE = DEPOSIT_STATUSES.indexOf("active");
 
 interface RepoConfig {
   maintainer: Address;

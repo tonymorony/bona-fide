@@ -1,10 +1,9 @@
+import { bountyFundAuthorization, bountyWalletAbi, payoutSignature, repoIdOf } from "@bona-fide/sdk";
 import { parseEventLogs, toHex, type Address, type Hex } from "viem";
 import { afterAll, beforeAll, expect, test } from "vitest";
-import { bountyWalletAbi } from "../src/abi.ts";
 import { bountyCalls, createBountyReader, DEFAULT_LIMITS } from "../src/bounty.ts";
 import { createChainReader, publicClientFor } from "../src/chain.ts";
-import { repoIdOf } from "../src/keys.ts";
-import { bountyFundAuthorization, payoutSignature, WINDOWS } from "../src/typed-data.ts";
+import { WINDOWS } from "../src/windows.ts";
 import { LOCAL_CHAIN_ID, startStack, type Stack } from "./support/stack.ts";
 
 // The Bounty page's typed data and contract calls, signed and sent with fresh test keys, against the

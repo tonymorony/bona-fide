@@ -129,6 +129,8 @@ replace() {
 install_files() {
 	step "Installing release $(cat "$incoming/REVISION")"
 	cp "$incoming/docker-compose.yml" "$incoming/Dockerfile" "$incoming/.dockerignore" "$incoming/.env.example" "$incoming/REVISION" "$dir/"
+	cp "$incoming/package.json" "$incoming/package-lock.json" "$dir/"
+	replace "$incoming/sdk" "$dir/sdk"
 	replace "$incoming/app" "$dir/app"
 	mkdir -p "$site"
 	if [ -d "$incoming/site/pages" ]; then

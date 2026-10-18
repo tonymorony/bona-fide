@@ -1,7 +1,7 @@
+import { repoIdOf } from "@bona-fide/sdk";
 import { createTestClient, createWalletClient, http, type Address } from "viem";
 import { afterAll, beforeAll, expect, test } from "vitest";
 import { createBindingActivator } from "../src/keeper/activator.ts";
-import { repoIdOf } from "../src/keys.ts";
 import type { Anvil } from "./support/anvil.ts";
 import { keeperHarness, signBinding, startKeeperAnvil } from "./support/keeper.ts";
 

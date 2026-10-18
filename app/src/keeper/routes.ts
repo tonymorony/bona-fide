@@ -1,6 +1,6 @@
+import { KINDS, type Kind } from "@bona-fide/sdk";
 import { getAddress, isAddress, type Hex } from "viem";
 import type { Bounties, SignedPayout } from "../bounties/bounties.ts";
-import { KINDS, type Kind } from "../keys.ts";
 import { fixedWindow, type RateLimit } from "../relay/rate-limit.ts";
 import { Refusal, type BindingProof, type Keeper, type SignedForfeit } from "./keeper.ts";
 

@@ -1,9 +1,19 @@
 import {
+  authorizationNonce,
+  DEPOSIT_STATUSES,
+  escrowAbi,
+  keyOf,
+  kindCode,
+  repoIdOf,
+  USDC_DECIMALS,
+  usdcAbi,
+  type Kind,
+} from "@bona-fide/sdk";
+import {
   encodeFunctionData,
   formatUnits,
   getAddress,
   isAddressEqual,
-  parseAbi,
   parseEventLogs,
   toHex,
   WaitForTransactionReceiptTimeoutError,
@@ -14,27 +24,14 @@ import {
 } from "viem";
 import { circleChain, executeCommand, signTypedDataCommand } from "./circle.ts";
 import { itemName } from "./copy.ts";
-import { authorizationNonce, keyOf, kindCode, repoIdOf, type Kind } from "./keys.ts";
 
-export const USDC_DECIMALS = 6;
-const STATUS_ACTIVE = 1;
+const STATUS_ACTIVE = DEPOSIT_STATUSES.indexOf("active");
 const DAY_SECONDS = 86_400;
 /** How long a signed authorization stays valid. Anyone holding it can submit it until then. */
 const SIGNATURE_WINDOW_SECONDS = 600n;
 const RELAY_PATH = "relay/deposit";
 const RECEIPT_TIMEOUT_MS = 60_000;
 const RECEIPT_POLL_MS = 500;
-
-const escrowAbi = parseAbi([
-  "function usdc() view returns (address)",
-  "function activeConfig(bytes32 repoId) view returns ((address maintainer, uint16 forfeitBps, uint32 timeout, uint256 amount))",
-  "function pendingConfig(bytes32 repoId) view returns ((address maintainer, uint16 forfeitBps, uint32 timeout, uint256 amount) config, uint64 effectiveAt)",
-  "function depositOf(bytes32 key) view returns ((address depositor, uint64 deadline, uint8 status, address maintainer, uint16 forfeitBps, uint64 serial, uint256 amount))",
-  "function deposit(bytes32 repoId, uint8 kind, uint64 number)",
-  "event Deposited(bytes32 indexed key, uint64 serial, bytes32 indexed repoId, uint8 kind, uint64 number, address indexed depositor, uint256 amount, uint64 deadline)",
-]);
-
-const usdcAbi = parseAbi(["function approve(address spender, uint256 amount) returns (bool)"]);
 
 /** A reason the tools won't prepare or submit a Deposit, written for the agent. */
 export class Refusal extends Error {}

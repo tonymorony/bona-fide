@@ -1,10 +1,9 @@
-import { createWalletClient, http, type AbiEvent, type AbiFunction } from "viem";
-import { formatAbiItem } from "viem/utils";
+import { keyOf, kindCode, repoIdOf, type Kind } from "@bona-fide/sdk";
+import { createWalletClient, http } from "viem";
 import { afterAll, beforeAll, expect, test } from "vitest";
-import { createEscrowChain, escrowAbi } from "../src/escrow.ts";
-import { keyOf, kindCode, repoIdOf, type Kind } from "../src/keys.ts";
+import { createEscrowChain } from "../src/escrow.ts";
 import { createRecordIndex } from "../src/records/records.ts";
-import { artifact, startAnvil, type Anvil } from "./support/anvil.ts";
+import { startAnvil, type Anvil } from "./support/anvil.ts";
 import { FakeGitHub } from "./support/fake-github.ts";
 import { HELLO_WORLD, NEWCOMER, REPO } from "./support/webhooks.ts";
 
@@ -48,14 +47,6 @@ test.each([
   });
 
   expect(keyOf(repoIdOf(repo), kind, number)).toBe(onChain);
-});
-
-test("the App's escrow ABI matches the Foundry artifact", () => {
-  const built = artifact("BonaFideEscrow").abi as (AbiEvent | AbiFunction)[];
-  for (const item of escrowAbi) {
-    const match = built.find((b) => b.type === item.type && b.name === item.name);
-    expect(match && formatAbiItem(match)).toBe(formatAbiItem(item));
-  }
 });
 
 test("Deposited events come with their key, item, depositor, amount, block time and transaction", async () => {

@@ -586,7 +586,7 @@ Events:
 ## Run it
 
 ```shell
-npm ci
+npm ci      # at the repo root: it installs the App and the SDK it imports
 npm start
 ```
 

@@ -29,6 +29,8 @@ On the server, everything lives in `/opt/bona-fide`:
 /opt/bona-fide/
 ├── .env                     your settings and keys: chmod 600, never in the repo
 ├── docker-compose.yml  Dockerfile  .dockerignore  .env.example
+├── package.json  package-lock.json  the workspace's: the App's dependencies, pinned
+├── sdk/                     the SDK the App imports
 ├── app/                     the App's source
 ├── site/Caddyfile.bonafide  the site block Caddy imports
 ├── site/pages/              the static pages
@@ -128,10 +130,10 @@ deploy/deploy.sh <ssh host>
 A deploy replaces the App's code and the pages, rebuilds the image, and recreates the container
 only if something changed. It never touches `.env`.
 
-- The pages come from `PAGES_DIR` (default `web/dist`). Build them first with `npm ci && npm run build`
-  in `web/`, for the network the App uses (see [../web/README.md](../web/README.md#build)). If that
+- The pages come from `PAGES_DIR` (default `web/dist`). Build them first with `npm ci` at the repo
+  root and `npm run build` in `web/`, for the network the App uses (see [../web/README.md](../web/README.md#build)). If that
   folder doesn't exist, the pages already on the server stay.
-- Uncommitted changes in `app/` or `deploy/` are deployed too, and the revision is marked `-dirty`.
+- Uncommitted changes in `app/`, `sdk/`, the root package files or `deploy/` are deployed too, and the revision is marked `-dirty`.
 - If the connection drops during a deploy, run it again: every step is safe to repeat.
 
 ## Logs

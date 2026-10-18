@@ -1,7 +1,7 @@
+import type { Kind } from "@bona-fide/sdk";
 import { expect, test } from "vitest";
 import { createApp } from "../src/app.ts";
 import { openDecisionFile } from "../src/decisions/file.ts";
-import type { Kind } from "../src/keys.ts";
 import type { DecisionLog, GitHubProfile } from "../src/ports.ts";
 import { createRecordExemptions, FLAG_MARKER } from "../src/records/exemption.ts";
 import { createRecordIndex } from "../src/records/records.ts";

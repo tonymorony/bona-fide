@@ -1,4 +1,3 @@
-import { zeroAddress, type Address, type Hex, type PublicClient } from "viem";
 import {
   BOUNTY_STATUSES,
   bountyFactoryAbi,
@@ -7,7 +6,8 @@ import {
   usdcAbi,
   type BountyStatus,
   type PayoutMethod,
-} from "./abi.ts";
+} from "@bona-fide/sdk";
+import { zeroAddress, type Address, type Hex, type PublicClient } from "viem";
 import type { RepoTerms } from "./chain.ts";
 import { readInRanges } from "./history.ts";
 import type { Network } from "./network.ts";

@@ -1,10 +1,10 @@
+import { arcMainnet, arcTestnet } from "@bona-fide/sdk";
 import type { Network } from "./src/network.ts";
 
 // One build of the pages per network: `npm run build` builds testnet, `npm run build -- mainnet`
 // builds mainnet. A build stops if the network's escrow or router address is missing. Without a
-// bountyFactory, the pages say Bounties aren't available on the network yet.
-
-const ARC_USDC = "0x3600000000000000000000000000000000000000";
+// bountyFactory, the pages say Bounties aren't available on the network yet. The contract addresses
+// and deploy blocks come from the SDK's deployments.
 
 const ENDPOINTS = {
   relayDeposit: "/relay/deposit",
@@ -14,17 +14,7 @@ const ENDPOINTS = {
 };
 
 export const testnet: Network = {
-  name: "Arc Testnet",
-  testnet: true,
-  chainId: 5042002,
-  rpcUrl: "https://rpc.testnet.arc.io",
-  explorerUrl: "https://explorer.testnet.arc.io",
-  usdc: ARC_USDC,
-  escrow: "0x05283F2c7D94D66669227Cecf75abBbd024771A7",
-  escrowFromBlock: 64_367_399,
-  router: "0xae079DC6536c270d2743c0721cfC41c94E12ca9f",
-  bountyFactory: "",
-  bountyFactoryFromBlock: 0,
+  ...arcTestnet,
   // The testnet router flushes through CCTP to a test address on Base Sepolia: Protocol Guild's
   // vest exists only on Base.
   forfeits: {
@@ -49,17 +39,7 @@ export const testnet: Network = {
 };
 
 export const mainnet: Network = {
-  name: "Arc",
-  testnet: false,
-  chainId: 5042,
-  rpcUrl: "https://rpc.mainnet.arc.io",
-  explorerUrl: "https://explorer.arc.io",
-  usdc: ARC_USDC,
-  escrow: "0xe2fe798427CFb43134FC37F6EE054c2da818fAc9",
-  escrowFromBlock: 24_583_718,
-  router: "0xe36fe5152C6A54946b15df3fEBDc068AF48581dc",
-  bountyFactory: "0xEda45D2931B1A36D5920edefA621Ff5533c98C42",
-  bountyFactoryFromBlock: 26_294_417,
+  ...arcMainnet,
   forfeits: {
     recipient: "Protocol Guild",
     purpose: "funds open-source maintainers through Protocol Guild",

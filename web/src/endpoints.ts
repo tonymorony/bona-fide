@@ -1,6 +1,5 @@
+import { KINDS, type Kind, type SignedDepositTerms } from "@bona-fide/sdk";
 import type { Address, Hex } from "viem";
-import { KINDS, type Kind } from "./keys.ts";
-import type { SignedDepositTerms } from "./typed-data.ts";
 
 /** The App's endpoints, on the pages' own origin. */
 export const PATHS = {

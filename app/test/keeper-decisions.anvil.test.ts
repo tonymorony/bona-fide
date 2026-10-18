@@ -1,6 +1,6 @@
+import { keyOf, repoIdOf, type Kind } from "@bona-fide/sdk";
 import { afterAll, beforeAll, expect, test } from "vitest";
 import { createTimeoutRefunder } from "../src/keeper/timeouts.ts";
-import { keyOf, repoIdOf, type Kind } from "../src/keys.ts";
 import type { Anvil } from "./support/anvil.ts";
 import { keeperHarness, startKeeperAnvil } from "./support/keeper.ts";
 import { NEWCOMER, payload, REPO, review } from "./support/webhooks.ts";

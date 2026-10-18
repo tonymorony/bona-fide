@@ -227,7 +227,10 @@ describe("the landing page", () => {
         lede: document.querySelector(".hero-copy .lede").getBoundingClientRect().toJSON(),
         title: document.querySelector(".hero-head").getBoundingClientRect().toJSON(),
       })`);
-      assert.ok(config.bottom <= lede.top, `the config file ends at ${config.bottom} px, over the lede at ${lede.top} px`);
+      assert.ok(
+        config.bottom <= lede.top,
+        `the config file ends at ${config.bottom} px, over the lede at ${lede.top} px`,
+      );
       assert.ok(
         config.top >= title.top,
         `the config file starts at ${config.top} px, higher than the headline at ${title.top} px`,

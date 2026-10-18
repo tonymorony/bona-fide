@@ -1,8 +1,8 @@
+import { keyOf, repoIdOf, type Kind } from "@bona-fide/sdk";
 import { concat, createTestClient, http, numberToHex, size, slice, hexToBigInt, hexToNumber, type Hex } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
 import { afterAll, beforeAll, expect, test } from "vitest";
 import { createKeeperRoutes } from "../src/keeper/routes.ts";
-import { keyOf, repoIdOf, type Kind } from "../src/keys.ts";
 import type { Anvil } from "./support/anvil.ts";
 import { keeperHarness, signForfeit, startKeeperAnvil } from "./support/keeper.ts";
 import { NEWCOMER, payload, REPO } from "./support/webhooks.ts";

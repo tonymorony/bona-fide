@@ -1,8 +1,8 @@
+import type { Kind } from "@bona-fide/sdk";
 import type { Verdict } from "../app.ts";
 import type { Config } from "../config.ts";
 import { depositLink, triageAcceptNote, triageDraftNote, usdc } from "../copy.ts";
 import { decisionCost, newDecision } from "../decisions/log.ts";
-import type { Kind } from "../keys.ts";
 import { ACCEPTED, BAD_FAITH, WAIVER } from "../labels.ts";
 import {
   fullName,

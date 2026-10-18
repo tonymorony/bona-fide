@@ -8,7 +8,8 @@ const APP = fileURLToPath(new URL("../../../app/", import.meta.url));
 
 /** Runs the Bona Fide App's Node host, with its deposit relay, as a separate process. */
 export async function startApp({ rpcUrl, escrow, relayerKey }: { rpcUrl: string; escrow: Address; relayerKey: Hex }) {
-  if (!existsSync(`${APP}node_modules`)) throw new Error("This test runs the App: run `npm ci` in app/ first.");
+  if (!existsSync(`${APP}../node_modules`))
+    throw new Error("This test runs the App: run `npm ci` at the repo root first.");
   const port = await freePort();
   const app = spawn(process.execPath, ["src/node.ts"], {
     cwd: APP,

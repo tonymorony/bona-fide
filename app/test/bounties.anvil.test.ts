@@ -1,15 +1,14 @@
-import { createPublicClient, createWalletClient, http, maxUint256, type Address, type Hex } from "viem";
+import { bountyFactoryAbi, bountyWalletAbi, PAYOUT_TYPES, repoIdOf } from "@bona-fide/sdk";
+import { createPublicClient, createWalletClient, getAbiItem, http, maxUint256, type Address, type Hex } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
 import { afterAll, beforeAll, expect, test } from "vitest";
 import { createApp } from "../src/app.ts";
 import { bountyMarkers, createBounties } from "../src/bounties/bounties.ts";
 import { createBountyNotices } from "../src/bounties/posted.ts";
-import { bountyFactoryAbi, bountyWalletAbi, createBountyWallets } from "../src/bounties/wallet.ts";
+import { createBountyWallets } from "../src/bounties/wallet.ts";
 import { createDecisionLog } from "../src/decisions/log.ts";
 import { createEscrowChain } from "../src/escrow.ts";
 import { createKeeperRoutes } from "../src/keeper/routes.ts";
-import { PAYOUT_TYPES } from "../src/keeper/signatures.ts";
-import { repoIdOf } from "../src/keys.ts";
 import type { Decision } from "../src/ports.ts";
 import { createWebhookHandler } from "../src/webhook.ts";
 import { artifact, type Anvil } from "./support/anvil.ts";
@@ -80,7 +79,7 @@ function bountyOf(issue: number) {
 async function paidEvents(issue: number) {
   return anvil.client.getLogs({
     address: wallet,
-    event: bountyWalletAbi.find((item) => item.type === "event" && item.name === "Paid")!,
+    event: getAbiItem({ abi: bountyWalletAbi, name: "Paid" }),
     args: { issueNumber: BigInt(issue) },
     fromBlock: 0n,
     strict: true,

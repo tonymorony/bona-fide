@@ -97,13 +97,29 @@ Deposit from its own wallet, within a limit you set.
 | Folder | What it is |
 |---|---|
 | [contracts/](contracts/README.md) | The escrow, the forfeit router and the Bounty wallet, on Arc |
+| [sdk/](sdk/README.md) | `@bona-fide/sdk`: the contracts' ABIs, ids, typed data, signature check and deployments, for TypeScript |
 | [app/](app/README.md) | The GitHub App: the check, the Keeper, the deposit relay, triage and Bounty Payouts |
 | [agent/](agent/README.md) | The MCP server that lets an AI agent make a Deposit |
 | [web/](web/README.md) | The deposit, verdict, setup, repo and Bounty pages; `npm run build` writes them and the landing page into `web/dist/` |
 | [web/landing/](web/landing/) | The landing page at https://bofi.live |
 | [deploy/](deploy/README.md) | Running the App and the pages on one server |
 
-The spec is in [docs/spec.md](docs/spec.md), and the terms are in [CONTEXT.md](CONTEXT.md).
+The spec is in [docs/spec.md](docs/spec.md), and the terms are in [CONTEXT.md](CONTEXT.md). Coding agents start
+at [AGENTS.md](AGENTS.md).
+
+## Build on it
+
+The contracts are immutable primitives that work without the App, and each one is useful on its own:
+
+- **A refundable deposit** for anything an off-chain id names, which only a named signer can forfeit, at most half,
+  and only to one fixed sink.
+- **A forwarder** that sends whatever USDC it holds through CCTP to one recipient on another chain, with no owner.
+- **A budget wallet** whose owner signs payouts anyone can relay, and whose automated payer stays within per-payout
+  and per-period limits.
+
+[`@bona-fide/sdk`](sdk/README.md) gives TypeScript their typed ABIs, the ids they compute, every message they check
+a signature on, and their addresses on Arc. [contracts/README.md](contracts/README.md#build-on-these-contracts) shows
+how to import them from Solidity, and the [MCP server](agent/README.md) shows an agent using them.
 
 ## Try it
 
@@ -131,10 +147,12 @@ USDC on Arc and nothing else: on Arc, gas is paid in USDC too.
 
 ```shell
 git submodule update --init --recursive
+npm ci                                # every TypeScript package, from one lockfile
 (cd contracts && forge test)          # unit, fuzz and invariant suites
-(cd app && npm ci && npm test)        # the App, against a local chain
-(cd agent && npm ci && npm test)
-(cd web && npm ci && npm test)        # the pages; some tests drive Chrome
+(cd sdk && npm test)                  # the SDK, against the real contracts on a local chain
+(cd app && npm test)                  # the App, against a local chain
+(cd agent && npm test)
+(cd web && npm test)                  # the pages; some tests drive Chrome
 node --test 'web/test/landing/*-test.mjs'
 ```
 
@@ -193,7 +211,8 @@ The first Deposit on mainnet went through [tonymorony/lottie-squeeze#1](https://
 
 - **Contracts:** Solidity 0.8.30 with [Foundry](https://getfoundry.sh) and OpenZeppelin; USDC's EIP-3009 for
   one-signature Deposits; Circle's CCTP for Forfeits.
-- **App and agent:** TypeScript on Node 24, [viem](https://viem.sh), Octokit and the Model Context Protocol SDK.
+- **SDK, App and agent:** TypeScript on Node 24, one npm workspace, [viem](https://viem.sh), Octokit and the Model
+  Context Protocol SDK.
 - **Pages:** plain static files with viem bundled in. Nothing loads from another site, and there are no
   trackers or cookies.
 - **Deploy:** one Docker container behind Caddy.

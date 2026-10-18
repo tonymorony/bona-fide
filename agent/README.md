@@ -22,7 +22,7 @@ runs the App, can take the money.
 
 ## Before you start
 
-- **Node 24** and a clone of this repository. In `agent/`, run `npm ci`.
+- **Node 24** and a clone of this repository. At its root, run `npm ci`.
 - **A wallet for the agent on Arc** that holds the Deposit in USDC. Two kinds work:
   - **A Circle agent wallet.** A person sets it up once, before the agent can use it (see
     [below](#set-up-a-circle-agent-wallet)).
@@ -180,5 +180,5 @@ npm run typecheck
 ```
 
 The tests need Foundry (`forge`, `anvil` and `cast`). They run the real escrow and a USDC mock with
-EIP-3009 on a local anvil chain. The end-to-end test also starts the App, so run `npm ci` in `app/`
-first.
+EIP-3009 on a local anvil chain. The end-to-end test also starts the App, which the root's `npm ci`
+installs too.

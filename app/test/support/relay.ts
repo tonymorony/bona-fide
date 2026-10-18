@@ -1,3 +1,4 @@
+import { keyOf, kindCode, repoIdOf, type Kind } from "@bona-fide/sdk";
 import {
   createTestClient,
   createWalletClient,
@@ -12,7 +13,6 @@ import {
 } from "viem";
 import { generatePrivateKey, privateKeyToAccount } from "viem/accounts";
 import { foundry } from "viem/chains";
-import { keyOf, kindCode, repoIdOf, type Kind } from "../../src/keys.ts";
 import { artifact, type Anvil } from "./anvil.ts";
 import { REPO } from "./webhooks.ts";
 

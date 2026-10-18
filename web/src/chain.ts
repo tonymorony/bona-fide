@@ -1,6 +1,6 @@
+import { chainOf, DEPOSIT_STATUSES, escrowAbi, usdcAbi, type DepositStatus } from "@bona-fide/sdk";
 import { createPublicClient, http, zeroAddress, type Address, type Hex, type PublicClient } from "viem";
-import { escrowAbi, STATUSES, usdcAbi, type Status } from "./abi.ts";
-import { chainOf, type LiveNetwork, type Network } from "./network.ts";
+import type { LiveNetwork, Network } from "./network.ts";
 
 /** A Binding's terms: USDC base units, basis points and seconds, and the Maintainer it binds. */
 export interface Terms {
@@ -17,7 +17,7 @@ export interface RepoTerms {
 
 /** A Deposit as the escrow snapshotted it. */
 export interface DepositState {
-  status: Status;
+  status: DepositStatus;
   depositor: Address;
   deadline: Date;
   maintainer: Address;
@@ -62,7 +62,7 @@ export function createChainReader(client: PublicClient, network: LiveNetwork) {
     async depositOf(key: Hex): Promise<DepositState> {
       const d = await client.readContract({ ...escrow, functionName: "depositOf", args: [key] });
       return {
-        status: STATUSES[d.status] ?? "none",
+        status: DEPOSIT_STATUSES[d.status] ?? "none",
         depositor: d.depositor,
         deadline: dateOf(d.deadline),
         maintainer: d.maintainer,

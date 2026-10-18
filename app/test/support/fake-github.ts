@@ -1,5 +1,5 @@
+import { repoIdOf, type Kind } from "@bona-fide/sdk";
 import type { Hex } from "viem";
-import { repoIdOf, type Kind } from "../../src/keys.ts";
 import type {
   CheckRun,
   ClosingPullRequest,

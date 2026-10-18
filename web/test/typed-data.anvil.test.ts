@@ -1,14 +1,20 @@
+import {
+  authorizationNonce,
+  bindingProof,
+  depositAuthorization,
+  forfeitVerdict,
+  keyOf,
+  repoIdOf,
+} from "@bona-fide/sdk";
 import { parseEventLogs, toHex, type Address, type Hex } from "viem";
 import { generatePrivateKey, privateKeyToAccount } from "viem/accounts";
 import { afterAll, beforeAll, expect, test } from "vitest";
-import { keyOf as appKeyOf, repoIdOf as appRepoIdOf } from "../../app/src/keys.ts";
 import { createDepositRelay } from "../../app/src/relay/deposit.ts";
 import { startAnvil, type Anvil } from "../../app/test/support/anvil.ts";
 import { keeperHarness, startKeeperAnvil } from "../../app/test/support/keeper.ts";
 import { relayKit } from "../../app/test/support/relay.ts";
 import { bindingProofBody, depositRelayBody, forfeitBody } from "../src/endpoints.ts";
-import { keyOf, repoIdOf } from "../src/keys.ts";
-import { authorizationNonce, bindingProof, depositAuthorization, forfeitVerdict, WINDOWS } from "../src/typed-data.ts";
+import { WINDOWS } from "../src/windows.ts";
 
 // The typed data the pages ask wallets to sign, signed with fresh test keys and checked by the real
 // escrow on anvil and by the App's own relay and Keeper.
@@ -36,10 +42,9 @@ function randomBytes32(): Hex {
   return toHex(crypto.getRandomValues(new Uint8Array(32)));
 }
 
-test("repo ids, Deposit keys and authorization nonces match the App's and the escrow's", async () => {
+test("repo ids, Deposit keys and authorization nonces match the escrow's", async () => {
   const repoId = repoIdOf(REPO);
 
-  expect(repoId).toBe(appRepoIdOf(REPO));
   expect(repoIdOf(REPO.toLowerCase())).toBe(repoId);
   for (const [kind, code] of [
     ["pr", 0],
@@ -52,7 +57,6 @@ test("repo ids, Deposit keys and authorization nonces match the App's and the es
       args: [repoId, code, 42n],
     });
     expect(keyOf(repoId, kind, 42)).toBe(onChain);
-    expect(keyOf(repoId, kind, 42)).toBe(appKeyOf(repoId, kind, 42));
   }
   const key = keyOf(repoId, "pr", 42);
   const salt = randomBytes32();

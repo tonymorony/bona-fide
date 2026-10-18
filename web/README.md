@@ -14,7 +14,7 @@ Forfeit and Binding are defined in [../CONTEXT.md](../CONTEXT.md).
 ## Build
 
 ```shell
-npm ci
+npm ci                        # at the repo root
 npm run build                 # Arc testnet
 npm run build -- mainnet      # Arc mainnet
 ```
@@ -24,9 +24,10 @@ in), the stylesheet, and the fonts and drawings the stylesheet names, each under
 [`deploy/deploy.sh`](../deploy/README.md) publishes `web/dist` as it finds it.
 
 One build serves one network, set in [`networks.ts`](networks.ts): its chain id and RPC, the escrow,
-the forfeit router, USDC, the explorer, and how the pages name where Forfeits go. The build stops
+the forfeit router, USDC and the explorer, from the SDK's
+[deployments](../sdk/src/deployments.ts), and how the pages name where Forfeits go. The build stops
 while the network's escrow or router address is missing. `bountyFactory` and `bountyFactoryFromBlock` name the Bounty wallet factory and its
-deploy block. Empty, as on both networks until it is deployed, the build goes on: the Bounty page
+deploy block. Empty, as on testnet, the build goes on: the Bounty page
 says Bounties aren't available on the network yet, and the setup and repo pages leave them out.
 
 ## The Bounty page
@@ -108,7 +109,8 @@ no `Referer`.
 | Bounty, to fund | USDC's EIP-3009 `ReceiveWithAuthorization` with `to` = the Bounty wallet, sent at once from the same wallet | 10 minutes |
 | Bounty, to pay | `Payout(issueNumber, serial, payee, amount, deadline)` in the domain `BonaFide Bounty`, version 1, of the wallet | 1 hour |
 
-The typed data is built in [`src/typed-data.ts`](src/typed-data.ts). Times are shown in the reader's
+The typed data comes from the SDK's [`typed-data.ts`](../sdk/src/typed-data.ts), and the windows
+from [`src/windows.ts`](src/windows.ts). Times are shown in the reader's
 time zone, with UTC in a tooltip.
 
 ## The brand
@@ -135,7 +137,7 @@ npm run typecheck
 ```
 
 The tests need Foundry (`forge`, `anvil`), the contracts' submodules
-(`git submodule update --init --recursive`), `npm ci` in `app/`, and Google Chrome. They cover:
+(`git submodule update --init --recursive`), `npm ci` at the repo root, and Google Chrome. They cover:
 
 - the typed data, signed with fresh keys and accepted by the real escrow on anvil and by the App's
   relay and Keeper, and the Bounty page's Payout and funding signatures and every call it sends,

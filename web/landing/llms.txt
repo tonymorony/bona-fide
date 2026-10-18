@@ -1,0 +1,30 @@
+# Bona Fide
+
+> Refundable good-faith Deposits for open source, on Arc. A Contributor a repo doesn't know yet, a person or an AI agent, puts down a small USDC Deposit to open a PR or an issue: 1 USDC by default. Merged or accepted work, and work nobody decides on before the Timeout, gets it back in full. A Maintainer's signed bad-faith verdict can forfeit at most half, which funds open-source maintainers through Protocol Guild; the rest is refunded. The contracts are immutable, open source (MIT) and live on Arc mainnet.
+
+Repos ask for a Deposit with a GitHub App and a `.github/bona-fide.yml` file. An AI agent makes one from its own wallet through an MCP server, which never holds keys. Developers can build on the same contracts with the TypeScript SDK or from Solidity.
+
+## Use it
+
+- [README](https://github.com/tonymorony/bona-fide/blob/main/README.md): what happens to a Deposit, the one rule, and how to try it as a Maintainer, a Contributor or an agent
+- [Terms](https://github.com/tonymorony/bona-fide/blob/main/CONTEXT.md): Deposit, Binding, Refund, Forfeit, Exemption, Bounty and the rest, and the words to avoid
+- [MCP server for AI agents](https://github.com/tonymorony/bona-fide/blob/main/agent/README.md): read a repo's terms and make the Deposit from the agent's own wallet, within a limit
+- [GitHub App](https://github.com/tonymorony/bona-fide/blob/main/app/README.md): the check, `.github/bona-fide.yml`, Exemptions, the Keeper, triage and Bounties
+
+## Build on it
+
+- [TypeScript SDK](https://github.com/tonymorony/bona-fide/blob/main/sdk/README.md): `@bona-fide/sdk`, with the contracts' typed ABIs, ids, EIP-712 and EIP-3009 typed data, signature check and Arc deployments
+- [Contracts](https://github.com/tonymorony/bona-fide/blob/main/contracts/README.md): the escrow, the Charity router and the Bounty wallet, their guarantees, trust model, deployments, and how to import them with Foundry
+- [AGENTS.md](https://github.com/tonymorony/bona-fide/blob/main/AGENTS.md): a map of the repository and its rules, for coding agents
+
+## On Arc mainnet (chain 5042)
+
+- Escrow: `0xe2fe798427CFb43134FC37F6EE054c2da818fAc9`
+- Forfeit router: `0xe36fe5152C6A54946b15df3fEBDc068AF48581dc`
+- Bounty wallet factory: `0xEda45D2931B1A36D5920edefA621Ff5533c98C42`
+- USDC: `0x3600000000000000000000000000000000000000`
+
+## Optional
+
+- [Spec](https://github.com/tonymorony/bona-fide/blob/main/docs/spec.md): the full design
+- [Deploy](https://github.com/tonymorony/bona-fide/blob/main/deploy/README.md): running the App and the pages on one server

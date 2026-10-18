@@ -1,11 +1,10 @@
-import { isAddressEqual, type Address, type Hex } from "viem";
+import { payoutSignature, repoIdOf } from "@bona-fide/sdk";
+import { hashTypedData, isAddressEqual, type Address, type Hex } from "viem";
 import { ARC_EXPLORER_URL, CONFIG_PATH, parseConfig } from "../config.ts";
 import { usdc } from "../copy.ts";
 import { decisionCost, newDecision } from "../decisions/log.ts";
 import { TransactionReverted } from "../keeper/escrow.ts";
 import { Refusal } from "../keeper/keeper.ts";
-import { payoutDigest } from "../keeper/signatures.ts";
-import { repoIdOf } from "../keys.ts";
 import {
   fullName,
   type Chain,
@@ -453,13 +452,17 @@ export function createBounties({
       const problem = payeeProblem(payee, wallet, wallets.keeper);
       if (problem) throw new Refusal(400, `This payee can't be paid: ${problem}.`);
       if ((await wallets.now()) > deadline) throw new Refusal(400, SIGNATURE_EXPIRED);
-      const digest = payoutDigest(await wallets.chainId(), wallet, {
-        issueNumber: BigInt(issue),
-        serial: bounty.serial,
-        payee,
-        amount: bounty.amount,
-        deadline,
-      });
+      const digest = hashTypedData(
+        payoutSignature({
+          chainId: await wallets.chainId(),
+          wallet,
+          issueNumber: issue,
+          serial: bounty.serial,
+          payee,
+          amount: bounty.amount,
+          deadline,
+        }),
+      );
       if (!(await wallets.isValidSignature(owner, digest, signature))) throw notTheOwners(owner);
       let txHash: Hex;
       try {

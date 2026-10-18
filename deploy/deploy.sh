@@ -51,9 +51,9 @@ pages=${PAGES_DIR:-web/dist}
 case "$pages" in /*) pages_dir=$pages ;; *) pages_dir="$repo/$pages" ;; esac
 
 revision=$(git -C "$repo" rev-parse HEAD)
-if [ -n "$(git -C "$repo" status --porcelain -- app/package.json app/package-lock.json app/src deploy)" ]; then
+if [ -n "$(git -C "$repo" status --porcelain -- package.json package-lock.json sdk/package.json sdk/src app/package.json app/src deploy)" ]; then
 	revision="$revision-dirty"
-	say "warning: app/ or deploy/ has uncommitted changes. They're deployed too, and the revision is marked -dirty."
+	say "warning: the App, the SDK or deploy/ has uncommitted changes. They're deployed too, and the revision is marked -dirty."
 fi
 short=$(printf '%.12s' "$revision")
 domain=$(awk '/^[^#[:space:]][^{]* \{$/ { sub(/,$/, "", $1); print $1; exit }' "$repo/deploy/Caddyfile.bonafide")
@@ -65,11 +65,14 @@ trap 'rm -rf "$stage"' EXIT
 
 # The release, laid out as /opt/bona-fide expects it.
 release="$stage/release"
-mkdir -p "$release/app" "$release/site"
+mkdir -p "$release/sdk" "$release/app" "$release/site"
 cp "$repo/deploy/docker-compose.yml" "$repo/deploy/Dockerfile" "$repo/deploy/.env.example" "$repo/deploy/install.sh" "$release/"
 cp "$repo/deploy/Dockerfile.dockerignore" "$release/.dockerignore"
 cp "$repo/deploy/Caddyfile.bonafide" "$release/site/"
-cp "$repo/app/package.json" "$repo/app/package-lock.json" "$release/app/"
+cp "$repo/package.json" "$repo/package-lock.json" "$release/"
+cp "$repo/sdk/package.json" "$release/sdk/"
+cp -R "$repo/sdk/src" "$release/sdk/src"
+cp "$repo/app/package.json" "$release/app/"
 cp -R "$repo/app/src" "$release/app/src"
 if [ -d "$pages_dir" ]; then
 	cp -R "$pages_dir" "$release/site/pages"
@@ -106,7 +109,9 @@ if [ "$dry_run" = 1 ]; then
 	say
 	say "Release ($(files_in "$release"), $(du -h "$tarball" | cut -f1 | tr -d ' ') packed):"
 	say "  docker-compose.yml  Dockerfile  .dockerignore  .env.example  install.sh  REVISION"
-	say "  app/: package.json, package-lock.json and src/ ($(files_in "$release/app/src"))"
+	say "  package.json and package-lock.json: the workspace's"
+	say "  sdk/: package.json and src/ ($(files_in "$release/sdk/src"))"
+	say "  app/: package.json and src/ ($(files_in "$release/app/src"))"
 	say "  site/Caddyfile.bonafide"
 	say "  $pages_note"
 	say
@@ -120,7 +125,7 @@ if [ "$dry_run" = 1 ]; then
 	say "   install.sh then, on $host:"
 	say "   - checks Docker, Docker Compose, curl, and that $remote_dir/.env exists (it never reads it)"
 	say "   - finds Caddy: a container that publishes port 443, else the caddy service on the host"
-	say "   - installs docker-compose.yml, Dockerfile, app/ and site/pages/ in $remote_dir"
+	say "   - installs docker-compose.yml, Dockerfile, the package files, sdk/, app/ and site/pages/ in $remote_dir"
 	say "   - runs 'docker compose up -d --build' and waits for http://127.0.0.1:8930/health"
 	say "   - installs $remote_dir/site/Caddyfile.bonafide, adds 'import $remote_dir/site/*.bonafide'"
 	say "     to Caddy's main Caddyfile if it isn't there, validates, and reloads Caddy; if Caddy"

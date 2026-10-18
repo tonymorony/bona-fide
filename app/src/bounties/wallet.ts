@@ -1,7 +1,14 @@
 import {
+  BOUNTY_STATUSES,
+  bountyFactoryAbi,
+  bountyWalletAbi,
+  isValidSignatureNow,
+  type BountyStatus,
+} from "@bona-fide/sdk";
+import {
+  getAbiItem,
   getAddress,
   isAddressEqual,
-  parseAbi,
   zeroAddress,
   type Address,
   type Hex,
@@ -9,32 +16,6 @@ import {
   type PublicClient,
 } from "viem";
 import { inTurnFor, revertNameOf, sendAndWait } from "../keeper/escrow.ts";
-import { isValidSignatureNow } from "../keeper/signatures.ts";
-
-export const bountyFactoryAbi = parseAbi([
-  "function walletOf(bytes32 repoId, address owner) view returns (address)",
-  "event WalletCreated(bytes32 indexed repoId, address indexed owner, address wallet)",
-]);
-
-export const bountyWalletAbi = parseAbi([
-  "function bountyOf(uint64 issueNumber) view returns ((uint256 amount, uint64 serial, uint8 status, address payee))",
-  "function owner() view returns (address)",
-  "function perPayoutLimit() view returns (uint256)",
-  "function keeperAllowance() view returns (uint256)",
-  "function keeperEnabled() view returns (bool)",
-  "function keeperPay(uint64 issueNumber, address payee)",
-  "function payWithSignature(uint64 issueNumber, address payee, uint256 deadline, bytes signature)",
-  "event Paid(uint64 indexed issueNumber, uint64 serial, address indexed payee, uint256 amount, uint8 method)",
-  "event BountyPosted(uint64 indexed issueNumber, uint64 serial, uint256 amount)",
-  "error NotKeeper()",
-  "error KeeperDisabled()",
-  "error BountyNotOpen()",
-  "error InvalidRecipient()",
-  "error AbovePayoutLimit()",
-  "error AbovePeriodLimit()",
-  "error InvalidSignature()",
-  "error SignatureExpired()",
-]);
 
 /** One of the Bounty wallet's custom errors, such as "AbovePeriodLimit". */
 export type BountyWalletError = Extract<(typeof bountyWalletAbi)[number], { type: "error" }>["name"];
@@ -49,13 +30,9 @@ export class BountyRejection extends Error {
   }
 }
 
-const PAID = bountyWalletAbi.find((item) => item.type === "event" && item.name === "Paid")!;
-const POSTED = bountyWalletAbi.find((item) => item.type === "event" && item.name === "BountyPosted")!;
-const CREATED = bountyFactoryAbi.find((item) => item.type === "event" && item.name === "WalletCreated")!;
-
-/** The wallet's Status enum in order. */
-const STATUSES = ["none", "open", "paid", "cancelled"] as const;
-export type BountyStatus = (typeof STATUSES)[number];
+const PAID = getAbiItem({ abi: bountyWalletAbi, name: "Paid" });
+const POSTED = getAbiItem({ abi: bountyWalletAbi, name: "BountyPosted" });
+const CREATED = getAbiItem({ abi: bountyFactoryAbi, name: "WalletCreated" });
 
 export interface WalletBounty {
   status: BountyStatus;
@@ -146,7 +123,7 @@ export function createBountyWallets({ client, account, factory, fromBlock = 0n }
       functionName: "bountyOf",
       args: [BigInt(issueNumber)],
     });
-    return { status: STATUSES[b.status] ?? "none", amount: b.amount, serial: b.serial, payee: b.payee };
+    return { status: BOUNTY_STATUSES[b.status] ?? "none", amount: b.amount, serial: b.serial, payee: b.payee };
   }
 
   return {

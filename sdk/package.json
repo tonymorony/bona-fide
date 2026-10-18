@@ -1,0 +1,48 @@
+{
+  "name": "@bona-fide/sdk",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Typed ABIs, keys, signatures and deployments for Bona Fide's refundable Deposits and Bounty wallets on Arc",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/tonymorony/bona-fide.git",
+    "directory": "sdk"
+  },
+  "homepage": "https://github.com/tonymorony/bona-fide/tree/main/sdk#readme",
+  "keywords": [
+    "arc",
+    "usdc",
+    "escrow",
+    "eip-3009",
+    "eip-712",
+    "viem",
+    "github"
+  ],
+  "type": "module",
+  "sideEffects": false,
+  "engines": {
+    "node": ">=24"
+  },
+  "exports": {
+    ".": "./src/index.ts",
+    "./package.json": "./package.json"
+  },
+  "scripts": {
+    "abi": "node scripts/abi.ts",
+    "build": "node scripts/build.ts",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit",
+    "format": "prettier --write scripts src test vitest.config.ts"
+  },
+  "peerDependencies": {
+    "viem": "^2.56.9"
+  },
+  "devDependencies": {
+    "@types/node": "^24.19.0",
+    "prettier": "^3.9.9",
+    "typescript": "^7.0.2",
+    "viem": "^2.56.9",
+    "vitest": "^5.0.2"
+  }
+}

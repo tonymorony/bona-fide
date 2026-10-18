@@ -1,3 +1,4 @@
+import { repoIdOf } from "@bona-fide/sdk";
 import { getAddress, isAddressEqual, pad, toHex, zeroAddress, type Address, type Hex } from "viem";
 import {
   BountyRejection,
@@ -6,7 +7,6 @@ import {
   type WalletEvent,
   type WalletState,
 } from "../../src/bounties/wallet.ts";
-import { repoIdOf } from "../../src/keys.ts";
 
 export const KEEPER: Address = getAddress("0x000000000000000000000000000000000000cafe");
 

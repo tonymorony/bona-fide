@@ -1,7 +1,7 @@
+import { keyOf, repoIdOf, type Kind } from "@bona-fide/sdk";
 import { createTestClient, createWalletClient, http, type Hex } from "viem";
 import { afterAll, beforeAll, expect, test, vi } from "vitest";
 import { createTimeoutRefunder } from "../src/keeper/timeouts.ts";
-import { keyOf, repoIdOf, type Kind } from "../src/keys.ts";
 import type { Anvil } from "./support/anvil.ts";
 import { keeperHarness, startKeeperAnvil } from "./support/keeper.ts";
 import { REPO } from "./support/webhooks.ts";

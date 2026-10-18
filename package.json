@@ -1,0 +1,19 @@
+{
+  "name": "bona-fide",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=24"
+  },
+  "workspaces": [
+    "sdk",
+    "app",
+    "agent",
+    "web"
+  ],
+  "scripts": {
+    "test": "npm test --workspaces",
+    "typecheck": "npm run typecheck --workspaces",
+    "format": "npm run format --workspaces"
+  }
+}

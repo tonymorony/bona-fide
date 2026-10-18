@@ -1,9 +1,9 @@
+import { DEPOSIT_STATUSES, escrowAbi, keyOf, KINDS, kindCode, repoIdOf, type Kind } from "@bona-fide/sdk";
 import {
   BaseError,
   ContractFunctionRevertedError,
   formatUnits,
   isAddress,
-  parseAbi,
   type Account,
   type Address,
   type Chain,
@@ -16,21 +16,12 @@ import {
 } from "viem";
 import { nonceManager, privateKeyToAccount, type PrivateKeyAccount } from "viem/accounts";
 import { USDC_DECIMALS } from "../config.ts";
-import { keyOf, KINDS, kindCode, repoIdOf, type Kind } from "../keys.ts";
 import { cooldown, fixedWindow, REVERT_COOLDOWN_MS, type RateLimit } from "./rate-limit.ts";
 
 export const RELAY_DEPOSIT_PATH = "/relay/deposit";
 
-const STATUS_ACTIVE = 1;
+const STATUS_ACTIVE = DEPOSIT_STATUSES.indexOf("active");
 const NOUN: Record<Kind, string> = { pr: "PR", issue: "Issue" };
-
-const abi = parseAbi([
-  "function activeConfig(bytes32 repoId) view returns ((address maintainer, uint16 forfeitBps, uint32 timeout, uint256 amount))",
-  "function depositOf(bytes32 key) view returns ((address depositor, uint64 deadline, uint8 status, address maintainer, uint16 forfeitBps, uint64 serial, uint256 amount))",
-  "function depositWithAuthorization(bytes32 repoId, uint8 kind, uint64 number, address from, uint256 validAfter, uint256 validBefore, bytes32 salt, bytes signature)",
-  "error RepoNotActive()",
-  "error DepositAlreadyActive()",
-]);
 
 export interface DepositRelayOptions {
   client: PublicClient;
@@ -92,8 +83,8 @@ export function createDepositRelay({
 
   async function relay(deposit: SignedDeposit, repoId: Hex, key: Hex): Promise<Response> {
     const [binding, existing] = await Promise.all([
-      client.readContract({ address: escrow, abi, functionName: "activeConfig", args: [repoId] }),
-      client.readContract({ address: escrow, abi, functionName: "depositOf", args: [key] }),
+      client.readContract({ address: escrow, abi: escrowAbi, functionName: "activeConfig", args: [repoId] }),
+      client.readContract({ address: escrow, abi: escrowAbi, functionName: "depositOf", args: [key] }),
     ]);
     if (binding.maintainer === zeroAddress) {
       return refuse(409, `Bona Fide isn't active for ${deposit.repo}, so it takes no Deposits.`);
@@ -114,7 +105,7 @@ export function createDepositRelay({
       .simulateContract({
         account: wallet.account,
         address: escrow,
-        abi,
+        abi: escrowAbi,
         functionName: "depositWithAuthorization",
         args: [
           repoId,

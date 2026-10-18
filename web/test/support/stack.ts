@@ -1,3 +1,4 @@
+import { forfeitVerdict, keyOf, kindCode, repoIdOf, type Kind } from "@bona-fide/sdk";
 import { spawn } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { createServer, type AddressInfo } from "node:net";
@@ -18,9 +19,7 @@ import {
 } from "viem";
 import { generatePrivateKey, privateKeyToAccount } from "viem/accounts";
 import { bountyCalls, DEFAULT_LIMITS, type BountyLimits } from "../../src/bounty.ts";
-import { keyOf, kindCode, repoIdOf, type Kind } from "../../src/keys.ts";
 import type { LiveNetwork } from "../../src/network.ts";
-import { forfeitVerdict } from "../../src/typed-data.ts";
 
 const CONTRACTS = fileURLToPath(new URL("../../../contracts/", import.meta.url));
 export const BINDING_DELAY = 3600;

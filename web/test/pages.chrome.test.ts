@@ -513,7 +513,7 @@ test("the Maintainer proves wallet control on the setup page, and the Keeper pro
     address: stack.escrow,
     abi: stack.escrowAbi,
     functionName: "pendingConfig",
-    args: [(await import("../src/keys.ts")).repoIdOf(repo)],
+    args: [(await import("@bona-fide/sdk")).repoIdOf(repo)],
   })) as [{ maintainer: string; amount: bigint; forfeitBps: number; timeout: number }, bigint];
   expect(pending).toMatchObject({
     maintainer: maintainer.address,

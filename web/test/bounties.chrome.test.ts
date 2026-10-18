@@ -1,3 +1,4 @@
+import { repoIdOf } from "@bona-fide/sdk";
 import { mkdir, mkdtemp } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -5,7 +6,6 @@ import type { Address } from "viem";
 import { afterAll, beforeAll, expect, test } from "vitest";
 import { bountyCalls, createBountyReader } from "../src/bounty.ts";
 import { publicClientFor } from "../src/chain.ts";
-import { repoIdOf } from "../src/keys.ts";
 import { buildPages } from "../build.ts";
 import { asWritten, DESKTOP, PHONE, startChrome, type Chrome, type Page, type Viewport } from "./support/chrome.ts";
 import { startSite } from "./support/site.ts";

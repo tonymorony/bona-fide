@@ -1,7 +1,7 @@
+import type { Kind } from "@bona-fide/sdk";
 import { formatUnits } from "viem";
 import type { Exemption, NewTerms } from "./app.ts";
 import { CONFIG_PATH, DAY_SECONDS, USDC_DECIMALS } from "./config.ts";
-import type { Kind } from "./keys.ts";
 import { ACCEPTED, BAD_FAITH, WAIVER } from "./labels.ts";
 import { fullName, type Binding, type Deposit, type Item, type PendingBinding, type Repo } from "./ports.ts";
 import type { RecordGrant } from "./records/exemption.ts";

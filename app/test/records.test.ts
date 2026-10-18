@@ -1,5 +1,5 @@
+import type { Kind } from "@bona-fide/sdk";
 import { expect, test, vi } from "vitest";
-import type { Kind } from "../src/keys.ts";
 import { createRecordIndex, LOOKUPS_PER_TICK, type RecordLink } from "../src/records/records.ts";
 import { FakeChain } from "./support/fake-chain.ts";
 import { FakeGitHub } from "./support/fake-github.ts";

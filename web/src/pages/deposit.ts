@@ -1,11 +1,18 @@
+import {
+  depositAuthorization,
+  escrowAbi,
+  keyOf,
+  kindCode,
+  repoIdOf,
+  usdcAbi,
+  type SignedDepositTerms,
+} from "@bona-fide/sdk";
 import { parseEventLogs, type Hex } from "viem";
-import { escrowAbi, usdcAbi } from "../abi.ts";
 import type { DepositState, RepoTerms, Terms } from "../chain.ts";
 import { depositRelayBody, relayDeposit } from "../endpoints.ts";
 import { forfeitSplit, shortAddress, timeout, usdc, usdcAmount } from "../format.ts";
-import { keyOf, kindCode, repoIdOf } from "../keys.ts";
 import { explorerAddress, explorerTx, itemName, itemUrl, readItemLink, repoPageUrl } from "../link.ts";
-import { depositAuthorization, WINDOWS, type SignedDepositTerms } from "../typed-data.ts";
+import { WINDOWS } from "../windows.ts";
 import { focusState, newView, onAction, render } from "../ui/dom.ts";
 import { isUndeployedSmartWalletSignature, isUserRejection, sendContractCall, signTypedData } from "../wallet.ts";
 import {

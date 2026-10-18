@@ -1,3 +1,4 @@
+import { keyOf, repoIdOf, type Kind } from "@bona-fide/sdk";
 import type { Hex } from "viem";
 import {
   ARC_EXPLORER_URL,
@@ -19,7 +20,6 @@ import {
   recordExemptText,
   setupLink,
 } from "./copy.ts";
-import { keyOf, repoIdOf, type Kind } from "./keys.ts";
 import { ACCEPTED, BAD_FAITH, DEPOSIT_REQUIRED, WAIVER } from "./labels.ts";
 import {
   fullName,

@@ -1,9 +1,9 @@
+import { KINDS } from "@bona-fide/sdk";
 import { McpServer } from "@modelcontextprotocol/server";
 import type { Address } from "viem";
 import * as z from "zod/v4";
 import { describeMadeDeposit, describeRules, describeSignedPlan, describeTwoStepPlan, withDetails } from "./copy.ts";
 import { createDeposits, type DepositsOptions } from "./deposits.ts";
-import { KINDS } from "./keys.ts";
 
 export type ServerOptions = DepositsOptions;
 

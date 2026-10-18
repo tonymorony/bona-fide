@@ -1,5 +1,6 @@
 # The Bona Fide App on one host, behind Caddy. deploy.sh installs this file as
-# /opt/bona-fide/docker-compose.yml, next to the Dockerfile, app/ and the server's .env.
+# /opt/bona-fide/docker-compose.yml, next to the Dockerfile, the workspace's package files, sdk/,
+# app/ and the server's .env.
 name: bona-fide
 
 services:

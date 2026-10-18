@@ -1,7 +1,7 @@
+import { keyOf, repoIdOf } from "@bona-fide/sdk";
 import { afterAll, beforeAll, expect, test } from "vitest";
 import { createChainReader, publicClientFor } from "../src/chain.ts";
 import { readRepoHistory } from "../src/history.ts";
-import { keyOf, repoIdOf } from "../src/keys.ts";
 import { startStack, type Stack } from "./support/stack.ts";
 
 let stack: Stack;

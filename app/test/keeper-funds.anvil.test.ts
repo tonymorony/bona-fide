@@ -1,3 +1,4 @@
+import { keyOf, repoIdOf, type Kind } from "@bona-fide/sdk";
 import {
   createTestClient,
   http,
@@ -9,12 +10,10 @@ import {
   type Hex,
 } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
-import { formatAbiItem } from "viem/utils";
 import { afterAll, beforeAll, expect, test } from "vitest";
 import { createBindingActivator } from "../src/keeper/activator.ts";
 import { createTimeoutRefunder } from "../src/keeper/timeouts.ts";
-import { EscrowRejection, keeperAbi } from "../src/keeper/escrow.ts";
-import { keyOf, repoIdOf, type Kind } from "../src/keys.ts";
+import { EscrowRejection } from "../src/keeper/escrow.ts";
 import { artifact, type Anvil } from "./support/anvil.ts";
 import { keeperHarness, signBinding, signForfeit, startKeeperAnvil } from "./support/keeper.ts";
 import { NEWCOMER, payload, REPO } from "./support/webhooks.ts";
@@ -244,11 +243,3 @@ test("with its key alone, the Keeper can't forfeit a Deposit or activate a Bindi
 
   await expect(escrow.activateRepo(repoIdOf(repo))).rejects.toEqual(new EscrowRejection("NotYetEffective"));
 }, 30_000);
-
-test("the Keeper's escrow ABI matches the Foundry artifact", () => {
-  const built = artifact("BonaFideEscrow").abi as Abi;
-  for (const item of keeperAbi) {
-    const match = built.find((b) => b.type === item.type && "name" in b && b.name === item.name);
-    expect(match && formatAbiItem(match)).toBe(formatAbiItem(item));
-  }
-});
