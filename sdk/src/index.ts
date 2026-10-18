@@ -23,6 +23,17 @@ export {
   type SignedPayout,
   type Wire,
 } from "./app-routes.ts";
+export {
+  createBountyWalletReader,
+  keeperLimitFor,
+  payeeDeclaredIn,
+  payeeLine,
+  payeeProblem,
+  type BountyState,
+  type BountyWalletReader,
+  type BountyWalletState,
+  type PayeeDeclaration,
+} from "./bounty-wallets.ts";
 export { arcMainnet, arcTestnet, chainOf, type Deployment } from "./deployments.ts";
 export { APP_SLUG, depositRequestBlock, depositRequestIn, type DepositRequest } from "./deposit-request.ts";
 export {

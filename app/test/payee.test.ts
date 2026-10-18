@@ -1,6 +1,5 @@
 import { expect, test } from "vitest";
-import { payeeOf, payeeProblem } from "../src/bounties/payee.ts";
-import { KEEPER } from "./support/fake-wallets.ts";
+import { payeeOf } from "../src/bounties/payee.ts";
 import { mergedPr, PAYEE, text } from "./support/bounties.ts";
 import { NEWCOMER } from "./support/webhooks.ts";
 
@@ -71,13 +70,4 @@ test.each([
 
 test("a PR whose author's account is gone has no payee", () => {
   expect(payeeOf(mergedPr({ author: null }))).toEqual({ kind: "none" });
-});
-
-test("the wallet can't pay the zero address, itself or the Keeper", () => {
-  const wallet = "0x0000000000000000000000000000000000000001";
-
-  expect(payeeProblem("0x0000000000000000000000000000000000000000", wallet, KEEPER)).toBe("it is the zero address");
-  expect(payeeProblem(wallet, wallet, KEEPER)).toBe("it is the Bounty wallet itself");
-  expect(payeeProblem(KEEPER, wallet, KEEPER)).toBe("it is the Keeper's address");
-  expect(payeeProblem(PAYEE, wallet, KEEPER)).toBeNull();
 });

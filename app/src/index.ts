@@ -67,7 +67,7 @@ export {
 } from "./bounties/bounties.ts";
 export { bountyLink, repoPageLink } from "./bounties/copy.ts";
 export { BOUNTY_NOTE_MS, createBountyNotices, type BountyNoticeDeps, type BountyNotices } from "./bounties/posted.ts";
-export { payeeOf, payeeProblem, type Payee, type PayeeSource } from "./bounties/payee.ts";
+export { payeeOf, type Payee, type PayeeSource } from "./bounties/payee.ts";
 export {
   BountyRejection,
   createBountyWallets,

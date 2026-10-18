@@ -6,6 +6,7 @@ import {
   bountyFundAuthorization,
   bountyWalletAbi,
   BOUNTY_STATUSES,
+  createBountyWalletReader,
   DEPOSIT_STATUSES,
   depositAuthorization,
   escrowAbi,
@@ -202,6 +203,43 @@ test("a Bounty wallet takes funding from bountyFundAuthorization and pays from p
   });
   expect(BOUNTY_STATUSES[paid.status]).toBe("paid");
   expect(paid.payee).toBe(anvil.payee);
+});
+
+test("the Bounty wallet reader finds the owner's wallet for a repo, its limits and each Bounty", async () => {
+  const owner = anvil.maintainer;
+  const repoId = repoIdOf("Codertocat/Bounties");
+  const reader = createBountyWalletReader(anvil.client, factory);
+
+  expect(await reader.walletOf(repoId, owner)).toBeNull();
+  await anvil.send(owner, factory, bountyFactoryAbi, "create", [repoId, 5_000_000n, 8_000_000n, 86_400]);
+  const wallet = (await reader.walletOf(repoId, owner))!;
+  await anvil.send(owner, usdc, usdcAbi, "approve", [wallet, 10_000_000n]);
+  await anvil.send(owner, wallet, bountyWalletAbi, "fund", [10_000_000n]);
+  await anvil.send(owner, wallet, bountyWalletAbi, "postBounty", [3n, 4_000_000n]);
+  await anvil.send(anvil.keeper, wallet, bountyWalletAbi, "keeperPay", [3n, anvil.payee]);
+  await anvil.send(owner, wallet, bountyWalletAbi, "postBounty", [4n, 6_000_000n]);
+
+  expect(await reader.state(wallet)).toEqual({
+    address: wallet,
+    owner,
+    keeper: anvil.keeper,
+    balance: 6_000_000n,
+    reserved: 6_000_000n,
+    available: 0n,
+    perPayoutLimit: 5_000_000n,
+    periodLimit: 8_000_000n,
+    periodLength: 86_400,
+    keeperEnabled: true,
+    keeperAllowance: 4_000_000n,
+  });
+  expect(await reader.bountyOf(wallet, 3)).toEqual({
+    amount: 4_000_000n,
+    serial: 1n,
+    status: "paid",
+    payee: anvil.payee,
+  });
+  expect(await reader.bountyOf(wallet, 4)).toEqual({ amount: 6_000_000n, serial: 2n, status: "open", payee: null });
+  expect(await reader.bountyOf(wallet, 5)).toEqual({ amount: 0n, serial: 0n, status: "none", payee: null });
 });
 
 test("isValidSignatureNow asks a contract signer through ERC-1271", async () => {

@@ -1,13 +1,12 @@
 import {
-  BOUNTY_STATUSES,
   bountyFactoryAbi,
   bountyWalletAbi,
+  createBountyWalletReader,
   PAYOUT_METHODS,
   usdcAbi,
-  type BountyStatus,
   type PayoutMethod,
 } from "@bona-fide/sdk";
-import { zeroAddress, type Address, type Hex, type PublicClient } from "viem";
+import type { Address, Hex, PublicClient } from "viem";
 import type { RepoTerms } from "./chain.ts";
 import { readInRanges } from "./history.ts";
 import type { Network } from "./network.ts";
@@ -17,33 +16,6 @@ export type BountyNetwork = Network & { bountyFactory: Address };
 
 export function hasBounties(network: Network): network is BountyNetwork {
   return network.bountyFactory !== "";
-}
-
-/** A Bounty wallet's settings and money, as it reports them. USDC in base units, times in seconds. */
-export interface BountyWalletState {
-  address: Address;
-  owner: Address;
-  keeper: Address;
-  /** Its whole USDC balance: what is reserved for open Bounties, and what isn't. */
-  balance: bigint;
-  /** The sum of open Bounties. */
-  reserved: bigint;
-  /** What the owner can post as Bounties or withdraw. */
-  available: bigint;
-  perPayoutLimit: bigint;
-  periodLimit: bigint;
-  periodLength: number;
-  keeperEnabled: boolean;
-  /** What the Keeper could still pay in total if it paid now, before the per-payout limit and the switch. */
-  keeperAllowance: bigint;
-}
-
-/** One Bounty as `bountyOf` reports it. */
-export interface BountyState {
-  amount: bigint;
-  serial: bigint;
-  status: BountyStatus;
-  payee: Address | null;
 }
 
 /** One posted Bounty and how it ended, rebuilt from the wallet's events. */
@@ -118,19 +90,10 @@ const EVENTS = bountyWalletAbi.filter(
 
 /** The reads the Bounty page and the repo page make, from the network's public RPC. */
 export function createBountyReader(client: PublicClient, network: BountyNetwork) {
-  const wallet = (address: Address) => ({ address, abi: bountyWalletAbi }) as const;
+  const reader = createBountyWalletReader(client, network.bountyFactory);
 
   return {
-    /** `owner`'s Bounty wallet for the repo, or null while they have none. */
-    async walletOf(repoId: Hex, owner: Address): Promise<Address | null> {
-      const address = await client.readContract({
-        address: network.bountyFactory,
-        abi: bountyFactoryAbi,
-        functionName: "walletOf",
-        args: [repoId, owner],
-      });
-      return address === zeroAddress ? null : address;
-    },
+    ...reader,
 
     /**
      * The repo's Bounty wallet: the active Binding Maintainer's, and no one else's. Anyone can create a
@@ -138,46 +101,7 @@ export function createBountyReader(client: PublicClient, network: BountyNetwork)
      */
     async repoWallet(repoId: Hex, terms: RepoTerms): Promise<Address | null> {
       if (!terms.active) return null;
-      return this.walletOf(repoId, terms.active.maintainer);
-    },
-
-    async state(address: Address): Promise<BountyWalletState> {
-      const at = wallet(address);
-      const [owner, keeper, reserved, available, perPayoutLimit, periodLimit, periodLength, keeperEnabled, allowance] =
-        await Promise.all([
-          client.readContract({ ...at, functionName: "owner" }),
-          client.readContract({ ...at, functionName: "keeper" }),
-          client.readContract({ ...at, functionName: "reserved" }),
-          client.readContract({ ...at, functionName: "available" }),
-          client.readContract({ ...at, functionName: "perPayoutLimit" }),
-          client.readContract({ ...at, functionName: "periodLimit" }),
-          client.readContract({ ...at, functionName: "periodLength" }),
-          client.readContract({ ...at, functionName: "keeperEnabled" }),
-          client.readContract({ ...at, functionName: "keeperAllowance" }),
-        ]);
-      return {
-        address,
-        owner,
-        keeper,
-        balance: reserved + available,
-        reserved,
-        available,
-        perPayoutLimit,
-        periodLimit,
-        periodLength,
-        keeperEnabled,
-        keeperAllowance: allowance,
-      };
-    },
-
-    async bountyOf(address: Address, issue: number): Promise<BountyState> {
-      const b = await client.readContract({ ...wallet(address), functionName: "bountyOf", args: [BigInt(issue)] });
-      return {
-        amount: b.amount,
-        serial: b.serial,
-        status: BOUNTY_STATUSES[b.status] ?? "none",
-        payee: b.payee === zeroAddress ? null : b.payee,
-      };
+      return reader.walletOf(repoId, terms.active.maintainer);
     },
 
     /** Every Bounty the wallet posted, newest first, from its events since the factory was deployed. */
@@ -198,20 +122,6 @@ export function createBountyReader(client: PublicClient, network: BountyNetwork)
 }
 
 export type BountyReader = ReturnType<typeof createBountyReader>;
-
-/** Why the Keeper can't pay a Bounty of `amount` on its own now, or null if it can. */
-export function keeperLimitFor(amount: bigint, wallet: BountyWalletState): "off" | "per-payout" | "period" | null {
-  if (!wallet.keeperEnabled) return "off";
-  if (amount > wallet.perPayoutLimit) return "per-payout";
-  if (amount > wallet.keeperAllowance) return "period";
-  return null;
-}
-
-/** A payee the wallet would refuse: zero, the wallet itself, or the Keeper. */
-export function isRefusedPayee(payee: Address, wallet: BountyWalletState): boolean {
-  const same = (a: Address, b: Address) => a.toLowerCase() === b.toLowerCase();
-  return same(payee, zeroAddress) || same(payee, wallet.address) || same(payee, wallet.keeper);
-}
 
 /** A Bounty wallet's first limits, or new ones: USDC base units, and seconds. */
 export interface BountyLimits {

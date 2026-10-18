@@ -1,10 +1,24 @@
 # Bona Fide for AI agents
 
 An [MCP](https://modelcontextprotocol.io) server that lets an AI agent make the refundable Deposit a
-repo asks for on its PR or issue, within a limit you set.
+repo asks for on its PR or issue, within a limit you set, follow it until it is refunded, and read
+the Bounties it can work on.
 
-The server never holds keys and never runs wallet commands. It reads the repo's rules from the escrow
+The server never holds keys and never runs wallet commands. It reads the escrow and the Bounty wallets
 on Arc and prepares what to sign or send. The agent's own wallet does the signing and sending.
+
+| Tool | What it does |
+|---|---|
+| `get_deposit_rules` | The repo's Binding: the Deposit it asks for, the Timeout and the forfeit share, and whether the item already has an active Deposit |
+| `prepare_signed_deposit` | USDC's authorization for the Deposit, as typed data for the agent's wallet to sign |
+| `submit_signed_deposit` | Sends that signature to the App, which makes the Deposit and pays its gas |
+| `prepare_two_step_deposit` | The Deposit as two transactions for the agent's wallet to send: an approve, then the deposit |
+| `get_deposit_status` | The item's Deposit: none, active, refunded or forfeited, its Serial, and when its Timeout ends |
+| `prepare_refund` | After the Timeout, the escrow's `refund` transaction, which anyone can send |
+| `get_bounty` | An issue's Bounty in the repo's Bounty wallet, who may pay it, and the line that names your Payee |
+
+Every tool only reads the chain or prepares calldata. Only `submit_signed_deposit` sends anything, and
+it sends a signature the agent's wallet already made.
 
 ## What a Deposit means
 
@@ -90,6 +104,9 @@ Arc mainnet.
 | `RPC_URL` | `https://rpc.testnet.arc.io` | An Arc RPC endpoint. For Arc mainnet, `https://rpc.mainnet.arc.io` |
 | `APP_URL` | none | The Bona Fide App. Needed only to submit one-signature Deposits |
 | `MAX_DEPOSIT_USDC` | `5` | The most the tools will prepare or submit for one Deposit, in USDC |
+| `BOUNTY_FACTORY_ADDRESS` | the factory deployed with `ESCROW_ADDRESS` | The Bounty wallet factory `get_bounty` reads. Needed only with another escrow |
+
+With Bona Fide's own escrow, the server also knows its block explorer, and links to it.
 
 ## When a PR or issue asks for a Deposit
 
@@ -152,6 +169,45 @@ Circle's spending policies apply only on mainnet, and Circle doesn't document wh
 contract calls or signatures. The agent's wallet can still send anything else it holds, so give it no
 more than it needs.
 
+## After your Deposit
+
+`get_deposit_status(repo, kind, number)` reads the item's Deposit from the escrow: `none`, `active`,
+`refunded` or `forfeited`; its amount, Depositor and Serial; when its Timeout ends and whether it
+has passed; and, once resolved, how much was refunded and how much forfeited. With Bona Fide's own
+escrow it links the Depositor's page on the block explorer.
+
+The Keeper refunds a Deposit as soon as the PR is merged or the item is accepted. If no one decides
+before the Timeout, anyone can Refund it after. `prepare_refund(repo, kind, number, from)` then
+returns the escrow's `refund` call, as calldata and as a `circle wallet execute` command, to send
+from `from`. The whole Deposit goes back to its Depositor, whoever sends it; the sender pays only
+gas, so no limit applies. Before the Timeout, only the Keeper can Refund, and the tool refuses,
+saying how long is left. It refuses too for an item with no Deposit, or one already refunded or
+forfeited.
+
+## Bounties
+
+`get_bounty(repo, issue, payee?)` reads the Bounty on an issue from the repo's Bounty wallet: the one
+its active Binding's Maintainer created. A wallet anyone else made for the repo doesn't count. It
+says whether the Bounty is `open`, `paid` or `cancelled`, its amount, and whether the wallet lets
+the Keeper pay it: Keeper payouts on, within the per-payout limit and within what the Keeper has
+left this period. Even then the App pays only after its checks on the merged PR pass. Otherwise the
+Maintainer pays, with a signature anyone can relay or directly.
+
+A Bounty is paid to the Payee the author of the merged PR that closes the issue names, on a line
+of its own in the PR's description or in their own comment on it:
+
+```text
+Bounty wallet: 0x5aAeb6053F3E94C9b9A09f33669435E7Ef1BeAed
+```
+
+Only the PR author's words count, and only a description or comment nobody else has edited since.
+The latest line wins: a comment over the description, a later comment over an earlier one, and in
+one text the last line. Pass `payee` to get that exact line for your wallet, checksummed, and to
+check that the Bounty wallet can pay it: it can't pay the zero address, itself or the Keeper.
+
+The tool reads one issue at a time. Listing every open Bounty in a repo takes a scan of the wallet's
+logs since the factory was deployed; the repo's page on the Bona Fide site does that.
+
 ## The relay API
 
 `submit_signed_deposit` calls the App's relay. Agents that don't use MCP can call it directly.
@@ -207,6 +263,6 @@ npm test
 npm run typecheck
 ```
 
-The tests need Foundry (`forge`, `anvil` and `cast`). They run the real escrow and a USDC mock with
-EIP-3009 on a local anvil chain. The end-to-end test also starts the App, which the root's `npm ci`
+The tests need Foundry (`forge`, `anvil` and `cast`). They run the real escrow, the Bounty wallet
+factory and a USDC mock with EIP-3009 on a local anvil chain. The end-to-end test also starts the App, which the root's `npm ci`
 installs too.

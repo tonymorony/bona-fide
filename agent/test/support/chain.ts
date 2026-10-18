@@ -2,6 +2,7 @@ import { execFileSync, spawn } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { createServer, type AddressInfo } from "node:net";
 import { fileURLToPath } from "node:url";
+import { forfeitVerdict } from "@bona-fide/sdk";
 import {
   createPublicClient,
   createTestClient,
@@ -54,9 +55,11 @@ export async function startChain() {
   const wallet = createWalletClient({ chain: ARC_TESTNET, transport: http(url) });
   await until(async () => (await client.getChainId()) === ARC_TESTNET.id);
 
-  const [deployer, keeper] = await wallet.getAddresses();
+  const [deployer, keeper, maintainer, stranger] = await wallet.getAddresses();
   const usdcArtifact = artifact("MockUSDC");
   const escrowArtifact = artifact("BonaFideEscrow");
+  const factoryArtifact = artifact("BountyWalletFactory");
+  const walletArtifact = artifact("BountyWallet");
 
   async function send(from: Address, address: Address, abi: Abi, functionName: string, args: unknown[]) {
     const hash = await wallet.writeContract({ account: from, chain: ARC_TESTNET, address, abi, functionName, args });
@@ -77,8 +80,19 @@ export async function startChain() {
     50_000_000n,
   ]);
 
-  async function propose(repo: string, amount: bigint) {
-    await send(keeper!, escrow, escrowArtifact.abi, "proposeRepo", [repoIdOf(repo), keeper, 5000, 7 * 86_400, amount]);
+  const bountyFactory = await deploy(factoryArtifact.abi, factoryArtifact.bytecode, [usdc, keeper]);
+
+  async function propose(repo: string, amount: bigint, by: Address = keeper!) {
+    await send(keeper!, escrow, escrowArtifact.abi, "proposeRepo", [repoIdOf(repo), by, 5000, 7 * 86_400, amount]);
+  }
+
+  async function depositOf(key: Hex) {
+    return (await client.readContract({
+      address: escrow,
+      abi: escrowArtifact.abi,
+      functionName: "depositOf",
+      args: [key],
+    })) as { serial: bigint };
   }
 
   return {
@@ -88,16 +102,85 @@ export async function startChain() {
     escrowAbi: escrowArtifact.abi,
     usdc,
     usdcAbi: usdcArtifact.abi,
+    keeper: keeper!,
+    /** A dev account that Maintains the repos bound with it. */
+    maintainer: maintainer!,
+    /** A dev account that Maintains nothing. */
+    stranger: stranger!,
+    bountyFactory,
 
-    /** Proposes a Binding (Maintainer = the Keeper, 50%, 7 days) that takes effect after the binding delay. */
+    /** Proposes a Binding (Maintainer = the Keeper by default, 50%, 7 days) that takes effect after the binding delay. */
     propose,
 
     /** Binds the repo with `amount` (default 1 USDC), 50% and 7 days, and waits out the binding delay. */
-    async bind(repo: string, amount = 1_000_000n) {
-      await propose(repo, amount);
+    async bind(repo: string, amount = 1_000_000n, by: Address = keeper!) {
+      await propose(repo, amount, by);
       await test.increaseTime({ seconds: BINDING_DELAY });
       await test.mine({ blocks: 1 });
       await send(keeper!, escrow, escrowArtifact.abi, "activateRepo", [repoIdOf(repo)]);
+    },
+
+    /** Moves the chain's time forward and mines a block at the new time. */
+    async increaseTime(seconds: number) {
+      await test.increaseTime({ seconds });
+      await test.mine({ blocks: 1 });
+    },
+
+    /** The Keeper refunds a Deposit early, as on a merge. */
+    async keeperRefund(key: Hex) {
+      return send(keeper!, escrow, escrowArtifact.abi, "refund", [key]);
+    },
+
+    /** Forfeits a Deposit of a repo bound with the Keeper as its Maintainer, with its signed verdict. */
+    async forfeit(key: Hex) {
+      const sigDeadline = (await client.getBlock()).timestamp + 600n;
+      const { serial } = await depositOf(key);
+      const verdict = forfeitVerdict({ chainId: ARC_TESTNET.id, escrow, key, serial, sigDeadline });
+      const signature = await wallet.signTypedData({ account: keeper!, ...verdict });
+      return send(deployer!, escrow, escrowArtifact.abi, "forfeit", [key, sigDeadline, signature]);
+    },
+
+    /** Creates `owner`'s Bounty wallet for the repo, funds it and posts the Bounties, as [issue, amount]. */
+    async postBounties(
+      owner: Address,
+      repo: string,
+      limits: { perPayout: bigint; period: bigint },
+      bounties: [number, bigint][],
+    ): Promise<Address> {
+      await send(owner, bountyFactory, factoryArtifact.abi, "create", [
+        repoIdOf(repo),
+        limits.perPayout,
+        limits.period,
+        86_400,
+      ]);
+      const address = (await client.readContract({
+        address: bountyFactory,
+        abi: factoryArtifact.abi,
+        functionName: "walletOf",
+        args: [repoIdOf(repo), owner],
+      })) as Address;
+      const total = bounties.reduce((sum, [, amount]) => sum + amount, 0n);
+      await send(deployer!, usdc, usdcArtifact.abi, "mint", [owner, total]);
+      await send(owner, usdc, usdcArtifact.abi, "approve", [address, total]);
+      await send(owner, address, walletArtifact.abi, "fund", [total]);
+      for (const [issue, amount] of bounties) {
+        await send(owner, address, walletArtifact.abi, "postBounty", [BigInt(issue), amount]);
+      }
+      return address;
+    },
+
+    /** The Keeper pays an open Bounty within the wallet's limits. */
+    async keeperPay(bountyWallet: Address, issue: number, payee: Address) {
+      return send(keeper!, bountyWallet, walletArtifact.abi, "keeperPay", [BigInt(issue), payee]);
+    },
+
+    async usdcBalance(account: Address): Promise<bigint> {
+      return (await client.readContract({
+        address: usdc,
+        abi: usdcArtifact.abi,
+        functionName: "balanceOf",
+        args: [account],
+      })) as bigint;
     },
 
     /** A fresh EOA holding `amount` USDC base units and some gas, with its key for signing. */
