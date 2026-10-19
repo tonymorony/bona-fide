@@ -94,7 +94,7 @@ export function describeTwoStepPlan({ from, steps }: TwoStepPlan): string {
 export function describeMadeDeposit(made: MadeDeposit): string {
   return [
     `Deposited ${made.amountUsdc} USDC for ${itemName(made)} in ${made.repo}, from ${made.depositor}. Transaction: ${made.txHash}.`,
-    `It is refunded in full to ${made.depositor} once ${settled(made)}, or when the Timeout ends at ${made.deadline}.`,
+    `It is refunded in full to ${made.depositor} once ${settled(made)}, or when the Timeout ends at ${made.deadline}, unless a Maintainer signs a Forfeit before then.`,
   ].join("\n");
 }
 
