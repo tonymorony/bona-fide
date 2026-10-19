@@ -180,6 +180,33 @@ test("mainnet's deposit page says how to get USDC on Arc, with no button for wha
   expect(test).toContain("Get test USDC");
 }, 60_000);
 
+test("the verdict page calls what the Maintainer signs a Forfeit, in its text and its script's messages", async () => {
+  const { page, outDir } = await built(mainnet, false);
+  const html = await page("verdict.html");
+  const script = /<script type="module" src="([^"]+)"/.exec(html)![1]!;
+  const code = await readFile(join(outDir, script), "utf8");
+  const text = html
+    .replace(/<script[\s\S]*?<\/script>/g, " ")
+    .replace(/<[^>]+>/g, " ")
+    .replace(/\s+/g, " ");
+
+  expect(text).not.toMatch(/\bverdicts?\b/i);
+  expect(text).toContain("The Forfeit is signed for Arc.");
+  expect(text).toContain("can sign the Forfeit for this Deposit.");
+  expect(text).toContain("Sending your Forfeit");
+  for (const words of [
+    "This wallet can't sign the Forfeit yet",
+    "Bona Fide didn't send the Forfeit",
+    "Forfeit not sent yet",
+    "Bona Fide paused Forfeits for this Deposit after one failed on-chain. Nothing was forfeited.",
+    "The Forfeit failed on-chain",
+    "Forfeit not sent",
+  ]) {
+    expect(code).toContain(words);
+  }
+  expect(code).not.toMatch(/the verdict|Verdict not sent|paused verdicts/);
+}, 60_000);
+
 test("the mark in the top bar comes from web/brand, and is the landing page's seal", async () => {
   const { page, files, outDir } = await built();
   const mark = (await readFile(new URL("../brand/mark.svg", import.meta.url), "utf8")).trim();

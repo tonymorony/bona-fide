@@ -502,6 +502,7 @@ test("the Maintainer signs a verdict on the verdict page, and the Keeper forfeit
   expect(
     await stranger.page.evaluate<string>(`document.querySelector('[data-show="wrong-wallet"] .btn').textContent`),
   ).toBe("Sign the Forfeit");
+  expect(await stranger.page.text()).toMatch(/Only 0x\S+ can sign the Forfeit for this Deposit\./);
   await stranger.page.close();
 
   const { page } = await walletPage(maintainer);
@@ -665,7 +666,7 @@ test("the repo page says what the Timeout counts from, and everyone who needs no
   expect(exempt.slice(5)).toEqual([
     "A PR or issue a Maintainer accepts: an approving review, or the bona-fide:ok label",
     "PRs and issues opened before Bona Fide started here",
-    "Contributors with a strong Bona Fide record in other public repos, unless this repo turns that off",
+    "Contributors with a strong Bona Fide record in public repos, unless this repo turns that off",
   ]);
   expect(page.errors).toEqual([]);
   await page.close();

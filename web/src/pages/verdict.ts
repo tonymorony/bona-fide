@@ -184,7 +184,7 @@ async function sign(): Promise<void> {
   if (run !== attempt) return;
   if (isUndeployedSmartWalletSignature(signature)) {
     return showProblem({
-      title: "This wallet can't sign the verdict yet",
+      title: "This wallet can't sign the Forfeit yet",
       body: `It's a smart wallet that hasn't made a transaction on ${network.name}, and the escrow can only check signatures from wallets that have. Make any transaction from it on ${network.name}, then sign again.`,
       retry: { label: "Sign again" },
     });
@@ -207,7 +207,7 @@ async function sign(): Promise<void> {
     case "refused":
       if (outcome.status === 400) {
         return showProblem({
-          title: "Bona Fide didn't send the verdict",
+          title: "Bona Fide didn't send the Forfeit",
           body: "Nothing was forfeited.",
           detail: outcome.message,
           retry: { label: "Sign again" },
@@ -217,7 +217,7 @@ async function sign(): Promise<void> {
       await load();
       if (stateNow() === "ready") {
         showProblem({
-          title: "Bona Fide didn't send the verdict",
+          title: "Bona Fide didn't send the Forfeit",
           body: "Nothing was forfeited.",
           detail: outcome.message,
         });
@@ -225,15 +225,15 @@ async function sign(): Promise<void> {
       return;
     case "wait":
       return showProblem({
-        title: "Verdict not sent yet",
+        title: "Forfeit not sent yet",
         body: outcome.paused
-          ? "Bona Fide paused verdicts for this Deposit after one failed on-chain. Nothing was forfeited."
+          ? "Bona Fide paused Forfeits for this Deposit after one failed on-chain. Nothing was forfeited."
           : "Bona Fide is getting too many requests from your connection right now. Nothing was forfeited.",
         retry: { label: "Sign again", until: Date.now() + outcome.seconds * 1000 },
       });
     case "reverted":
       return showProblem({
-        title: "The verdict failed on-chain",
+        title: "The Forfeit failed on-chain",
         body: "The transaction reverted, so nothing was forfeited. Try again in 10 minutes.",
         txHash: outcome.txHash,
         retry: { label: "Sign again", until: Date.now() + 10 * 60_000 },
@@ -245,7 +245,7 @@ async function sign(): Promise<void> {
       });
     case "unavailable":
       return showProblem({
-        title: "Verdict not sent",
+        title: "Forfeit not sent",
         body: `Bona Fide couldn't be reached, or couldn't reach ${network.name}. Nothing was forfeited. Try again in a minute.`,
         retry: { label: "Sign again" },
       });
