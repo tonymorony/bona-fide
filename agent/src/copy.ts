@@ -11,8 +11,8 @@ import type {
 } from "./deposits.ts";
 
 const WORDS = {
-  pr: { noun: "PR", accepted: "Merged or accepted", settled: "merged or accepted" },
-  issue: { noun: "issue", accepted: "Accepted", settled: "accepted" },
+  pr: { noun: "PR", accepted: "Merged or accepted", notAccepted: "Not merged", settled: "merged or accepted" },
+  issue: { noun: "issue", accepted: "Accepted", notAccepted: "Not accepted", settled: "accepted" },
 } as const;
 
 export function itemName({ kind, number }: Target): string {
@@ -39,7 +39,7 @@ export function describeRules(rules: DepositRules): string {
     lines.push(
       `${rules.repo} asks for a refundable Deposit of ${binding.amountUsdc} USDC on ${item}.`,
       `- ${WORDS[rules.kind].accepted}: refunded in full.`,
-      `- No decision within ${days(binding.timeoutDays)}: refunded in full.`,
+      `- ${WORDS[rules.kind].notAccepted}: refunded in full when the Timeout ends, ${days(binding.timeoutDays)} after the Deposit.`,
     );
     if (binding.forfeitPercent > 0) {
       lines.push(
@@ -62,7 +62,7 @@ export function describeRules(rules: DepositRules): string {
   }
   if (pendingBinding) {
     lines.push(
-      `A new Binding takes effect at ${pendingBinding.effectiveAt}: a Deposit of ${pendingBinding.amountUsdc} USDC, refunded after ${days(pendingBinding.timeoutDays)} without a decision.${binding ? " Deposits made before then keep the current terms." : ""}`,
+      `A new Binding takes effect at ${pendingBinding.effectiveAt}: a Deposit of ${pendingBinding.amountUsdc} USDC with a Timeout of ${days(pendingBinding.timeoutDays)}.${binding ? " Deposits made before then keep the current terms." : ""}`,
     );
   }
   return lines.join("\n");
@@ -94,7 +94,7 @@ export function describeTwoStepPlan({ from, steps }: TwoStepPlan): string {
 export function describeMadeDeposit(made: MadeDeposit): string {
   return [
     `Deposited ${made.amountUsdc} USDC for ${itemName(made)} in ${made.repo}, from ${made.depositor}. Transaction: ${made.txHash}.`,
-    `It is refunded in full to ${made.depositor} once ${settled(made)}, or after ${made.deadline} if no one decides.`,
+    `It is refunded in full to ${made.depositor} once ${settled(made)}, or when the Timeout ends at ${made.deadline}.`,
   ].join("\n");
 }
 
@@ -117,7 +117,7 @@ export function describeDepositState(state: DepositState): string {
     );
   } else {
     lines.push(
-      `It is active. The Keeper refunds it in full once ${settled(state)}. If no one decides, anyone can Refund it after the Timeout ends at ${deposit.deadline}, ${timeLeft(deposit.secondsLeft)} from now.`,
+      `It is active. The Keeper refunds it in full once ${settled(state)}. Otherwise anyone can Refund it once the Timeout ends at ${deposit.deadline}, ${timeLeft(deposit.secondsLeft)} from now.`,
     );
     if (deposit.forfeitPercent > 0) {
       lines.push(
