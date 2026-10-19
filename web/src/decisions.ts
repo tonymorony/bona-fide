@@ -41,7 +41,7 @@ const ACTIONS: Record<string, string> = {
   "noted-accept": "Posted a note suggesting the Maintainer accept it.",
   "drafted-verdict": "Posted a draft bad-faith verdict for the Maintainer. Nothing was forfeited.",
   silent: "Posted nothing. The Maintainer decides.",
-  "skipped: a Maintainer decided": "A Maintainer decided while the model read, so nothing was posted.",
+  "skipped: a Maintainer decided": "A Maintainer decided while the automated reviewer read, so nothing was posted.",
   refunded: "Refunded the Deposit in full to its Depositor.",
 };
 
@@ -93,7 +93,7 @@ export function decisionWords(d: Decision): DecisionWords {
   const asked = d.type === "triage" || d.type === "waive";
   let suggestion: string | null = null;
   if (d.suggestion) suggestion = `Suggested: ${VERDICTS[d.suggestion.verdict] ?? d.suggestion.verdict}`;
-  else if (asked && !failed) suggestion = "The model gave no suggestion.";
+  else if (asked && !failed) suggestion = "The automated reviewer gave no suggestion.";
   const waive = d.type === "waive";
   const bounty = d.type === "pay" || d.type === "hold";
   const unasked = waive ? "The Deposit is still needed." : "Nothing was posted.";
@@ -107,7 +107,7 @@ export function decisionWords(d: Decision): DecisionWords {
     done: bounty
       ? bountyAction(d, failed)
       : ((waive ? WAIVE_ACTIONS[d.action] : ACTIONS[d.action]) ??
-        (failed ? `The model couldn't be asked (${failed}). ${unasked}` : d.action)),
+        (failed ? `The automated reviewer couldn't be asked (${failed}). ${unasked}` : d.action)),
     read,
     cost: d.cost ? costWords(d.cost) : null,
     pr: pr !== null && pr > 0 ? pr : null,

@@ -43,7 +43,7 @@ test("a triage decision says what the model suggested, what it read, what was do
 test.each([
   [{ suggestion: { verdict: "bad-faith", reasons: [] }, action: "drafted-verdict" }, "Suggested: likely bad faith"],
   [{ suggestion: { verdict: "unsure", reasons: [] }, action: "silent" }, "Suggested: unsure"],
-  [{ suggestion: null, action: "silent" }, "The model gave no suggestion."],
+  [{ suggestion: null, action: "silent" }, "The automated reviewer gave no suggestion."],
   [{ suggestion: null, action: "failed: rate limited" }, null],
 ])("%j is worded %j", (more, suggestion) => {
   expect(decisionWords({ ...triage, ...more, outcome: "escalated" })).toMatchObject({
@@ -60,8 +60,14 @@ test("a failed review names the failure, and a model without a price has no esti
     cost: { model: "claude-next", inputTokens: 5, outputTokens: 1, usd: null },
   });
 
-  expect(words.done).toBe("The model couldn't be asked (rate limited). Nothing was posted.");
+  expect(words.done).toBe("The automated reviewer couldn't be asked (rate limited). Nothing was posted.");
   expect(words.cost).toBe("Model cost: claude-next: 5 tokens in, 1 out, no price on file.");
+});
+
+test("a review a Maintainer overtook says nothing was posted, naming the automated reviewer", () => {
+  expect(decisionWords({ ...triage, action: "skipped: a Maintainer decided" }).done).toBe(
+    "A Maintainer decided while the automated reviewer read, so nothing was posted.",
+  );
 });
 
 test("an early Refund says it refunded the Deposit, with no suggestion, reading or cost", () => {
@@ -129,11 +135,15 @@ test.each([
     "Suggested: ask for the Deposit, and flag the record for the Maintainer",
     "Kept asking for the Deposit, and posted a note for the Maintainer.",
   ],
-  [{ suggestion: null, action: "silent" }, "The model gave no suggestion.", "Kept asking for the Deposit."],
+  [
+    { suggestion: null, action: "silent" },
+    "The automated reviewer gave no suggestion.",
+    "Kept asking for the Deposit.",
+  ],
   [
     { suggestion: null, action: "failed: rate limited" },
     null,
-    "The model couldn't be asked (rate limited). The Deposit is still needed.",
+    "The automated reviewer couldn't be asked (rate limited). The Deposit is still needed.",
   ],
 ])("a Record Exemption held back, %j, is worded %j and %j", (more, suggestion, done) => {
   expect(decisionWords({ ...waive, ...more, outcome: "escalated" })).toMatchObject({

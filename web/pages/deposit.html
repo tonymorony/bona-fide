@@ -41,12 +41,9 @@
           <li>
             <span class="ico"><svg class="icon md"><use href="#i-clock"></use></svg></span>
             <div>
-              <div class="when">
-                <span data-kind="pr">Not merged within <span data-text="timeout"></span></span
-                ><span data-kind="issue">Not accepted within <span data-text="timeout"></span></span>
-              </div>
+              <div class="when"><span data-kind="pr">Not merged</span><span data-kind="issue">Not accepted</span></div>
               <div class="detail">
-                <span data-text="timeout"></span> is this repo's Timeout. After it, Bona Fide sends the Refund, and anyone else can too, you included.
+                Refunded when the Timeout ends, <span data-text="timeout"></span> after your Deposit. Bona Fide sends the Refund, and anyone else can too, you included.
               </div>
             </div>
             <div class="back"><span data-text="amount"></span><small>back to you</small></div>
@@ -185,10 +182,9 @@
               </div>
             </div>
             {{#if links.portal}}
-            <button class="btn secondary block" type="button" disabled>Buy USDC with a card: coming soon</button>
             <p class="hint">
               <span>
-                Until then, withdraw USDC from an exchange on the {{network.name}} network, or bring it from another chain
+                Withdraw USDC from an exchange on the {{network.name}} network, or bring it from another chain
                 in <a href="{{links.portal}}" target="_blank" rel="noopener">Arc Portal</a>.
               </span>
             </p>

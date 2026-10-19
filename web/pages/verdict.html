@@ -2,7 +2,7 @@
 <html lang="en" data-state="loading">
   <head>
     {{> head}}
-    <title>Sign a bad-faith verdict · Bona Fide</title>
+    <title>Sign the Forfeit · Bona Fide</title>
   </head>
   <body>
     {{> icons}}
@@ -17,7 +17,7 @@
         <svg class="icon"><use href="#i-repo"></use></svg><a data-href="repo-page" data-text="repo"></a><span>·</span
         ><a data-href="item-url" data-text="item"></a>
       </p>
-      <h1>Sign a bad-faith verdict</h1>
+      <h1>Sign the Forfeit</h1>
       <p class="lede" data-if="item-known">
         Your signature forfeits the Deposit on <span data-text="item"></span>. The <code>bona-fide:bad-faith</code> label
         alone moves no funds.
@@ -63,7 +63,7 @@
       <section class="card mt-24" data-show="done" aria-labelledby="done-title">
         <div class="result" role="status">
           <div class="big"><svg class="icon"><use href="#i-check"></use></svg></div>
-          <h2 id="done-title">Verdict signed</h2>
+          <h2 id="done-title">Forfeit signed</h2>
           <p>The Deposit on <span data-text="item"></span> is forfeited.</p>
         </div>
         <dl class="rows mt-20">
@@ -171,7 +171,7 @@
             <p>Only <span data-text="maintainer-short"></span> can sign a verdict for this Deposit. Switch to it in your wallet.</p>
           </div>
         </div>
-        <button class="btn danger block mt-14" type="button" disabled>Sign the verdict</button>
+        <button class="btn danger block mt-14" type="button" disabled>Sign the Forfeit</button>
       </section>
 
       <section class="card mt-16" data-show="ready">
@@ -184,11 +184,15 @@
           <input type="checkbox" data-confirm />
           <span>I reviewed <span data-text="item"></span>, and it was made in bad faith.</span>
         </label>
-        <button class="btn danger block mt-14" type="button" data-action="sign">Sign the verdict</button>
+        <p class="hint mt-12">
+          <svg class="icon"><use href="#i-alert"></use></svg>
+          <span>This can't be undone.</span>
+        </p>
+        <button class="btn danger block mt-14" type="button" data-action="sign">Sign the Forfeit</button>
         <p class="inline-note mt-12" data-text="note" data-if="note" role="status"></p>
         <p class="hint mt-12">
           <svg class="icon"><use href="#i-info"></use></svg>
-          <span>This can't be undone. Signing is free: Bona Fide sends your signature to the escrow and pays the network fee.</span>
+          <span>Signing is free: Bona Fide sends your signature to the escrow and pays the network fee.</span>
         </p>
       </section>
 

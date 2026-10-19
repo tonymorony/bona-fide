@@ -309,8 +309,7 @@ onAction((action) => {
 });
 
 confirmBox.addEventListener("change", () => paint());
-if (item)
-  document.title = `Sign a bad-faith verdict for ${itemName(item.kind, item.number)} in ${item.repo} · Bona Fide`;
+if (item) document.title = `Sign the Forfeit for ${itemName(item.kind, item.number)} in ${item.repo} · Bona Fide`;
 setInterval(() => {
   if (phase === "problem" && problem?.retry?.until) paint();
 }, 1000);
