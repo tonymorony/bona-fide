@@ -168,13 +168,14 @@ test("testnet pages send Forfeits to the test recipient, and mainnet pages to Pr
   expect(mainnetText[0]).not.toContain(">Testnet<");
 }, 60_000);
 
-test("mainnet's deposit page says how to get USDC on Arc, with the card button marked as coming", async () => {
+test("mainnet's deposit page says how to get USDC on Arc, with no button for what it can't do yet", async () => {
   const main = await (await built(mainnet, false)).page("deposit.html");
   const test = await (await built(testnet, false)).page("deposit.html");
 
-  expect(main).toMatch(/<button class="btn secondary block" type="button" disabled>Buy USDC with a card: coming soon</);
-  expect(main).toMatch(/withdraw USDC from an exchange on the Arc network/);
-  expect(main).toContain('<a href="https://portal.arc.io" target="_blank" rel="noopener">Arc Portal</a>');
+  expect(main).not.toContain("Buy USDC with a card");
+  expect(main).toMatch(
+    /Withdraw USDC from an exchange on the Arc network, or bring it from another chain\s+in\s+<a href="https:\/\/portal\.arc\.io" target="_blank" rel="noopener">Arc Portal<\/a>\./,
+  );
   expect(test).not.toContain("Buy USDC with a card");
   expect(test).toContain("Get test USDC");
 }, 60_000);

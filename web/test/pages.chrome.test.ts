@@ -267,6 +267,15 @@ async function connect(page: Page, state: string) {
   await page.waitForState(state);
 }
 
+/** The deposit page's ways to get the Deposit back, each as one line of text. */
+function outcomes(page: Page): Promise<string[]> {
+  return page.evaluate<string[]>(
+    asWritten(
+      `[...document.querySelectorAll(".outcomes > li")].map((li) => li.innerText.replace(/\\s+/g, " ").trim())`,
+    ),
+  );
+}
+
 /** Browser-level errors for failed requests to `path`: expected where a test makes an endpoint fail. */
 function besides(errors: string[], path: string): string[] {
   return errors.filter((error) => !(error.includes("Failed to load resource") && error.includes(path)));
@@ -282,6 +291,9 @@ test("the deposit page's one signature ends in a Deposited event, sent by the Ap
   await page.waitForState("not-connected");
   await frame(page, "deposit-not-connected-1280");
   expect(await page.text()).toContain("1 USDC");
+  expect((await outcomes(page))[1]).toMatch(
+    /^Not merged Refunded when the Timeout ends, 7 days after your Deposit\. Bona Fide sends the Refund, and anyone else can too, you included\./,
+  );
   await page.click('[data-action="connect"]');
   await page.waitFor("!document.querySelector('[data-picker]').hidden", "the wallet picker");
   await frame(page, "deposit-connect-1280");
@@ -313,6 +325,9 @@ test("the deposit page pays with two transactions from the Contributor's own wal
 
   await page.open(site.url("deposit.html?repo=acme/widgets&kind=issue&number=8"));
   await connect(page, "ready");
+  expect((await outcomes(page))[1]).toMatch(
+    /^Not accepted Refunded when the Timeout ends, 7 days after your Deposit\./,
+  );
   await page.click('[data-action="two-step"]');
   await page.waitForState("two-step-approve");
   await frame(page, "deposit-two-step-approve-1280");
@@ -359,9 +374,9 @@ test("too little USDC, a refused signature and a smart wallet that can't sign ye
   await connect(page, "low-balance");
   await frame(page, "deposit-low-balance-1280");
   expect(await page.text()).toContain("Add at least 0.60 USDC");
-  expect(await page.text()).toContain("Buy USDC with a card: coming soon");
+  expect(await page.text()).not.toContain("Buy USDC with a card");
   expect(await page.text()).toMatch(
-    /withdraw USDC from an exchange on the Arc Testnet \(local\) network, or bring it from another chain\s+in Arc Portal/,
+    /Withdraw USDC from an exchange on the Arc Testnet \(local\) network, or bring it from another chain\s+in Arc Portal\./,
   );
 
   const funded = await walletPage(await stack.account());
@@ -484,6 +499,9 @@ test("the Maintainer signs a verdict on the verdict page, and the Keeper forfeit
   await stranger.page.open(site.url(`verdict.html?repo=${repo}&kind=pr&number=125`));
   await connect(stranger.page, "wrong-wallet");
   await frame(stranger.page, "verdict-wrong-wallet-1280");
+  expect(
+    await stranger.page.evaluate<string>(`document.querySelector('[data-show="wrong-wallet"] .btn').textContent`),
+  ).toBe("Sign the Forfeit");
   await stranger.page.close();
 
   const { page } = await walletPage(maintainer);
@@ -491,11 +509,28 @@ test("the Maintainer signs a verdict on the verdict page, and the Keeper forfeit
   await page.waitForState("not-connected");
   await connect(page, "ready");
   expect(await page.evaluate<boolean>(`document.querySelector('[data-action="sign"]').disabled`)).toBe(true);
+  // The App's note links "Sign the Forfeit": the page says the same, and warns before the button.
+  expect(await page.evaluate<string>("document.title")).toBe(
+    "Sign the Forfeit for PR #125 in acme/verdicts · Bona Fide",
+  );
+  expect(await page.evaluate<string>(`document.querySelector("h1").textContent`)).toBe("Sign the Forfeit");
+  const ready = await page.evaluate<string[]>(
+    asWritten(
+      `[...document.querySelector('[data-show="ready"]').children].map((el) => el.innerText.replace(/\\s+/g, " ").trim())`,
+    ),
+  );
+  const sign = ready.indexOf("Sign the Forfeit");
+  expect(sign).toBeGreaterThan(0);
+  expect(ready.slice(0, sign)).toContain("This can't be undone.");
+  expect(ready.slice(sign)).toContain(
+    "Signing is free: Bona Fide sends your signature to the escrow and pays the network fee.",
+  );
   await page.click("[data-confirm]");
   await frame(page, "verdict-ready-1280");
   await page.click('[data-action="sign"]');
   await page.waitForState("done", 30_000);
   await frame(page, "verdict-done-1280");
+  expect(await page.evaluate<string>(`document.querySelector("#done-title").textContent`)).toBe("Forfeit signed");
 
   expect(await stack.depositOf(repo, "pr", 125)).toMatchObject({ status: 3 });
   expect(await stack.usdcBalance(stack.router)).toBe(routerBefore + 500_000n);
@@ -613,6 +648,29 @@ test("the repo page lists the Deposits, refunds a timed-out one, and sends the r
   await page.close();
 }, 90_000);
 
+test("the repo page says what the Timeout counts from, and everyone who needs no Deposit", async () => {
+  const page = await chrome.newPage({ intercept: github });
+
+  await page.open(site.url("repo.html?repo=Acme/Widgets"));
+  await page.waitForState("live");
+  await page.waitFor(`!document.body.innerText.includes("Reading Deposits")`);
+
+  expect(await page.text()).toContain(
+    "Counted from each Deposit. Not merged or accepted by then? It's refunded in full.",
+  );
+  const exempt = await page.evaluate<string[]>(
+    `[...document.querySelectorAll(".exempt-list li")].map((li) => li.textContent.replace(/\\s+/g, " ").trim())`,
+  );
+  expect(exempt).toHaveLength(8);
+  expect(exempt.slice(5)).toEqual([
+    "A PR or issue a Maintainer accepts: an approving review, or the bona-fide:ok label",
+    "PRs and issues opened before Bona Fide started here",
+    "Contributors with a strong Bona Fide record in other public repos, unless this repo turns that off",
+  ]);
+  expect(page.errors).toEqual([]);
+  await page.close();
+}, 60_000);
+
 test("the repo page shows the decision log: the counts, and what was suggested, checked and done", async () => {
   const page = await chrome.newPage({ intercept: github });
   const decisions = `document.querySelectorAll("[data-decisions] > li").length`;
@@ -630,7 +688,7 @@ test("the repo page shows the decision log: the counts, and what was suggested, 
   expect(text).toContain("Posted a draft bad-faith verdict for the Maintainer. Nothing was forfeited.");
   expect(text).toContain("Suggested: good-faith work");
   expect(text).toContain("Posted a note suggesting the Maintainer accept it.");
-  expect(text).toContain("The model couldn't be asked (rate limited). Nothing was posted.");
+  expect(text).toContain("The automated reviewer couldn't be asked (rate limited). Nothing was posted.");
   expect(text).toContain("Approved by");
   expect(text).toContain("@mo, with write access");
   expect(text).toContain("Refunded the Deposit in full to its Depositor.");
@@ -769,7 +827,7 @@ test("before its script runs, a page shows only its loading card, not every stat
   const page = await chrome.newPage();
   await page.withoutScripts();
   const stateHeadings =
-    /Pay the Deposit|Deposit made|Already paid|Nothing to pay|Verdict signed|Sign before|Proof accepted|Bona Fide is live here|Why sign|Not set up here yet|Terms\n/;
+    /Pay the Deposit|Deposit made|Already paid|Nothing to pay|Forfeit signed|Sign before|Proof accepted|Bona Fide is live here|Why sign|Not set up here yet|Terms\n/;
 
   for (const [, path] of PAGES) {
     await page.open(site.url(path));

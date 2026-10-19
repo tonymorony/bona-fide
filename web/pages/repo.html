@@ -95,7 +95,7 @@
           <p class="muted" data-if="terms-starting">From <time data-time="starts-at"></time>, or shortly after.</p>
           <dl class="rows mt-12">
             <div><dt>Deposit</dt><dd data-text="amount"></dd></div>
-            <div><dt>Timeout</dt><dd><span data-text="timeout"></span><small>Not merged or accepted by then? It's refunded in full.</small></dd></div>
+            <div><dt>Timeout</dt><dd><span data-text="timeout"></span><small>Counted from each Deposit. Not merged or accepted by then? It's refunded in full.</small></dd></div>
             <div><dt>Bad-faith share</dt><dd><span data-text="share"></span><small>{{capital:forfeits.purpose}}</small></dd></div>
             <div>
               <dt>Maintainer wallet</dt>
@@ -303,6 +303,9 @@
           <li><svg class="icon"><use href="#i-check"></use></svg><span>Anyone with a merged PR in <span data-text="repo"></span></span></li>
           <li><svg class="icon"><use href="#i-check"></use></svg><span>Allowed bots, such as Dependabot and Renovate</span></li>
           <li><svg class="icon"><use href="#i-check"></use></svg><span>A PR or issue a Maintainer labels <code>bona-fide:waive</code></span></li>
+          <li><svg class="icon"><use href="#i-check"></use></svg><span>A PR or issue a Maintainer accepts: an approving review, or the <code>bona-fide:ok</code> label</span></li>
+          <li><svg class="icon"><use href="#i-check"></use></svg><span>PRs and issues opened before Bona Fide started here</span></li>
+          <li><svg class="icon"><use href="#i-check"></use></svg><span>Contributors with a strong Bona Fide record in other public repos, unless this repo turns that off</span></li>
         </ul>
       </section>
     </main>
