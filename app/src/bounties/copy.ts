@@ -72,11 +72,12 @@ export interface PostedFacts {
 
 /** The note on the issue when a Bounty is posted on it, so Contributors see it where they work. */
 export function bountyPostedNote({ issue, amount, payer, aboveLimit, repoLink }: PostedFacts): string {
-  // "The first merged PR" is the Keeper's rule: it holds a Bounty when another PR that closes the
-  // issue was merged first. The Maintainer can pay any merged PR.
+  // "The first merged PR" is the Keeper's rule, and it reads the checks once, at the merge: it holds
+  // a Bounty when another PR that closes the issue was merged first. A held Bounty is the
+  // Maintainer's to pay, to anyone, or to cancel.
   const paid =
     payer === "keeper"
-      ? "The first merged PR that closes this issue gets the Bounty, in full. The Keeper pays it once the PR's checks are green and an automated reviewer agrees it resolves the issue, within the Maintainer's limits. Otherwise the Maintainer can pay it by signing the Payout."
+      ? "The Keeper pays the Bounty in full to the author of the first merged PR that closes this issue, within the Maintainer's limits. It pays only if the PR's checks are green when it's merged and an automated reviewer agrees it resolves the issue. Otherwise the Maintainer decides, and can pay it by signing the Payout."
       : "Once your PR is merged, the Maintainer can pay the Bounty to you in full by signing the Payout.";
   const limit =
     aboveLimit === null
@@ -90,8 +91,13 @@ export function bountyPostedNote({ issue, amount, payer, aboveLimit, repoLink }:
     "To receive it:",
     "",
     `1. Open a PR that closes this issue, such as with \`Fixes #${issue}\` in its description.`,
-    "2. Add a line with your wallet to the PR description, or to a comment of your own on the PR:",
-    "   `Bounty wallet: 0xYourWalletAddress`",
+    // A fenced block, as in the payee note: a Contributor who copies the line copies no backticks.
+    "2. Add this line, with your wallet, to the PR description or to a comment of your own on the PR:",
+    "",
+    "   ```",
+    "   Bounty wallet: 0xYourWalletAddress",
+    "   ```",
+    "",
     `3. ${paid}`,
     "",
     `[See the Bounty](${repoLink})`,

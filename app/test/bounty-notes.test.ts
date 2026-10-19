@@ -64,9 +64,13 @@ test("a Bounty posted on an open issue gets one note there, which tells Contribu
       "To receive it:",
       "",
       "1. Open a PR that closes this issue, such as with `Fixes #42` in its description.",
-      "2. Add a line with your wallet to the PR description, or to a comment of your own on the PR:",
-      "   `Bounty wallet: 0xYourWalletAddress`",
-      "3. The first merged PR that closes this issue gets the Bounty, in full. The Keeper pays it once the PR's checks are green and an automated reviewer agrees it resolves the issue, within the Maintainer's limits. Otherwise the Maintainer can pay it by signing the Payout.",
+      "2. Add this line, with your wallet, to the PR description or to a comment of your own on the PR:",
+      "",
+      "   ```",
+      "   Bounty wallet: 0xYourWalletAddress",
+      "   ```",
+      "",
+      "3. The Keeper pays the Bounty in full to the author of the first merged PR that closes this issue, within the Maintainer's limits. It pays only if the PR's checks are green when it's merged and an automated reviewer agrees it resolves the issue. Otherwise the Maintainer decides, and can pay it by signing the Payout.",
       "",
       `[See the Bounty](${REPO_LINK})`,
     ].join("\n"),
@@ -111,8 +115,12 @@ test("a Bounty above the wallet's per-payout limit says the Keeper won't pay it 
       "To receive it:",
       "",
       "1. Open a PR that closes this issue, such as with `Fixes #42` in its description.",
-      "2. Add a line with your wallet to the PR description, or to a comment of your own on the PR:",
-      "   `Bounty wallet: 0xYourWalletAddress`",
+      "2. Add this line, with your wallet, to the PR description or to a comment of your own on the PR:",
+      "",
+      "   ```",
+      "   Bounty wallet: 0xYourWalletAddress",
+      "   ```",
+      "",
       "3. Once your PR is merged, the Maintainer can pay the Bounty to you in full by signing the Payout.",
     ].join("\n"),
   );
@@ -130,6 +138,7 @@ test.each([
 
   expect(notes()).toHaveLength(1);
   expect(notes()[0]).toContain("reserved in the repo's Bounty wallet.\n\nTo receive it:\n\n");
+  expect(notes()[0]).toContain("\n   ```\n   Bounty wallet: 0xYourWalletAddress\n   ```\n");
   expect(notes()[0]).toContain(
     "3. Once your PR is merged, the Maintainer can pay the Bounty to you in full by signing the Payout.",
   );
