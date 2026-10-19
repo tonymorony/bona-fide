@@ -16,7 +16,7 @@ the person who decides for a repo is still the Maintainer ([CONTEXT.md](../CONTE
 | Role | Who | Does | Never |
 |---|---|---|---|
 | Owner | Anton | decides, says when to release, deploys, holds every key and secret, changes the guards | |
-| Orchestrator | the main AI session | writes briefs, starts workers and reviewers, reads every diff, merges into `develop` and releases `develop` into `main` on Anton's word, only through `scripts/merge-guard.sh`; syncs the public repo | a protected act (A-2) his word doesn't cover; a way around a denial |
+| Orchestrator | the main AI session | writes briefs, starts workers and reviewers, reads every diff, merges into `develop` and releases `develop` into `main` on Anton's word, only through `scripts/merge-guard.sh`; brings each public merge into the private repo | a protected act (A-2) his word doesn't cover; a way around a denial |
 | Worker | a sub-agent that builds | one task in its own worktree: pushes its branch, opens a PR, reports | merges, deploys, force-pushes, deletes a branch, touches a secret |
 | Reviewer | a sub-agent that reviews | reads the code and the task, runs tests, proves each finding | edits tracked files, fixes, reads the author's own account |
 
@@ -241,6 +241,12 @@ and the public repo alike. The public repo gets each change as a PR, never the p
 its commits carry only the Co-Authored-By trailer.
 *Why:* public history is permanent, and when it's written is Anton's choice.
 
+**G-9. Work lands in the public repo first.** Branch from its `origin/develop` and open the PR
+there. After each merge, copy the public tree into a branch of the private repo with `rsync`,
+keeping the files only the private repo has, and open a PR there too.
+*Why:* the public repo's ruleset and CI guard the work where it ends up, and copying the tree
+instead of the commits keeps the private history out of the public one.
+
 ## Working with Anton (O)
 
 **O-1. Put decisions in one short numbered list.** Each item says what is true now, the option you
@@ -288,7 +294,7 @@ wall behind these rules; in the private repo, which can't hold one, these rules 
 | `git push` with `--force`, `--force-with-lease` (any `--force*`), `-f`, a ` +` refspec, `--mirror` or `--prune` | a force push, or a push that rewrites or prunes remote refs | G-1 |
 | `git push * --delete main`, `-d main`, `:main`, and the same for `develop`; `gh api` naming `refs/heads/main` or `refs/heads/develop` (a `DELETE` or `PATCH` of the ref, or a `POST` that creates it) | deleting or moving a long branch. Deleting another branch (`git push origin --delete feat/x`, `:feat/x`) stays open, for the orchestrator's own merged branches | A-2 |
 | `gh api *rulesets*`, `gh api *branches/*/protection*`, `gh api *statuses/*`; `scripts/protect-branches.sh` with no arguments | changing a ruleset, branch protection or a commit status. `gh ruleset list` and `gh ruleset view` still read rulesets, `gh pr checks` reads checks, and `--dry-run` still runs | A-2 |
-| `rsync *:*` (a `host:path` or `rsync://` target), `rsync -e`, `--rsh` | `rsync` to or through another machine. A local `rsync`, such as copying the private tree into a clone of the public repo, stays open | G-6 |
+| `rsync *:*` (a `host:path` or `rsync://` target), `rsync -e`, `--rsh` | `rsync` to or through another machine. A local `rsync`, such as copying the public tree into the private repo, stays open | G-6 |
 | `deploy/deploy.sh` in its usual forms; `ssh`, `scp`, `sftp` | a deploy, or a session on a server | G-6 |
 | `Read(.env)`, `Read(.env.*)` except `.env.example`, under the working directory; `Read(//**/.env)` anywhere; `Read(~/.config/bona-fide/**)` | reading a secret with Read, Edit or `cat`-style commands | C-1 |
 | `gh secret set`, `gh secret delete`; `cast wallet private-key`, `cast wallet decrypt-keystore` | setting a secret, printing a private key | C-1 |

@@ -82,8 +82,10 @@ with its reason and id, and [docs/agents/](docs/agents/) has the brief, review a
 - **Merge** only with `scripts/merge-guard.sh`, never `gh pr merge`: into `develop` when Anton said
   so for that PR or batch in this session (`merge-guard.sh <pr>`, `--repo tonymorony/bona-fide` in
   the public repo), and a release only on his word for it (`merge-guard.sh --release <pr>`).
-- **Public repo:** sync it by copying the private tree into a local clone with `rsync`, then push a
-  feature branch there and open a PR. Delete your own feature branches once they are merged.
+- **Public repo first:** branch from the public repo's `origin/develop` and open the PR there. After
+  each merge, bring the public `develop` into the private repo: copy the public tree into a private
+  branch with `rsync`, keeping the files only the private repo has, and open a PR there too. Delete
+  your own feature branches once they are merged.
 - **Never** force-push, push to `main` or `develop`, delete `main`, `develop` or a branch you didn't
   create, change a ruleset, branch protection or commit status, read or print a secret (`.env`
   files, `~/.config/bona-fide`), or broadcast to mainnet. `.claude/settings.json` denies these.
