@@ -210,7 +210,7 @@ export function depositedText(kind: Kind, deposit: Deposit, explorerUrl: string)
   return {
     title: `Deposit received from ${depositor.slice(0, 6)}…${depositor.slice(-4)}`,
     summary: [
-      `${depositor} paid the refundable Deposit of **${usdc(deposit.amount)}** for this ${WORDS[kind].noun}. It's refunded in full when this ${WORDS[kind].noun} is ${WORDS[kind].accepted.toLowerCase()}, or when the Timeout ends.`,
+      `${depositor} paid the refundable Deposit of **${usdc(deposit.amount)}** for this ${WORDS[kind].noun}. It's refunded in full when this ${WORDS[kind].noun} is ${WORDS[kind].accepted.toLowerCase()}, or when the Timeout ends, unless a Maintainer signs a Forfeit before then.`,
       "",
       `[View the Deposit on Arc](${transaction})`,
     ].join("\n"),
