@@ -70,7 +70,7 @@ test("a Deposit just made is refunded once the PR is settled, or when the Timeou
   };
 
   expect(describeMadeDeposit(made)).toContain(
-    `It is refunded in full to ${DEPOSITOR} once the PR is merged or accepted, or when the Timeout ends at ${DEADLINE}.`,
+    `It is refunded in full to ${DEPOSITOR} once the PR is merged or accepted, or when the Timeout ends at ${DEADLINE}, unless a Maintainer signs a Forfeit before then.`,
   );
 });
 
