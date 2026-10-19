@@ -248,8 +248,31 @@ describe("colour contrast", () => {
 describe("the words", () => {
   const visible = html.replace(/<[^>]+>/g, " ");
 
-  test("use the product's terms, never another name for a Deposit, a Forfeit or the router", () => {
-    assert.doesNotMatch(visible, /\b(stake|staking|bond|slash\w*|charity|donation|donate)\b/i);
+  test("use the product's terms, never another name for a Deposit, a Refund, a Forfeit or the router", () => {
+    assert.doesNotMatch(visible, /\b(stake|staking|bond|slash\w*|charity|donation|donate|returned)\b/i);
+  });
+
+  test("say who needs a Deposit, how it is refunded and what the model does in the product's words", () => {
+    const text = visible.replace(/\s+/g, " ");
+    assert.match(text, /you don't know yet back their PR or issue with a small refundable Deposit\./);
+    assert.match(text, /Deposit refunded in full · recorded on Arc/);
+    assert.match(
+      text,
+      /Collaborators, vouched Contributors, past contributors and allowed bots never need a Deposit\./,
+    );
+    assert.match(
+      text,
+      /§2 Not merged or accepted: refunded when the Timeout ends, 7 days after the Deposit by default\. Anyone can send the Refund\. 100% back/,
+    );
+    assert.match(
+      text,
+      /Each repo's page shows what Claude read, what it suggested, what was checked and the transaction\./,
+    );
+  });
+
+  test("name the section for the visitor's own agent apart from Bona Fide's agent", () => {
+    assert.match(html, /<a href="#agent">The agent<\/a>/);
+    assert.match(html, /<a href="#agents">Your agent<\/a>/);
   });
 
   test("use no glyph the self-hosted latin subsets lack: ticks and arrows are drawn", () => {
