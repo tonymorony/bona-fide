@@ -78,7 +78,7 @@ test("the check asks for the active Binding's terms, and the Deposit is exactly 
   const paid = await deliver("synchronize");
 
   expect(asked?.title).toBe("Deposit needed: 2.50 USDC, refundable");
-  expect(asked?.summary).toContain("Not merged within 14 days");
+  expect(asked?.summary).toContain("Not merged:** refunded in full when the Timeout ends, 14 days after the Deposit.");
   expect(asked?.summary).toContain("up to 20% funds open-source maintainers (Protocol Guild)");
   expect(paid?.summary).toContain("paid the refundable Deposit of **2.50 USDC**");
   expect(paid?.summary).toContain(`[View the Deposit on Arc](https://explorer.arc.io/tx/${txHash})`);

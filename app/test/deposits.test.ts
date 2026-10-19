@@ -22,7 +22,7 @@ test("a PR whose Deposit is on-chain passes, shows who paid and links the Deposi
   const check = github.checkOn(REPO, HEAD_SHA);
   expect(check).toMatchObject({ conclusion: "success", title: "Deposit received from 0x5aAe…eAed" });
   expect(check?.summary).toBe(
-    `${DEPOSITOR} paid the refundable Deposit of **1 USDC** for this PR.\n\n` +
+    `${DEPOSITOR} paid the refundable Deposit of **1 USDC** for this PR. It's refunded in full when this PR is merged or accepted, or when the Timeout ends.\n\n` +
       `[View the Deposit on Arc](https://explorer.arc.io/tx/${txHash})`,
   );
 });

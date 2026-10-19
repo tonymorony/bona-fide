@@ -439,13 +439,13 @@ test("without a named wallet, the author is asked for one, and the Payout runs o
       bountyMarkers(BOUNTY_ISSUE, setup.serial).payee,
       "**Bounty: which wallet should it go to?**",
       "",
-      "This PR closed #42, which has a Bounty of **10 USDC**. To receive it, @newcomer adds a line like this to the PR description or to a comment of their own:",
+      "This PR closed #42, which has a Bounty of **10 USDC**. @newcomer, to receive it, add a line like this to the PR description or to a comment of your own:",
       "",
       "```",
       "Bounty wallet: 0xYourWalletAddress",
       "```",
       "",
-      "Only @newcomer's own words count, and the latest line wins. The Bounty is checked again as soon as they add it.",
+      "Only your own words count, and the latest line wins. The Bounty is checked again as soon as you add it.",
     ].join("\n"),
   ]);
   expect(setup.logged).toEqual([expect.objectContaining({ type: "hold", action: "held: payee wallet needed" })]);

@@ -51,17 +51,19 @@ export function recordExemptText(kind: Kind, author: string, grant: RecordGrant)
     refunds > 0
       ? `${count(refunds, "Refund")} across ${count(repos, "repo")}`
       : `${count(mergedElsewhere, "merged PR")} elsewhere`;
-  const record = [
-    `@${author}'s Bona Fide record: ${count(refunds, "Deposit")} refunded on accepted work across ${count(repos, "public repo")}.`,
-  ];
-  if (mergedElsewhere > 0)
-    record.push(`They also have ${count(mergedElsewhere, "merged PR")} in other people's repos.`);
+  const merged = `${count(mergedElsewhere, "merged PR")} in other people's repos.`;
+  // A grant with no Refunds rests on merged PRs alone, so the check doesn't cite zero Refunds.
+  let record = `@${author}'s Bona Fide record: ${merged}`;
+  if (refunds > 0) {
+    record = `@${author}'s Bona Fide record: ${count(refunds, "Deposit")} refunded on accepted work across ${count(repos, "public repo")}.`;
+    if (mergedElsewhere > 0) record += ` They also have ${merged}`;
+  }
   return {
     title: `No Deposit needed: ${title}`,
     summary: [
-      record.join(" "),
+      record,
       "",
-      `An automated reviewer read the record and agreed, so this ${WORDS[kind].noun} needs no Deposit. Forfeits in ${FORFEIT_REPOS} repos end this. Maintainers can turn it off with \`record_exemption: off\` in ${CONFIG_PATH}.`,
+      `An automated reviewer read the record and found no reason to hold it back, so this ${WORDS[kind].noun} needs no Deposit. This ends once @${author}'s Deposits have been forfeited in ${FORFEIT_REPOS} repos. Maintainers can turn it off with \`record_exemption: off\` in ${CONFIG_PATH}.`,
     ].join("\n"),
   };
 }
@@ -208,7 +210,7 @@ export function depositedText(kind: Kind, deposit: Deposit, explorerUrl: string)
   return {
     title: `Deposit received from ${depositor.slice(0, 6)}…${depositor.slice(-4)}`,
     summary: [
-      `${depositor} paid the refundable Deposit of **${usdc(deposit.amount)}** for this ${WORDS[kind].noun}.`,
+      `${depositor} paid the refundable Deposit of **${usdc(deposit.amount)}** for this ${WORDS[kind].noun}. It's refunded in full when this ${WORDS[kind].noun} is ${WORDS[kind].accepted.toLowerCase()}, or when the Timeout ends.`,
       "",
       `[View the Deposit on Arc](${transaction})`,
     ].join("\n"),
@@ -243,7 +245,7 @@ export function depositNeededText(kind: Kind, terms: Binding, newTerms: NewTerms
     `This repo asks for a refundable Deposit of **${amount}** on this ${WORDS[kind].noun}.`,
     "",
     `- **${WORDS[kind].accepted}:** refunded in full.`,
-    `- **${WORDS[kind].notAccepted} within ${timeout(terms.timeoutSeconds)}:** refunded in full.`,
+    `- **${WORDS[kind].notAccepted}:** refunded in full when the Timeout ends, ${timeout(terms.timeoutSeconds)} after the Deposit.`,
   ];
   if (terms.forfeitBps > 0) {
     lines.push(

@@ -72,11 +72,12 @@ export interface PostedFacts {
 
 /** The note on the issue when a Bounty is posted on it, so Contributors see it where they work. */
 export function bountyPostedNote({ issue, amount, payer, aboveLimit, repoLink }: PostedFacts): string {
-  const closes = `such as with \`Fixes #${issue}\` in its description`;
-  const how =
+  // "The first merged PR" is the Keeper's rule: it holds a Bounty when another PR that closes the
+  // issue was merged first. The Maintainer can pay any merged PR.
+  const paid =
     payer === "keeper"
-      ? `When the first merged PR that closes this issue, ${closes}, has green checks and an automated reviewer agrees it resolves the issue, the Keeper pays the Bounty in full to the PR's author, within the Maintainer's limits. Otherwise it waits for the Maintainer, who can sign the Payout.`
-      : `When a PR that closes this issue is merged, ${closes}, the Maintainer can pay the Bounty in full to the PR's author by signing the Payout.`;
+      ? "The first merged PR that closes this issue gets the Bounty, in full. The Keeper pays it once the PR's checks are green and an automated reviewer agrees it resolves the issue, within the Maintainer's limits. Otherwise the Maintainer can pay it by signing the Payout."
+      : "Once your PR is merged, the Maintainer can pay the Bounty to you in full by signing the Payout.";
   const limit =
     aboveLimit === null
       ? ""
@@ -84,13 +85,14 @@ export function bountyPostedNote({ issue, amount, payer, aboveLimit, repoLink }:
   return [
     `**Bounty: ${usdc(amount)}**`,
     "",
-    `This issue has a Bounty of **${usdc(amount)}**, reserved in the repo's Bounty wallet.${limit} ${how}`,
+    `This issue has a Bounty of **${usdc(amount)}**, reserved in the repo's Bounty wallet.${limit}`,
     "",
-    "To receive it, the PR's author adds a line like this to the PR description or to a comment of their own:",
+    "To receive it:",
     "",
-    "```",
-    "Bounty wallet: 0xYourWalletAddress",
-    "```",
+    `1. Open a PR that closes this issue, such as with \`Fixes #${issue}\` in its description.`,
+    "2. Add a line with your wallet to the PR description, or to a comment of your own on the PR:",
+    "   `Bounty wallet: 0xYourWalletAddress`",
+    `3. ${paid}`,
     "",
     `[See the Bounty](${repoLink})`,
   ].join("\n");
@@ -109,14 +111,14 @@ export function payeeNeededNote({ issue, amount, author, problem }: PayeeFacts):
   return [
     "**Bounty: which wallet should it go to?**",
     "",
-    `This PR closed #${issue}, which has a Bounty of **${usdc(amount)}**. To receive it, @${author} adds a line like this to the PR description or to a comment of their own:`,
+    `This PR closed #${issue}, which has a Bounty of **${usdc(amount)}**. @${author}, to receive it, add a line like this to the PR description or to a comment of your own:`,
     "",
     "```",
     "Bounty wallet: 0xYourWalletAddress",
     "```",
     "",
     ...(problem ? [problem, ""] : []),
-    `Only @${author}'s own words count, and the latest line wins. The Bounty is checked again as soon as they add it.`,
+    "Only your own words count, and the latest line wins. The Bounty is checked again as soon as you add it.",
   ].join("\n");
 }
 

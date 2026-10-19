@@ -44,7 +44,9 @@ test.each([
     expect(check?.title).toBe(`Deposit needed: ${amount}, refundable`);
     expect(check?.summary).toContain(`refundable Deposit of **${amount}**`);
     expect(check?.summary).toContain(`up to ${forfeit} funds open-source maintainers (Protocol Guild)`);
-    expect(check?.summary).toContain(`Not merged within ${timeout}`);
+    expect(check?.summary).toContain(
+      `Not merged:** refunded in full when the Timeout ends, ${timeout} after the Deposit.`,
+    );
     expect(check?.summary).not.toMatch(/new terms|terms change/);
   },
 );

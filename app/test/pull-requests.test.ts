@@ -21,7 +21,7 @@ test("a PR from someone new gets a check asking for the Deposit", async () => {
       "This repo asks for a refundable Deposit of **1 USDC** on this PR.",
       "",
       "- **Merged or accepted:** refunded in full.",
-      "- **Not merged within 7 days:** refunded in full.",
+      "- **Not merged:** refunded in full when the Timeout ends, 7 days after the Deposit.",
       "- **Bad faith, signed by a Maintainer:** up to 50% funds open-source maintainers (Protocol Guild), and the rest is refunded.",
       "",
       "Nobody else gets any of it: not the Maintainers, and not Bona Fide.",
