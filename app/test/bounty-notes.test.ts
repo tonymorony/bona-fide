@@ -59,13 +59,14 @@ test("a Bounty posted on an open issue gets one note there, which tells Contribu
       bountyMarkers(BOUNTY_ISSUE, serial).posted,
       "**Bounty: 10 USDC**",
       "",
-      "This issue has a Bounty of **10 USDC**, reserved in the repo's Bounty wallet. When the first merged PR that closes this issue, such as with `Fixes #42` in its description, has green checks and an automated reviewer agrees it resolves the issue, the Keeper pays the Bounty in full to the PR's author, within the Maintainer's limits. Otherwise it waits for the Maintainer, who can sign the Payout.",
+      "This issue has a Bounty of **10 USDC**, reserved in the repo's Bounty wallet.",
       "",
-      "To receive it, the PR's author adds a line like this to the PR description or to a comment of their own:",
+      "To receive it:",
       "",
-      "```",
-      "Bounty wallet: 0xYourWalletAddress",
-      "```",
+      "1. Open a PR that closes this issue, such as with `Fixes #42` in its description.",
+      "2. Add a line with your wallet to the PR description, or to a comment of your own on the PR:",
+      "   `Bounty wallet: 0xYourWalletAddress`",
+      "3. The first merged PR that closes this issue gets the Bounty, in full. The Keeper pays it once the PR's checks are green and an automated reviewer agrees it resolves the issue, within the Maintainer's limits. Otherwise the Maintainer can pay it by signing the Payout.",
       "",
       `[See the Bounty](${REPO_LINK})`,
     ].join("\n"),
@@ -104,9 +105,17 @@ test("a Bounty above the wallet's per-payout limit says the Keeper won't pay it 
   await notices.tick();
 
   expect(notes()[0]).toContain(
-    "This issue has a Bounty of **10 USDC**, reserved in the repo's Bounty wallet. It is above the wallet's per-payout limit of 5 USDC, so the Keeper won't pay it on its own. When a PR that closes this issue is merged, such as with `Fixes #42` in its description, the Maintainer can pay the Bounty in full to the PR's author by signing the Payout.",
+    [
+      "This issue has a Bounty of **10 USDC**, reserved in the repo's Bounty wallet. It is above the wallet's per-payout limit of 5 USDC, so the Keeper won't pay it on its own.",
+      "",
+      "To receive it:",
+      "",
+      "1. Open a PR that closes this issue, such as with `Fixes #42` in its description.",
+      "2. Add a line with your wallet to the PR description, or to a comment of your own on the PR:",
+      "   `Bounty wallet: 0xYourWalletAddress`",
+      "3. Once your PR is merged, the Maintainer can pay the Bounty to you in full by signing the Payout.",
+    ].join("\n"),
   );
-  expect(notes()[0]).toContain("Bounty wallet: 0xYourWalletAddress");
 });
 
 test.each([
@@ -120,8 +129,9 @@ test.each([
   await notices.tick();
 
   expect(notes()).toHaveLength(1);
+  expect(notes()[0]).toContain("reserved in the repo's Bounty wallet.\n\nTo receive it:\n\n");
   expect(notes()[0]).toContain(
-    "reserved in the repo's Bounty wallet. When a PR that closes this issue is merged, such as with `Fixes #42` in its description, the Maintainer can pay the Bounty in full to the PR's author by signing the Payout.",
+    "3. Once your PR is merged, the Maintainer can pay the Bounty to you in full by signing the Payout.",
   );
   expect(notes()[0]).not.toContain("automated reviewer");
 });

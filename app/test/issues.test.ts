@@ -18,7 +18,7 @@ test("an issue from someone new gets one comment asking for the Deposit, and the
       "This repo asks for a refundable Deposit of **1 USDC** on this issue.",
       "",
       "- **Accepted:** refunded in full.",
-      "- **Not accepted within 7 days:** refunded in full.",
+      "- **Not accepted:** refunded in full when the Timeout ends, 7 days after the Deposit.",
       "- **Bad faith, signed by a Maintainer:** up to 50% funds open-source maintainers (Protocol Guild), and the rest is refunded.",
       "",
       "Nobody else gets any of it: not the Maintainers, and not Bona Fide.",

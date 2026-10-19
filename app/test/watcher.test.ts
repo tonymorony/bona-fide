@@ -69,7 +69,9 @@ test("a Deposit on an issue edits the comment and removes the label", async () =
   const comments = github.commentsOn(REPO, ISSUE);
   expect(comments).toHaveLength(1);
   expect(comments[0]).toContain("Deposit received from 0x5aAe…eAed");
-  expect(comments[0]).toContain(`${DEPOSITOR} paid the refundable Deposit of **1 USDC** for this issue.`);
+  expect(comments[0]).toContain(
+    `${DEPOSITOR} paid the refundable Deposit of **1 USDC** for this issue. It's refunded in full when this issue is accepted, or when the Timeout ends.`,
+  );
   expect(comments[0]).toContain(`[View the Deposit on Arc](https://explorer.arc.io/tx/${txHash})`);
   expect(github.labelsOn(REPO, ISSUE)).not.toContain(REQUIRED);
 });

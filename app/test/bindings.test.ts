@@ -56,7 +56,7 @@ test("the check asks for the active Binding's amount, Timeout and forfeit share,
   const check = github.checkOn(REPO, HEAD_SHA);
   expect(check?.title).toBe("Deposit needed: 2.50 USDC, refundable");
   expect(check?.summary).toContain("refundable Deposit of **2.50 USDC**");
-  expect(check?.summary).toContain("Not merged within 14 days");
+  expect(check?.summary).toContain("Not merged:** refunded in full when the Timeout ends, 14 days after the Deposit.");
   expect(check?.summary).toContain("up to 20% funds open-source maintainers (Protocol Guild)");
 });
 
@@ -65,7 +65,7 @@ test("a Timeout that isn't a whole number of days is shown in hours, rounded up"
 
   await deliver("pull_request", payload("pull_request", "opened", { author: NEWCOMER }));
 
-  expect(github.checkOn(REPO, HEAD_SHA)?.summary).toContain("Not merged within 28 hours:");
+  expect(github.checkOn(REPO, HEAD_SHA)?.summary).toContain("when the Timeout ends, 28 hours after the Deposit.");
 });
 
 test("a config that differs from the active Binding adds a line saying new terms are pending", async () => {

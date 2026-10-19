@@ -133,7 +133,7 @@ test("a Contributor with a good record passes once the model agrees, and the che
     summary: [
       "@newcomer's Bona Fide record: 4 Deposits refunded on accepted work across 3 public repos.",
       "",
-      "An automated reviewer read the record and agreed, so this PR needs no Deposit. Forfeits in 2 repos end this. Maintainers can turn it off with `record_exemption: off` in .github/bona-fide.yml.",
+      "An automated reviewer read the record and found no reason to hold it back, so this PR needs no Deposit. This ends once @newcomer's Deposits have been forfeited in 2 repos. Maintainers can turn it off with `record_exemption: off` in .github/bona-fide.yml.",
     ].join("\n"),
   });
   expect(github.markedNotesOn(REPO, PR)).toEqual([]);
@@ -254,6 +254,29 @@ test("with a lower threshold, merged PRs alone can do it, and the check says so"
 
   expect(github.checkOn(REPO, HEAD_SHA)?.title).toBe("No Deposit needed: 5 merged PRs elsewhere");
 });
+
+test.each([
+  ["5 merged PRs", 5, "record_threshold: 2\n"],
+  ["1 merged PR", 1, "record_threshold: 1\n"],
+])(
+  "with no Refunds and %s elsewhere, the check cites only the merged PRs, not zero Refunds",
+  async (merged, mergedElsewhere, config) => {
+    const { github, model, open } = await recorded({ history: [], config, profile: { mergedElsewhere } });
+    model.answers = [advice("waive")];
+
+    await open();
+
+    expect(github.checkOn(REPO, HEAD_SHA)).toMatchObject({
+      conclusion: "success",
+      title: `No Deposit needed: ${merged} elsewhere`,
+      summary: [
+        `@newcomer's Bona Fide record: ${merged} in other people's repos.`,
+        "",
+        "An automated reviewer read the record and found no reason to hold it back, so this PR needs no Deposit. This ends once @newcomer's Deposits have been forfeited in 2 repos. Maintainers can turn it off with `record_exemption: off` in .github/bona-fide.yml.",
+      ].join("\n"),
+    });
+  },
+);
 
 test("a private repo's Deposits count toward nothing the check shows", async () => {
   const { github, model, open } = await recorded({
