@@ -146,10 +146,18 @@ install_files() {
 
 start_app() {
 	step "Pulling the newest base image, then building and starting the App"
-	# `build --pull` fetches the newest release of the Dockerfile's base image, with its Node and
-	# Alpine security fixes. `up --pull always` would look for bona-fide-app in a registry instead.
-	(cd "$dir" && docker compose build --pull)
-	(cd "$dir" && docker compose up -d --build --remove-orphans)
+	# `build --pull` always tries to pull a newer version of the Dockerfile's base image, which brings
+	# its Node and Alpine security fixes. If that fails, the App is built on the base this server
+	# already has; a build that fails for another reason fails again and stops the deploy. `up` then
+	# starts the image just built, without building it again.
+	if ! (cd "$dir" && docker compose build --pull); then
+		local base
+		base=$(awk '$1 == "FROM" { print $2; exit }' "$dir/Dockerfile")
+		say "The build with --pull failed. Building again on the $base this server already has."
+		(cd "$dir" && docker compose build)
+		say "warning: couldn't pull the newest $base, so the App was built on the one this server already has. Deploy again later to get it."
+	fi
+	(cd "$dir" && docker compose up -d --remove-orphans)
 	say "Waiting for $health_url"
 	local _
 	for _ in $(seq 1 30); do
