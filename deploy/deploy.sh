@@ -145,7 +145,7 @@ if [ "$dry_run" = 1 ]; then
 	say "   - checks Docker, Docker Compose, curl, and that $remote_dir/.env exists (it never reads it)"
 	say "   - finds Caddy: a container that publishes port 443, else the caddy service on the host"
 	say "   - installs docker-compose.yml, Dockerfile, the package files, sdk/, app/ and site/pages/ in $remote_dir"
-	say "   - runs 'docker compose up -d --build' and waits for http://127.0.0.1:8930/health"
+	say "   - runs 'docker compose build --pull' (a plain 'build' if the pull fails), then 'docker compose up -d', and waits for http://127.0.0.1:8930/health"
 	say "   - installs $remote_dir/site/Caddyfile.bonafide, adds 'import $remote_dir/site/*.bonafide'"
 	say "     to Caddy's main Caddyfile if it isn't there, validates, and reloads Caddy; if Caddy"
 	say "     rejects the config, it puts both files back"

@@ -127,8 +127,9 @@ git pull
 deploy/deploy.sh <ssh host>
 ```
 
-A deploy replaces the App's code and the pages, rebuilds the image, and recreates the container
-only if something changed. It never touches `.env`.
+A deploy replaces the App's code and the pages, rebuilds the image on the newest `node:24-alpine`
+(or, if it can't pull that, on the one the server has), and recreates the container only if
+something changed. It never touches `.env`.
 
 - The pages are built into `web/dist` first, for the network `web/landing/config.js` names (see
   [../web/README.md](../web/README.md#build)), so run `npm ci` at the repo root once. To publish
