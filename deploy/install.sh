@@ -145,7 +145,10 @@ install_files() {
 }
 
 start_app() {
-	step "Building and starting the App"
+	step "Pulling the newest base image, then building and starting the App"
+	# `build --pull` fetches the newest release of the Dockerfile's base image, with its Node and
+	# Alpine security fixes. `up --pull always` would look for bona-fide-app in a registry instead.
+	(cd "$dir" && docker compose build --pull)
 	(cd "$dir" && docker compose up -d --build --remove-orphans)
 	say "Waiting for $health_url"
 	local _
